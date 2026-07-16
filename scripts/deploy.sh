@@ -5,9 +5,18 @@ cd /home/ubuntu/project/AIGC_web
 
 export NEXT_PUBLIC_BASE_PATH=/aigc
 
+if [[ -f .env.production ]]; then
+  set -a
+  source .env.production
+  set +a
+fi
+
+./scripts/infra.sh
+
 npm ci --include=dev --no-audit --no-fund
 npm run typecheck
 npm run build
+node scripts/migrate.mjs
 
 mkdir -p .next/standalone/.next
 cp -R .next/static .next/standalone/.next/static
@@ -18,7 +27,7 @@ fi
 sudo systemctl restart aigc-web
 
 for attempt in {1..20}; do
-  if curl --fail --silent http://127.0.0.1:3010/aigc/ >/dev/null; then
+  if curl --fail --silent http://127.0.0.1:3010/aigc/api/health/ >/dev/null; then
     echo "AIGC Web deployment is healthy"
     exit 0
   fi

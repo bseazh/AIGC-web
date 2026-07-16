@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "潮汐创作台",
-  description: "面向电商团队的 AI 商品视觉创作平台",
+  title: "芭乐AIGC",
+  description: "面向电商团队的一站式商品视觉创作平台",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

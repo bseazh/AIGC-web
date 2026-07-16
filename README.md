@@ -1,6 +1,6 @@
-# 潮汐创作台
+# 芭乐AIGC
 
-面向电商团队的 AIGC 创作平台第一版原型。当前包含公开首页、登录交互、响应式工作台，以及 GitHub Actions 到 Ubuntu 服务器的自动部署链路。
+面向电商团队的一站式商品视觉创作平台。当前包含公开首页、手机号/邮箱密码账户、100 积分开户、响应式工作台、PostgreSQL/Redis 基础设施，以及 GitHub Actions 到 Ubuntu 服务器的自动部署链路。
 
 ## 本地开发
 
@@ -25,11 +25,15 @@ npm run build
 服务器端使用：
 
 - Node.js 22
+- PostgreSQL 16
+- Redis 7 + BullMQ
 - systemd 服务 `aigc-web`
 - 本地监听 `127.0.0.1:3010`
 - Nginx 公开路径 `/aigc/`
 
 仓库 Secrets：`DEPLOY_HOST`、`DEPLOY_USER`、`DEPLOY_PATH`、`DEPLOY_SSH_KEY`。
+
+生产环境变量只存放在服务器 `.env.production`，不会同步到 GitHub。持久化数据位于服务器 `data/`，部署时不会删除。
 
 ## 文档
 

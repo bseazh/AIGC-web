@@ -79,9 +79,9 @@ const features = [
 
 function Brand() {
   return (
-    <div className="brand" aria-label="潮汐创作台">
+    <div className="brand" aria-label="芭乐AIGC">
       <span className="brand-mark"><Sparkles size={20} /></span>
-      <span>潮汐创作台</span>
+      <span>芭乐AIGC</span>
     </div>
   );
 }
@@ -89,8 +89,12 @@ function Brand() {
 export default function Home() {
   const router = useRouter();
   const [loginOpen, setLoginOpen] = useState(false);
-  const [mode, setMode] = useState<"phone" | "password">("phone");
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [agreed, setAgreed] = useState(true);
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     document.body.style.overflow = loginOpen ? "hidden" : "";
@@ -98,6 +102,31 @@ export default function Home() {
   }, [loginOpen]);
 
   const enterWorkspace = () => router.push("/workspace");
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
+  const submitAccount = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!agreed || submitting) return;
+    setSubmitting(true);
+    setAuthError("");
+    try {
+      const response = await fetch(`${basePath}/api/auth/${mode}/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier, password }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setAuthError(result.message || "登录失败，请稍后再试");
+        return;
+      }
+      enterWorkspace();
+    } catch {
+      setAuthError("网络连接失败，请稍后再试");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <main className="home-shell">
@@ -113,8 +142,8 @@ export default function Home() {
 
       <section className="hero-content">
         <div className="hero-badge"><Sparkles size={16} />商品视觉 · 营销视频 · 内容资产</div>
-        <h1>让商品视觉<br />跟上每一次上新</h1>
-        <p>从一张素材出发，快速完成主图、穿搭、场景与营销内容。</p>
+        <h1>好商品，<br />值得更好的画面</h1>
+        <p>芭乐AIGC 面向电商团队，从一张商品素材出发，快速生成主图、模特穿搭、场景图与营销内容。</p>
         <button className="hero-cta" onClick={() => setLoginOpen(true)}>
           开始创作<ArrowRight size={20} />
         </button>
@@ -143,8 +172,8 @@ export default function Home() {
       </section>
 
       <footer className="public-footer">
-        <span>© 2026 潮汐创作台</span>
-        <nav><a href="#">服务协议</a><a href="#">隐私政策</a><a href="#">内容规范</a></nav>
+        <span>© 2026 芭乐AIGC</span>
+        <nav><a href="mailto:bseazh@163.com">联系我们</a><a href="#">服务协议</a><a href="#">隐私政策</a></nav>
       </footer>
 
       <button className="support-button" aria-label="联系客服"><MessageCircle size={23} /></button>
@@ -154,22 +183,18 @@ export default function Home() {
           <section className="login-modal" role="dialog" aria-modal="true" aria-labelledby="login-title">
             <button className="icon-button modal-close" aria-label="关闭" onClick={() => setLoginOpen(false)}><X size={20} /></button>
             <Brand />
-            <div className="login-heading"><span><Sparkles size={18} /></span><h2 id="login-title">欢迎回来</h2><p>登录后继续你的创作任务</p></div>
+            <div className="login-heading"><span><Sparkles size={18} /></span><h2 id="login-title">{mode === "login" ? "欢迎回来" : "创建账户"}</h2><p>{mode === "login" ? "登录后继续你的创作任务" : "注册即赠送 100 积分"}</p></div>
             <div className="segmented" role="tablist">
-              <button className={mode === "phone" ? "active" : ""} onClick={() => setMode("phone")}>短信登录</button>
-              <button className={mode === "password" ? "active" : ""} onClick={() => setMode("password")}>账号密码</button>
+              <button className={mode === "login" ? "active" : ""} onClick={() => { setMode("login"); setAuthError(""); }}>登录</button>
+              <button className={mode === "register" ? "active" : ""} onClick={() => { setMode("register"); setAuthError(""); }}>注册</button>
             </div>
-            <form onSubmit={(event) => { event.preventDefault(); if (agreed) enterWorkspace(); }}>
-              <label>手机号<input inputMode="tel" placeholder="请输入手机号" /></label>
-              {mode === "phone" ? (
-                <label>短信验证码<span className="input-action"><input inputMode="numeric" placeholder="6 位验证码" /><button type="button">获取验证码</button></span></label>
-              ) : (
-                <label>密码<input type="password" placeholder="请输入密码" /></label>
-              )}
+            <form onSubmit={submitAccount}>
+              <label>手机号或邮箱<input value={identifier} onChange={(event) => setIdentifier(event.target.value)} autoComplete="username" placeholder="请输入手机号或邮箱" required /></label>
+              <label>密码<input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder="8-72 位密码" minLength={8} maxLength={72} required /></label>
               <label className="consent"><button type="button" className={agreed ? "checked" : ""} onClick={() => setAgreed(!agreed)} aria-label="同意协议">{agreed && <Check size={13} />}</button><span>我已阅读并同意《用户协议》和《隐私政策》</span></label>
-              <button className="submit-button" type="submit" disabled={!agreed}>登录并进入工作台<ArrowRight size={18} /></button>
+              {authError && <p className="auth-error" role="alert">{authError}</p>}
+              <button className="submit-button" type="submit" disabled={!agreed || submitting}>{submitting ? "处理中..." : mode === "login" ? "登录并进入工作台" : "注册并领取 100 积分"}<ArrowRight size={18} /></button>
             </form>
-            <button className="demo-link" onClick={enterWorkspace}>直接查看演示工作台</button>
           </section>
         </div>
       )}
