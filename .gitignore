@@ -11,3 +11,4 @@ out/
 .DS_Store
 deploy/*.local
 data/
+cos/

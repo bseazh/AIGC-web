@@ -23,6 +23,9 @@ if [[ -d public ]]; then
 fi
 
 sudo systemctl restart aigc-web
+if systemctl list-unit-files aigc-worker.service >/dev/null 2>&1; then
+  sudo systemctl restart aigc-worker
+fi
 
 for attempt in {1..20}; do
   if curl --fail --silent http://127.0.0.1:3010/api/health/ >/dev/null; then

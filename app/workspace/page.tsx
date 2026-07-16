@@ -23,7 +23,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const tools = [
-  { name: "商品主图", note: "生成电商首屏视觉", icon: ImageIcon, color: "blue" },
+  { name: "商品主图", note: "生成电商首屏视觉", icon: ImageIcon, color: "blue", href: "/create/product-hero" },
   { name: "模特穿搭", note: "服装自然上身展示", icon: Shirt, color: "violet" },
   { name: "场景延展", note: "匹配营销使用场景", icon: WandSparkles, color: "cyan" },
   { name: "详情页套图", note: "组织统一卖点表达", icon: Layers3, color: "orange" },
@@ -62,7 +62,7 @@ export default function Workspace() {
   return (
     <main className="workspace-shell">
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
-        <div className="workspace-brand"><span><Sparkles size={19} /></span><strong>芭乐AIGC</strong></div>
+        <div className="workspace-brand"><span><img src="/brand/bala-aigc-mark.png" alt="" /></span><strong>芭乐AIGC</strong></div>
         <nav>
           <a className="active"><Home size={19} />工作台</a>
           <a><Sparkles size={19} />创作工具</a>
@@ -90,7 +90,7 @@ export default function Workspace() {
 
           <section className="tool-grid" aria-label="创作工具">
             {tools.map((tool) => { const Icon = tool.icon; return (
-              <button className="tool-card" key={tool.name} disabled><span className={`tool-icon ${tool.color}`}><Icon size={22} /></span><span><strong>{tool.name}</strong><small>{tool.note}</small></span><ChevronRight size={18} />
+              <button className="tool-card" key={tool.name} disabled={!tool.href} onClick={() => tool.href && router.push(tool.href)}><span className={`tool-icon ${tool.color}`}><Icon size={22} /></span><span><strong>{tool.name}</strong><small>{tool.note}</small></span><ChevronRight size={18} />
               </button>
             ); })}
           </section>

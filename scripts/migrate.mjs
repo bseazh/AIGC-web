@@ -65,6 +65,9 @@ try {
 
     CREATE INDEX IF NOT EXISTS generation_tasks_user_created_idx ON generation_tasks (user_id, created_at DESC);
 
+    ALTER TABLE generation_tasks ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS generation_tasks_idempotency_unique ON generation_tasks (idempotency_key) WHERE idempotency_key IS NOT NULL;
+
     CREATE TABLE IF NOT EXISTS assets (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       owner_id UUID NOT NULL REFERENCES users(id),
@@ -73,8 +76,13 @@ try {
       mime_type TEXT NOT NULL,
       byte_size BIGINT NOT NULL CHECK (byte_size >= 0 AND byte_size <= 10485760),
       audit_status TEXT NOT NULL DEFAULT 'PENDING',
+      original_name TEXT,
+      metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    ALTER TABLE assets ADD COLUMN IF NOT EXISTS original_name TEXT;
+    ALTER TABLE assets ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb;
   `);
   await client.query("COMMIT");
   console.log("Database migrations completed");

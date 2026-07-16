@@ -80,7 +80,7 @@ const features = [
 function Brand() {
   return (
     <div className="brand" aria-label="芭乐AIGC">
-      <span className="brand-mark"><Sparkles size={20} /></span>
+      <span className="brand-mark"><img src="/brand/bala-aigc-mark.png" alt="" /></span>
       <span>芭乐AIGC</span>
     </div>
   );

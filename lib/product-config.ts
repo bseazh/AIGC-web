@@ -1,8 +1,8 @@
 export const heroImageWorkflow = {
   key: "product-hero-image",
   name: "商品主图",
-  enabled: false,
-  disabledReason: "AI_PROVIDER_NOT_CONFIGURED",
+  enabled: Boolean(process.env.AI_API_KEY && process.env.COS_SECRET_ID),
+  disabledReason: process.env.AI_API_KEY && process.env.COS_SECRET_ID ? null : "PROVIDER_NOT_CONFIGURED",
   pointsPerTask: Number(process.env.HERO_IMAGE_TASK_POINTS || 10),
   outputsPerTask: 4,
   acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
