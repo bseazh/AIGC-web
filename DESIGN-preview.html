@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>赢海式电商 AIGC 创作平台 Preview</title>
+    <meta name="color-scheme" content="light" />
+    <style>
+      :root {
+        --page-bg: #F4F6F6;
+        --page-bg-muted: rgb(250, 251, 251);
+        --surface-bg: #FFFFFF;
+        --surface-bg-muted: rgb(250, 251, 251);
+        --surface-border: #D8E3F7;
+        --surface-border-strong: rgb(215, 218, 219);
+        --surface-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 2px rgba(0, 0, 0, 0.04), 0 8px 8px -8px rgba(0, 0, 0, 0.04);
+        --surface-shadow-soft: 0 0 0 1px #D8E3F7;
+        --ink: #252B35;
+        --muted: #69778D;
+        --subtle: rgb(149, 153, 157);
+        --accent: #1478FF;
+        --font-body: "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+        --font-display: "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+        --font-mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, monospace;
+        --body-size: 14px;
+        --body-line: 24px;
+        --body-weight: 400;
+        --label-size: 12px;
+        --label-line: 16px;
+        --label-track: 2.64px;
+        --title-size: 24px;
+        --title-line: 32px;
+        --title-track: -0.03em;
+        --section-size: 20px;
+        --section-line: 32px;
+        --section-track: -0.02em;
+        --source-size: 13px;
+        --source-line: 24px;
+        --space-1: 4px;
+        --space-2: 6px;
+        --space-3: 8px;
+        --space-4: 12px;
+        --space-5: 16px;
+        --space-6: 20px;
+        --radius-panel: 12;
+        --radius-card: 12;
+        --radius-micro: 4px;
+        --radius-pill: 9999px;
+        --button-height: 40px;
+        --button-font-size: 12px;
+        --button-weight: 500;
+        --button-radius: 9999px;
+        --secondary-button-radius: 9999px;
+        --layout-gap: 12px;
+        --page-padding: 12px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        color: var(--ink);
+        font-family: var(--font-body);
+        font-size: var(--body-size);
+        font-weight: var(--body-weight);
+        line-height: var(--body-line);
+        background:
+          radial-gradient(circle at top, color-mix(in srgb, var(--accent) 8%, transparent), transparent 30%),
+          linear-gradient(180deg, var(--page-bg) 0%, var(--page-bg-muted) 100%);
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        background-image:
+          linear-gradient(color-mix(in srgb, var(--surface-border) 56%, transparent) 1px, transparent 1px),
+          linear-gradient(90deg, color-mix(in srgb, var(--surface-border) 56%, transparent) 1px, transparent 1px);
+        background-size: 100% calc(24px), calc(24px) 100%;
+        mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.3), transparent 88%);
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      button {
+        font: inherit;
+      }
+
+      .shell {
+        width: min(1440px, calc(100vw - (var(--page-padding) * 2)));
+        margin: 0 auto;
+        padding: var(--page-padding) 0 calc(var(--page-padding) * 1.2);
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(340px, 0.92fr) minmax(420px, 1fr);
+        gap: var(--layout-gap);
+        align-items: start;
+      }
+
+      .stack {
+        display: grid;
+        gap: var(--space-4);
+      }
+
+      .panel {
+        overflow: hidden;
+        border: 1px solid var(--surface-border);
+        border-radius: var(--radius-panel);
+        background: linear-gradient(180deg, color-mix(in srgb, var(--surface-bg) 88%, white) 0%, var(--surface-bg) 100%);
+        box-shadow: var(--surface-shadow);
+      }
+
+      .panel-inner {
+        padding: var(--space-4);
+      }
+
+      .hero-card {
+        position: relative;
+      }
+
+      .hero-card::before {
+        content: "";
+        position: absolute;
+        left: var(--space-4);
+        right: var(--space-4);
+        top: 0;
+        height: 3px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #1478FF 0%, #20C8FF 33%, #24D6C8 67%, #7357FF 100%);
+      }
+
+      .eyebrow {
+        margin-bottom: var(--space-2);
+        color: var(--muted);
+        font-size: var(--label-size);
+        line-height: var(--label-line);
+        letter-spacing: var(--label-track);
+        text-transform: uppercase;
+      }
+
+      .site-title,
+      .section-title {
+        margin: 0;
+        color: var(--ink);
+        font-family: var(--font-display);
+        font-weight: 600;
+      }
+
+      .site-title {
+        font-size: var(--title-size);
+        line-height: var(--title-line);
+        letter-spacing: var(--title-track);
+      }
+
+      .descriptor {
+        margin: var(--space-2) 0 0;
+        max-width: 42ch;
+        color: var(--muted);
+        font-size: var(--body-size);
+        line-height: var(--body-line);
+      }
+
+      .summary {
+        margin: var(--space-3) 0 0;
+        max-width: 56ch;
+        color: var(--muted);
+        font-size: var(--body-size);
+        line-height: var(--body-line);
+      }
+
+      .chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+        margin: var(--space-3) 0 0;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        min-height: calc(4px * 3);
+        padding: 0 var(--space-2);
+        border: 1px solid var(--surface-border);
+        border-radius: var(--radius-pill);
+        background: var(--surface-bg);
+        color: var(--ink);
+        font-size: var(--label-size);
+        line-height: var(--label-line);
+        box-shadow: var(--surface-shadow-soft);
+      }
+
+      .observed-link {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+        margin-top: var(--space-4);
+        padding-top: var(--space-3);
+        border-top: 1px solid var(--surface-border);
+        color: var(--muted);
+        font-size: var(--label-size);
+        overflow-wrap: anywhere;
+      }
+
+      .observed-link::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--accent);
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent);
+      }
+
+      .section-title {
+        font-size: var(--section-size);
+        line-height: var(--section-line);
+        letter-spacing: var(--section-track);
+      }
+
+      .section-subtitle {
+        margin: var(--space-2) 0 var(--space-4);
+        color: var(--muted);
+        font-size: var(--body-size);
+        line-height: var(--body-line);
+      }
+
+      .palette-grid,
+      .theme-mode-grid,
+      .type-list,
+      .component-card,
+      .prompt-list,
+      .mini-grid,
+      .token-table {
+        display: grid;
+        gap: var(--space-2);
+      }
+
+      .palette-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--space-2);
+      }
+
+      .palette-row.neutral-row {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .theme-mode-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-3);
+      }
+
+      .theme-mode-card {
+        display: grid;
+        gap: var(--space-2);
+        padding: var(--space-3);
+        border: 1px solid var(--surface-border);
+        border-radius: var(--radius-card);
+        background: color-mix(in srgb, var(--surface-bg) 92%, white);
+      }
+
+      .theme-mode-card.is-dark {
+        background: #111111;
+        color: #f4f4f4;
+        border-color: rgba(255, 255, 255, 0.12);
+      }
+
+      .theme-mode-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+      }
+
+      .theme-mode-label {
+        color: var(--subtle);
+        font-size: var(--label-size);
+        line-height: var(--label-line);
+        letter-spacing: var(--label-track);
+        text-transform: uppercase;
+      }
+
+      .theme-mode-card.is-dark .theme-mode-label {
+        color: rgba(255, 255, 255, 0.7);
+      }
+
+      .theme-mode-note {
+        margin: 0;
+        color: var(--muted);
+        font-size: calc(var(--body-size) - 1px);
+        line-height: calc(var(--body-line) - 4px);
+      }
+
+      .theme-mode-card.is-dark .theme-mode-note {
+        color: rgba(255, 255, 255, 0.82);
+      }
+
+      .theme-swatch-row {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: var(--space-2);
+      }
+
+      .theme-swatch {
+        display: grid;
+        gap: 6px;
+      }
+
+      .theme-swatch-box {
+        height: 72px;
+        border-radius: calc(var(--radius-card) - 4px);
+        border: 1px solid color-mix(in srgb, var(--surface-border-strong) 75%, transparent);
+      }
+
+      .theme-mode-card.is-dark .theme-swatch-box {
+        border-color: rgba(255, 255, 255, 0.14);
+      }
+
+      .theme-swatch-name {
+        color: inherit;
+        font-size: 12px;
+        line-height: 1.3;
+      }
+
+      .theme-swatch-value {
+        color: var(--subtle);
+        font-size: 11px;
+        line-height: 1.3;
+      }
+
+      .theme-mode-card.is-dark .theme-swatch-value {
+        color: rgba(255, 255, 255, 0.62);
+      }
+
+      .swatch {
+        display: grid;
+        gap: var(--space-2);
+      }
+
+      .swatch-box {
+        min-height: calc(4px * 12);
+        border-radius: var(--radius-card);
+        border: 1px solid color-mix(in srgb, var(--surface-border-strong) 75%, transparent);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 4%, transparent);
+      }
+
+      .swatch-label,
+      .token-heading,
+      .prompt-card strong,
+      .card-preview h4 {
+        color: var(--ink);
+        font-family: var(--font-display);
+        font-size: var(--body-size);
+        line-height: var(--body-line);
+        font-weight: 600;
+      }
+
+      .swatch-meta,
+      .type-metrics,
+      .mini-label,
+      .copy-state,
+      .file-tab,
+      .ghost-button,
+      .segmented button {
+        color: var(--muted);
+        font-size: var(--label-size);
+        line-height: var(--label-line);
+      }
+
+      .type-row {
+        display: grid;
+        grid-template-columns: 72px minmax(0, 1fr) auto;
+        gap: var(--space-2);
+        align-items: baseline;
+        padding: var(--space-2) 0;
+        border-top: 1px solid var(--surface-border);
+      }
+
+      .type-row:first-child,
+      .mini-row:first-child,
+      .token-row:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+
+      .type-role {
+        color: var(--muted);
+        font-size: var(--label-size);
+        line-height: var(--label-line);
+        letter-spacing: var(--label-track);
+        text-transform: uppercase;
+      }
+
+      .type-sample {
+        color: var(--ink);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .split-card {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-4);
+      }
+
+      .token-row,
+      .mini-row {
+        display: grid;
+        gap: var(--space-2);
+        align-items: start;
+        padding-top: var(--space-2);
+        border-top: 1px solid var(--surface-border);
+      }
+
+      .token-row {
+        grid-template-columns: 1fr auto;
+      }
+
+      .mini-row {
+        grid-template-columns: 88px minmax(0, 1fr);
+      }
+
+      .mini-content,
+      .prompt-card p,
+      .card-preview p {
+        color: var(--muted);
+        font-size: var(--body-size);
+        line-height: var(--body-line);
+      }
+
+      .radius-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-2);
+      }
+
+      .radius-card,
+      .prompt-card {
+        padding: var(--space-3);
+        border: 1px solid var(--surface-border);
+        border-radius: var(--radius-card);
+        background: var(--surface-bg-muted);
+        box-shadow: var(--surface-shadow-soft);
+      }
+
+      .radius-demo {
+        aspect-ratio: 1;
+        width: 100%;
+        border: 1px solid var(--surface-border-strong);
+        background: var(--surface-bg);
+      }
+
+      .radius-name {
+        margin-top: var(--space-2);
+        color: var(--ink);
+        font-size: var(--body-size);
+        line-height: var(--body-line);
+        font-weight: 600;
+      }
+
+      .radius-value {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: var(--label-size);
+      }
+
+      .button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+      }
+
+      .cta {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: var(--button-height);
+        padding: 0 var(--space-3);
+        border-radius: var(--button-radius);
+        font-family: var(--font-body);
+        font-size: var(--button-font-size);
+        font-weight: var(--button-weight);
+        line-height: 1;
+        letter-spacing: normal;
+      }
+
+      .cta-primary {
+        border: 1px solid transparent;
+        background: #171717;
+        color: #ffffff;
+        border-radius: 9999px;
+      }
+
+      .cta-secondary {
+        border: 1px solid #171717;
+        background: #ffffff;
+        color: #171717;
+        border-radius: 9999px;
+        box-shadow: var(--surface-shadow-soft);
+      }
+
+      .card-preview {
+        padding: 8px;
+        border-radius: 12;
+        border: 1px solid color-mix(in srgb, var(--surface-border-strong) 72%, transparent);
+        background: var(--surface-bg);
+        color: var(--ink);
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 2px rgba(0, 0, 0, 0.04), 0 8px 8px -8px rgba(0, 0, 0, 0.04);
+      }
+
+      .card-preview h4 {
+        margin: 0 0 var(--space-1);
+      }
+
+      .source-shell {
+        position: sticky;
+        top: var(--page-padding);
+      }
+
+      .source-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+        padding: var(--space-3) var(--space-4) var(--space-2);
+        border-bottom: 1px solid var(--surface-border);
+      }
+
+      .file-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px var(--space-3);
+      }
+
+      .file-tab {
+        padding: 0 0 var(--space-2);
+        border-bottom: 2px solid transparent;
+      }
+
+      .file-tab.active {
+        color: var(--ink);
+        border-bottom-color: var(--ink);
+        font-weight: 600;
+      }
+
+      .source-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--space-2);
+        padding: var(--space-2) var(--space-4);
+        border-bottom: 1px solid var(--surface-border);
+      }
+
+      .segmented {
+        display: inline-flex;
+        padding: 3px;
+        border: 1px solid var(--surface-border);
+        border-radius: var(--radius-pill);
+        background: var(--surface-bg-muted);
+      }
+
+      .segmented button {
+        border: 0;
+        border-radius: var(--radius-pill);
+        background: transparent;
+        padding: 6px 12px;
+        cursor: pointer;
+      }
+
+      .segmented button.is-active {
+        background: var(--surface-bg);
+        color: var(--ink);
+        box-shadow: var(--surface-shadow-soft);
+      }
+
+      .toolbar-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+        margin-left: auto;
+      }
+
+      .ghost-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        border: 1px solid var(--surface-border);
+        border-radius: 4px;
+        background: var(--surface-bg);
+        box-shadow: var(--surface-shadow-soft);
+        cursor: pointer;
+      }
+
+      .source-body {
+        max-height: calc(100vh - (var(--page-padding) * 2) - 120px);
+        overflow: auto;
+      }
+
+      .source-view,
+      .rendered-view {
+        margin: 0;
+        padding: var(--space-4);
+      }
+
+      .source-view {
+        color: var(--ink);
+        font-family: var(--font-mono);
+        font-size: var(--source-size);
+        line-height: var(--source-line);
+        white-space: pre-wrap;
+        word-break: break-word;
+        background: var(--surface-bg);
+      }
+
+      .rendered-view {
+        color: var(--ink);
+        font-family: var(--font-body);
+        font-size: var(--body-size);
+        line-height: var(--body-line);
+        background: var(--surface-bg);
+      }
+
+      .rendered-view[hidden],
+      .source-view[hidden] {
+        display: none;
+      }
+
+      .rendered-view h2,
+      .rendered-view h3 {
+        margin: var(--space-4) 0 var(--space-2);
+        color: var(--ink);
+        font-family: var(--font-display);
+        font-weight: 600;
+      }
+
+      .rendered-view h2 {
+        font-size: var(--section-size);
+        line-height: var(--section-line);
+        letter-spacing: var(--section-track);
+      }
+
+      .rendered-view h2:first-child {
+        margin-top: 0;
+      }
+
+      .rendered-view h3 {
+        color: var(--muted);
+        font-size: calc(24px - 4px);
+        line-height: calc(32px - 4px);
+      }
+
+      .rendered-view p,
+      .rendered-view li {
+        color: var(--muted);
+      }
+
+      .rendered-view ul,
+      .rendered-view ol {
+        margin: 0 0 var(--space-3) 20px;
+        padding: 0;
+      }
+
+      .rendered-view table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: var(--space-2) 0 var(--space-4);
+      }
+
+      .rendered-view th,
+      .rendered-view td {
+        padding: var(--space-2) var(--space-2);
+        border: 1px solid var(--surface-border);
+        text-align: left;
+        vertical-align: top;
+        font-size: var(--label-size);
+        line-height: var(--label-line);
+      }
+
+      .rendered-view th {
+        color: var(--ink);
+        background: var(--surface-bg-muted);
+      }
+
+      .rendered-view code {
+        padding: 0.14em 0.4em;
+        border-radius: 4px;
+        background: var(--surface-bg-muted);
+        color: var(--ink);
+        font-family: var(--font-mono);
+        font-size: 0.92em;
+      }
+
+      @media (max-width: 1120px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+
+        .source-shell {
+          position: relative;
+          top: 0;
+        }
+
+        .source-body {
+          max-height: none;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .shell {
+          width: min(100vw - (6px * 2), 100%);
+          padding-top: 6px;
+        }
+
+        .panel-inner,
+        .source-view,
+        .rendered-view {
+          padding-left: var(--space-3);
+          padding-right: var(--space-3);
+        }
+
+        .palette-row,
+        .palette-row.neutral-row,
+        .theme-mode-grid,
+        .theme-swatch-row,
+        .split-card,
+        .radius-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .type-row,
+        .mini-row {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <div class="layout">
+        <section class="stack">
+          <article class="panel hero-card">
+            <div class="panel-inner">
+              <div class="eyebrow">Design Preview</div>
+              <h1 class="site-title">赢海式电商 AIGC 创作平台</h1>
+              <p class="descriptor">这是一个“媒体先行、工具后置”的电商 AIGC 门户。首屏以全屏商品视频承担情绪和能力展示，界面层只保留白色品牌字、半透明玻璃控件和一条持续移动的创作入口。视觉密度集中在下半屏卡片带，...</p>
+              <div class="chip-row"><span class="chip">全屏视频/图片是真正的背景和首要视觉资产，深色遮罩保证前景文字可...</span><span class="chip">透明白玻璃控件叠在媒体上；登录后工具界面转为浅色蓝灰表面和高饱和...</span><span class="chip">创作能力用大幅媒体卡表达，信息覆盖在图片上，不使用纯图标功能宫格...</span><span class="chip">交互运动短促：按钮轻微上浮，卡片图片放大；入口跑马灯以 46 秒...</span><span class="chip">中文文案直接描述任务与产物，避免抽象 AI 术语堆砌。</span></div>
+              <p class="summary">这是一个“媒体先行、工具后置”的电商 AIGC 门户。首屏以全屏商品视频承担情绪和能力展示，界面层只保留白色品牌字、半透明玻璃控件和一条持续移动的创作入口。视觉密度集中在下半屏卡片带，上半屏保持极简且居中，让用户先看见结果质感，再选择工具。品牌姿态偏专业、克制和商业化，不使用娱乐化 AI 插画或复杂营销长页。</p>
+              <a class="observed-link" href="https://yinghai.xin/" target="_blank" rel="noreferrer">https://yinghai.xin/</a>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-inner">
+              <h2 class="section-title">Palette</h2>
+              <p class="section-subtitle">Roles and neutrals rendered using the extracted design system rather than a separate display theme.</p>
+              <div class="palette-grid"><div class="palette-row"><div class="swatch">
+    <div class="swatch-box" style="background:#1478FF;"></div>
+    <div class="swatch-label">Electric Blue</div>
+    <div class="swatch-meta">
+      <span>#1478FF</span>
+      <span>Primary action</span>
+    </div>
+  </div><div class="swatch">
+    <div class="swatch-box" style="background:#20C8FF;"></div>
+    <div class="swatch-label">Cyan</div>
+    <div class="swatch-meta">
+      <span>#20C8FF</span>
+      <span>Secondary accent</span>
+    </div>
+  </div><div class="swatch">
+    <div class="swatch-box" style="background:#24D6C8;"></div>
+    <div class="swatch-label">Aqua</div>
+    <div class="swatch-meta">
+      <span>#24D6C8</span>
+      <span>Supporting accent</span>
+    </div>
+  </div></div><div class="palette-row neutral-row"><div class="swatch">
+    <div class="swatch-box" style="background:#7357FF;"></div>
+    <div class="swatch-label">Violet</div>
+    <div class="swatch-meta">
+      <span>#7357FF</span>
+      <span>Premium accent</span>
+    </div>
+  </div><div class="swatch">
+    <div class="swatch-box" style="background:#FF9D27;"></div>
+    <div class="swatch-label">Clay Orange</div>
+    <div class="swatch-meta">
+      <span>#FF9D27</span>
+      <span>Warm signal</span>
+    </div>
+  </div><div class="swatch">
+    <div class="swatch-box" style="background:#FF4E67;"></div>
+    <div class="swatch-label">Rose</div>
+    <div class="swatch-meta">
+      <span>#FF4E67</span>
+      <span>Destructive</span>
+    </div>
+  </div><div class="swatch">
+    <div class="swatch-box" style="background:#F4F6F6;"></div>
+    <div class="swatch-label">Cool Fog</div>
+    <div class="swatch-meta">
+      <span>#F4F6F6</span>
+      <span>App background</span>
+    </div>
+  </div></div></div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-inner">
+              <h2 class="section-title">Theme Modes</h2>
+              <p class="section-subtitle">If the product supports light and dark themes, both modes should stay visible in the exported design system and preview.</p>
+              <div class="prompt-card"><strong>Single mode detected</strong><p>No explicit <code>Theme Modes</code> section was detected in the markdown. If the product supports both light and dark themes, document both so the preview can render them side by side.</p></div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-inner">
+              <h2 class="section-title">Typography</h2>
+              <p class="section-subtitle">The preview shell itself now uses the extracted typography stack, sizes, line heights, and tracking.</p>
+              <div class="type-list"><div class="type-row">
+        <div class="type-role">Hero headline</div>
+        <div
+          class="type-sample"
+          style="font-size:48px; line-height:48px; font-weight:700; letter-spacing:normal; font-family:&quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Arial, sans-serif;"
+        >
+          The quick brown fox jumps
+        </div>
+        <div class="type-metrics">clamp(48px, 8vw, 120px) • 700 • 1.0</div>
+      </div><div class="type-row">
+        <div class="type-role">Hero subtitle</div>
+        <div
+          class="type-sample"
+          style="font-size:16px; line-height:32px; font-weight:500; letter-spacing:normal; font-family:&quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Arial, sans-serif;"
+        >
+          The quick brown fox jumps
+        </div>
+        <div class="type-metrics">16px mobile / 24px desktop • 500 • 32px</div>
+      </div><div class="type-row">
+        <div class="type-role">Section heading</div>
+        <div
+          class="type-sample"
+          style="font-size:18px; line-height:28px; font-weight:600; letter-spacing:normal; font-family:&quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Arial, sans-serif;"
+        >
+          The quick brown fox jumps
+        </div>
+        <div class="type-metrics">18px mobile / 24px desktop • 600 • 28/32px</div>
+      </div><div class="type-row">
+        <div class="type-role">Card title</div>
+        <div
+          class="type-sample"
+          style="font-size:20px; line-height:28px; font-weight:700; letter-spacing:normal; font-family:&quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Arial, sans-serif;"
+        >
+          The quick brown fox jumps
+        </div>
+        <div class="type-metrics">20px • 700 • 28px</div>
+      </div><div class="type-row">
+        <div class="type-role">Body</div>
+        <div
+          class="type-sample"
+          style="font-size:14px; line-height:24px; font-weight:400; letter-spacing:normal; font-family:&quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Arial, sans-serif;"
+        >
+          The quick brown fox jumps
+        </div>
+        <div class="type-metrics">14-16px • 400 • 24px</div>
+      </div><div class="type-row">
+        <div class="type-role">Label / Eyebrow</div>
+        <div
+          class="type-sample"
+          style="font-size:12px; line-height:16px; font-weight:600; letter-spacing:2.64px; font-family:&quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Arial, sans-serif;"
+        >
+          The quick brown fox jumps
+        </div>
+        <div class="type-metrics">12px • 600 • 16px</div>
+      </div><div class="type-row">
+        <div class="type-role">Control</div>
+        <div
+          class="type-sample"
+          style="font-size:14px; line-height:20px; font-weight:500; letter-spacing:normal; font-family:&quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Arial, sans-serif;"
+        >
+          The quick brown fox jumps
+        </div>
+        <div class="type-metrics">14-18px • 500-600 • 20-28px</div>
+      </div><div class="type-row">
+        <div class="type-role">Caption / Meta</div>
+        <div
+          class="type-sample"
+          style="font-size:12px; line-height:17px; font-weight:400; letter-spacing:normal; font-family:&quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Arial, sans-serif;"
+        >
+          The quick brown fox jumps
+        </div>
+        <div class="type-metrics">12px • 400-600 • 17-20px</div>
+      </div></div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-inner">
+              <h2 class="section-title">Spacing &amp; Shape</h2>
+              <p class="section-subtitle">Spacing, panel padding, and radius tokens are mapped directly from the layout rules in the markdown.</p>
+              <div class="split-card">
+    <div>
+      <h3 class="token-heading">Spacing</h3>
+      <div class="token-table"><div class="token-row">
+        <span>Base unit</span>
+        <span>4px</span>
+      </div><div class="token-row">
+        <span>Step 2</span>
+        <span>6px</span>
+      </div><div class="token-row">
+        <span>Step 3</span>
+        <span>8px</span>
+      </div><div class="token-row">
+        <span>Step 4</span>
+        <span>12px</span>
+      </div><div class="token-row">
+        <span>Step 5</span>
+        <span>16px</span>
+      </div></div>
+    </div>
+    <div>
+      <h3 class="token-heading">Border Radius</h3>
+      <div class="radius-grid"><div class="radius-card">
+        <div class="radius-demo" style="border-radius:4px;"></div>
+        <div class="radius-name">Micro utility</div>
+        <div class="radius-value">4px</div>
+      </div><div class="radius-card">
+        <div class="radius-demo" style="border-radius:12;"></div>
+        <div class="radius-name">Standard module</div>
+        <div class="radius-value">12</div>
+      </div><div class="radius-card">
+        <div class="radius-demo" style="border-radius:9999px;"></div>
+        <div class="radius-name">Category rail</div>
+        <div class="radius-value">9999px</div>
+      </div><div class="radius-card">
+        <div class="radius-demo" style="border-radius:9999px;"></div>
+        <div class="radius-name">CTA pill</div>
+        <div class="radius-value">9999px</div>
+      </div></div>
+    </div>
+  </div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-inner">
+              <h2 class="section-title">Components</h2>
+              <p class="section-subtitle">Buttons and cards use the documented height, weight, radius, colors, and surface treatment.</p>
+              <div class="component-card">
+    <div class="button-row">
+      <span class="cta cta-primary">Start Deploying</span>
+      <span class="cta cta-secondary">Get a Demo</span>
+    </div>
+    <div class="card-preview">
+      <h4>System Card Preview</h4>
+      <p>White framed module with restrained shadow and precise spacing.</p>
+    </div>
+  </div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-inner">
+              <h2 class="section-title">System Notes</h2>
+              <p class="section-subtitle">Responsive behavior and depth rules stay visible while keeping the overall proportions calm and readable.</p>
+              <div class="split-card">
+    <div>
+      <h3 class="token-heading">Breakpoints</h3>
+      <div class="mini-grid"><div class="mini-row">
+            <div class="mini-label">Mobile</div>
+            <div class="mini-content"><strong>&lt; 640px</strong><br />左右 16px；Hero 48px；卡宽 260px；页脚换为 84px；弹窗宽约 100vw - 16px</div>
+          </div><div class="mini-row">
+            <div class="mini-label">Tablet</div>
+            <div class="mini-content"><strong>640-1279px</strong><br />边距升至 32px；卡宽 320px；副标题升至 24px</div>
+          </div><div class="mini-row">
+            <div class="mini-label">Desktop</div>
+            <div class="mini-content"><strong>&gt;= 1280px</strong><br />边距 40px；卡宽 360-430px；Hero 由 8vw 控制，上限 120px</div>
+          </div></div>
+    </div>
+    <div>
+      <h3 class="token-heading">Elevation</h3>
+      <div class="mini-grid"><div class="mini-row">
+            <div class="mini-label">Flat</div>
+            <div class="mini-content"><strong>无阴影，透明背景</strong><br />页头、正文和页脚链接</div>
+          </div><div class="mini-row">
+            <div class="mini-label">Ring</div>
+            <div class="mini-content"><strong>1px 半透明白/蓝边框</strong><br />输入、badge、玻璃按钮</div>
+          </div><div class="mini-row">
+            <div class="mini-label">Card</div>
+            <div class="mini-content"><strong>16-44px 软阴影，低 alpha</strong><br />功能入口、登录后内容表面</div>
+          </div><div class="mini-row">
+            <div class="mini-label">Modal</div>
+            <div class="mini-content"><strong>28px 76px 黑色 46% 阴影</strong><br />登录和关键流程弹窗</div>
+          </div></div>
+    </div>
+  </div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-inner">
+              <h2 class="section-title">Prompt Guide</h2>
+              <p class="section-subtitle">Prompt snippets are shown in the same typography and spacing language as the extracted design system.</p>
+              <div class="prompt-list"><div class="prompt-card"><strong>Quick Summary</strong><p>构建一个面向电商经营者的 AIGC 创作平台。公开首页是一屏全幅真实商品视频，透明页头、居中品牌标题、单一玻璃 CTA，以及底部自动横移的媒体功能卡。登录后的工作界面切换为浅蓝灰背景、白色半透明表面和蓝青渐变动作色。字体使用中文系统无衬线，字距为 0；圆角从 10px 输入到 24px 卡片，主按钮为全圆角。交互只做轻微上浮、图片缩放和克制软阴影。</p></div><div class="prompt-card">
+            <strong>Hero</strong>
+            <p>“创建一屏高的电商 AIGC Hero，以真实商品生成视频全幅铺底，叠加深色可读性遮罩；中间放 48-120px 白色品牌名、两行内价值描述和 56px 高玻璃 CTA，首屏底部必须露出创作入口。”</p>
+          </div><div class="prompt-card">
+            <strong>Card</strong>
+            <p>“创建 260-430px 宽、198px 高的媒体入口卡，24px 圆角，图片 cover；上方是玻璃类别 badge 与图标，下方是白色标题、两行描述和箭头动作，使用底部与左侧双暗化遮罩。”</p>
+          </div><div class="prompt-card">
+            <strong>Navigation</strong>
+            <p>“创建 64px 透明绝对定位页头，左侧 36px 品牌图和站名，右侧仅一个图标+登录按钮；移动端保持同一结构，不添加汉堡菜单。”</p>
+          </div><div class="prompt-card">
+            <strong>Login</strong>
+            <p>“创建 430px 深灰蓝登录弹窗，24px 圆角，包含品牌、两段登录方式、输入与验证码、三条合规确认和全宽提交按钮；控件使用白色低透明表面与灰绿焦点环。”</p>
+          </div><div class="prompt-card"><strong>Ready-to-Use Prompt</strong><p>以本 DESIGN.md 为唯一视觉规则，设计一个原创的电商 AIGC 创作平台。保留媒体先行、一屏 Hero、横向创作入口、深色登录弹窗和浅色工具工作台的设计语言，但使用全新的品牌、文案与已授权媒体。实现 desktop/tablet/mobile 响应式、键盘焦点、reduced-motion、入口跑马灯暂停，以及完整的登录、任务状态和资产操作状态。不得下载或复用原站 OSS 素材。</p></div></div>
+              <div class="split-card" style="margin-top:var(--space-4);">
+    <div>
+      <h3 class="token-heading">Do</h3>
+      <div class="mini-grid"><div class="mini-row"><div class="mini-label">Do</div><div class="mini-content">用真实生成结果作为首屏和入口卡主视觉。</div></div><div class="mini-row"><div class="mini-label">Do</div><div class="mini-content">让创作入口直接对应用户任务：商品主图、模特穿搭、详情页、带货视频。</div></div><div class="mini-row"><div class="mini-label">Do</div><div class="mini-content">保持图标、颜色和文案的动作语义一致。</div></div><div class="mini-row"><div class="mini-label">Do</div><div class="mini-content">为跑马灯提供 hover/focus 暂停和 reduced-motion 降级。</div></div></div>
+    </div>
+    <div>
+      <h3 class="token-heading">Don't</h3>
+      <div class="mini-grid"><div class="mini-row"><div class="mini-label">Don't</div><div class="mini-content">不复制“赢海”名称、Logo、OSS 媒体、案例或原站文案作为新产品资产。</div></div><div class="mini-row"><div class="mini-label">Don't</div><div class="mini-content">不把首页扩成堆叠卡片的通用 SaaS 营销长页。</div></div><div class="mini-row"><div class="mini-label">Don't</div><div class="mini-content">不在 Hero 上叠放白色实心大卡，也不使用抽象渐变图替代真实商品结果。</div></div><div class="mini-row"><div class="mini-label">Don't</div><div class="mini-content">不为中文标题使用负字距或随视口线性缩放正文。</div></div></div>
+    </div>
+  </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="source-shell">
+          <article class="panel">
+            <div class="source-header">
+              <div class="file-tabs">
+                <span class="file-tab">design-system.md</span>
+                <span class="file-tab active">DESIGN.md</span>
+                <span class="file-tab">Design JSON</span>
+                <span class="file-tab">CSS Variables</span>
+                <span class="file-tab">Design Tokens</span>
+              </div>
+            </div>
+            <div class="source-toolbar">
+              <div class="segmented" role="tablist" aria-label="View Switcher">
+                <button class="is-active" data-view="source" type="button">Source</button>
+                <button data-view="preview" type="button">Preview</button>
+              </div>
+              <div class="toolbar-actions">
+                <button class="ghost-button" id="copyButton" type="button">Copy</button>
+                <a class="ghost-button" href="DESIGN.md" download>Open .md</a>
+                <span class="copy-state" id="copyState"></span>
+              </div>
+            </div>
+            <div class="source-body">
+              <pre class="source-view" id="sourceView"># Design System: 赢海式电商 AIGC 创作平台
+
+&gt; 目标：记录 `https://yinghai.xin/` 公开首页与登录弹窗所呈现的设计语言，供创建同类产品时参考。本文不授权复制原站品牌、商标、媒体素材或未公开页面。所有“观察”来自 2026-07-16 的浏览器渲染结果；登录后的应用壳部分仅在公开样式表中可见，相关结论会明确标为推断。
+
+## 1. Visual Theme &amp; Atmosphere
+
+这是一个“媒体先行、工具后置”的电商 AIGC 门户。首屏以全屏商品视频承担情绪和能力展示，界面层只保留白色品牌字、半透明玻璃控件和一条持续移动的创作入口。视觉密度集中在下半屏卡片带，上半屏保持极简且居中，让用户先看见结果质感，再选择工具。品牌姿态偏专业、克制和商业化，不使用娱乐化 AI 插画或复杂营销长页。
+
+### Key Characteristics
+
+- 全屏视频/图片是真正的背景和首要视觉资产，深色遮罩保证前景文字可读。
+- 透明白玻璃控件叠在媒体上；登录后工具界面转为浅色蓝灰表面和高饱和蓝青操作色。
+- 创作能力用大幅媒体卡表达，信息覆盖在图片上，不使用纯图标功能宫格。
+- 交互运动短促：按钮轻微上浮，卡片图片放大；入口跑马灯以 46 秒匀速循环。
+- 中文文案直接描述任务与产物，避免抽象 AI 术语堆砌。
+
+## 2. Color Palette &amp; Roles
+
+| Role | Semantic Name | Value | Usage |
+| --- | --- | --- | --- |
+| Primary action | Electric Blue | `#1478FF` | 登录后主要操作、焦点、保存与查看 |
+| Secondary accent | Cyan | `#20C8FF` | 蓝青渐变中段、下载、成功反馈 |
+| Supporting accent | Aqua | `#24D6C8` | 蓝青渐变尾部、成功和服务入口 |
+| Premium accent | Violet | `#7357FF` | 付费、账户操作和特殊工具 |
+| Warm signal | Clay Orange | `#FF9D27` | 重试、提示与警示性动作 |
+| Destructive | Rose | `#FF4E67` | 删除、危险和错误动作 |
+| App background | Cool Fog | `#F4F6F6` | 登录后页面主背景 |
+| App surface | Porcelain | `#FFFFFF` | 卡片、弹层和内容表面 |
+| Primary text | Rock | `#252B35` | 浅色界面标题与正文 |
+| Muted text | Steel | `#69778D` | 辅助描述和元数据 |
+| Border | Blue Hairline | `#D8E3F7` | 表面分隔与输入框边界 |
+| Hero card base | Ink Navy | `#1D2433` | 媒体卡图片加载前底色 |
+| Login surface | Graphite | `#323C4A` to `#3E4856` | 登录弹窗渐变底 |
+| Hero micro-accent | Soft Gold | `#E7CA82` | Sparkles 图标、小范围高级感提示 |
+
+### Primary
+
+- 主要操作渐变：`linear-gradient(135deg, #1478FF 0%, #20C8FF 52%, #24D6C8 100%)`。
+- 首页不直接使用蓝色实心 CTA；CTA 保持白色玻璃态，避免与背景视频争夺注意力。
+
+### Interactive
+
+- 焦点环：`#1478FF`；登录弹窗输入框使用偏灰绿 `rgba(139, 198, 187, .88)` 与 3px 外环。
+- 首页 hover 主要改变白色透明度并上浮 `2px`；登录后按钮 hover 提高饱和度与亮度。
+- 危险、重试、付费等动作使用不同语义色，不把所有操作染成同一种蓝色。
+
+### Neutral Scale
+
+- 标题/正文：`#252B35`。
+- 次级正文：`#69778D`。
+- 边框：`#D8E3F7`。
+- 背景：`#F4F6F6`。
+- 深色弹层文字：白色的 `94% / 86% / 66% / 42%` 透明度层级。
+
+### Surface &amp; Overlay
+
+- 英雄区媒体遮罩应从顶部的轻白雾过渡到底部的 `rgba(7,10,16,.68)`，文字区域可追加左侧暗化。
+- 首页玻璃控件使用 `rgba(255,255,255,.12-.24)`，白色边框 `24%-42%`，`backdrop-filter: blur(12px)`。
+- 登录后内容表面使用约 `rgba(255,255,255,.78-.90)`，搭配轻蓝边框，不使用厚重灰边。
+
+### Theme Modes
+
+#### Light Mode
+
+- Background: `#F4F6F6`，可叠加很淡的蓝/青径向光。
+- Surface: `rgba(255,255,255,.78-.90)`。
+- Text: `#252B35` / `#69778D`。
+- Accent: `#1478FF` 到 `#24D6C8`。
+- Notes: 公开首页本身始终由深色视频决定明暗；此模式主要适用于登录后工具界面。
+
+#### Dark Mode
+
+- Background: 观察到的样式表使用约 `#080B10` 与 `#101521`。
+- Surface: 约 `rgba(18,22,32,.72-.88)`。
+- Text: `rgba(238,245,255,.90)` / `rgba(238,245,255,.68)`。
+- Accent: 蓝青渐变保持不变，成功色提升至浅青。
+- Notes: 首页没有公开的主题切换控件；暗色规则来自可读取的站点样式表，而非首页交互验证。
+
+### Shadows &amp; Depth
+
+- 首页玻璃 CTA：`0 18px 42px rgba(0,0,0,.20)`。
+- 入口卡默认：`0 16px 34px rgba(37,43,53,.08)`；hover：`0 22px 48px rgba(37,43,53,.12)`。
+- 登录弹窗：`0 28px 76px rgba(0,0,0,.46)`。
+- 登录后通用卡（观察到的样式规则）：`0 18px 44px rgba(29,36,51,.08)`。
+- 阴影只负责分层，边界仍由 1px 半透明边框定义。
+
+## 3. Typography Rules
+
+### Font Family
+
+- Primary: `&quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, ui-sans-serif, system-ui, sans-serif`。
+- Monospace: 仅在技术数据需要时使用系统等宽字体；首页未观察到等宽字体。
+- OpenType Features: 无特殊设置；所有可见标题 `letter-spacing: 0`，仅英文 eyebrow 使用正向字距。
+
+### Hierarchy
+
+| Role | Font | Size | Weight | Line Height | Letter Spacing | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| Hero headline | 系统中文无衬线 | `clamp(48px, 8vw, 120px)` | 700 | 1.0 | `0` | 桌面实测 115.2px，移动 48px |
+| Hero subtitle | 同上 | 16px mobile / 24px desktop | 500 | 32px | `0` | 居中，白色 86% |
+| Section heading | 同上 | 18px mobile / 24px desktop | 600 | 28/32px | `0` | 入口跑马灯标题 |
+| Card title | 同上 | 20px | 700 | 28px | `0` | 白字带轻投影 |
+| Body | 同上 | 14-16px | 400 | 24px | `0` | 卡片描述限制两行 |
+| Label / Eyebrow | 同上 | 12px | 600 | 16px | `2.64px` | 大写英文 `CREATIVE ENTRIES` |
+| Control | 同上 | 14-18px | 500-600 | 20-28px | `0` | 按钮依据层级放大 |
+| Caption / Meta | 同上 | 12px | 400-600 | 17-20px | `0` | 协议、帮助与状态 |
+
+### Principles
+
+- 中文标题不使用负字距；靠字号、字重和留白构建层级。
+- Hero 标题极大但只有品牌名；价值描述放在副标题中。
+- 卡片标题和描述使用短句，覆盖在媒体的暗化区域上。
+- 英文只作为克制的结构标签，不承担主要信息。
+
+## 4. Component Stylings
+
+### Buttons and Links
+
+- Primary hero CTA: 56px 高、左右 40px、全圆角、18px/600 白字、白色 16% 背景和 42% 边框；hover 上移 2px并将背景提高到 24%。
+- Header login: 38px 高、16px 圆角、14px/500，白色 14% 背景，左侧 16px Lucide 登录图标。
+- App primary: 蓝到青绿的 135 度渐变，白字、全圆角，约 48px 高。
+- Secondary: 白色 86% 表面、蓝色文字、淡蓝边框和轻阴影。
+- Text links: 无常驻下划线；协议类链接使用较高字重区分。
+- Iconography: 2px 线宽的 Lucide 风格图标；按钮图标通常 16-20px。
+
+### Cards and Containers
+
+- 首页入口卡：260px mobile、320px tablet、`clamp(360px,22vw,430px)` desktop；实测高度 198px。
+- Radius: 首页媒体卡 24px；登录弹窗桌面约 24-30px，移动 20px。
+- Border: 1px `#D8E3F7`，叠在媒体上时可使用白色 28%-36%。
+- Internal spacing: 20px；信息分为顶部标签/图标和底部标题/描述/行动三层。
+- 图片 `object-fit: cover`；下方和左侧各叠一层线性暗化，不把文字放进额外内嵌卡片。
+
+### Inputs and Interactive Controls
+
+- 登录弹窗输入框：36px 常规高度，验证码位可达 48px；10px 圆角、12px 水平内边距。
+- 深色表面输入：白色 8% 背景、白色 14% 边框、白色 94% 输入文字、42% placeholder。
+- Focus: 灰绿边框加 `0 0 0 3px rgba(139,198,187,.20)`。
+- Tabs: 两列分段控件，40px 高、16px 外圆角；选中项为白色 90% 表面与深色字。
+- Checkbox: 16px，4px 圆角；重要合规声明逐条确认，不能合并成一个模糊总开关。
+
+### Navigation
+
+- 公开首页头部为 64px 绝对定位透明栏，左右各 16px 内边距。
+- 左侧 36px 方形品牌图标和粗体站名；右侧只放登录主动作。
+- 不使用长导航菜单。功能选择在首屏下方的入口带完成。
+- 登录后的应用壳推断应使用紧凑工具导航，避免沿用营销大标题。
+
+### Image Treatment
+
+- 使用真实商品图、模特图、详情页或视频结果，不用抽象渐变插画替代产品证据。
+- 入口图保持自然色，只做轻微 `brightness(1.03) saturate(1.02)`。
+- Hover 将入口图缩放至约 105%，持续 300ms；容器保持裁切。
+- 自建版本必须使用有授权的素材或自行生成资产，不能镜像原站 OSS 文件。
+
+### Distinctive Components
+
+- Hero badge: 白色 12% 玻璃胶囊，配一个金色 Sparkles 图标，文案枚举三类产物。
+- Creative marquee: 两份入口卡序列拼接，46 秒线性向左移动；hover/focus-within 暂停，reduced-motion 时静止。
+- Floating support: 右下角 52px mobile / 60px desktop 圆形按钮，支持拖动；客服信息悬浮展开。
+- Login modal: 深灰蓝独立表面，品牌头、登录方式分段控件、验证码、企业用途声明与协议确认完整收拢在 430px 宽窗口内。
+
+## 5. Layout Principles
+
+### Spacing System
+
+- Base unit: 4px。
+- 高频值：8、12、16、20、24、32、40px。
+- Hero 元素间距：badge 到标题 24px，标题到副标题 20px，副标题到 CTA 32px。
+
+### Grid &amp; Container
+
+- Hero 内容最大宽度约 1280px，居中；副标题最大宽度更窄。
+- 页面高度围绕 `100dvh` 组织，桌面内容和 36px 页脚合计一屏。
+- 入口区不采用网格换行，而采用横向单行卡片轨道；间隙 16px。
+- 首页两侧安全边距：16px mobile、32px tablet、40px desktop。
+
+### Whitespace Philosophy
+
+- 上半屏大面积留白来自背景媒体，不额外添加装饰模块。
+- 信息始终向中轴或卡片暗区对齐；不要把文字随机漂浮在图像亮部。
+- 公开入口强调快速扫描；登录后工具表单应提高密度并保持清晰分组。
+
+### Border Radius Scale
+
+- Micro: 4px（checkbox）。
+- Input: 10px。
+- Standard: 12-16px（普通按钮、标签、工具卡）。
+- Large: 20-24px（媒体卡、移动弹窗）。
+- Modal: 24-30px desktop。
+- Pill: `9999px`（主 CTA、状态标签、分段高亮）。
+
+## 6. Depth &amp; Elevation
+
+| Level | Treatment | Use |
+| --- | --- | --- |
+| Flat | 无阴影，透明背景 | 页头、正文和页脚链接 |
+| Ring | 1px 半透明白/蓝边框 | 输入、badge、玻璃按钮 |
+| Card | 16-44px 软阴影，低 alpha | 功能入口、登录后内容表面 |
+| Modal | 28px 76px 黑色 46% 阴影 | 登录和关键流程弹窗 |
+| Focus | 3px 外环 | 键盘焦点和输入状态 |
+
+### Depth Principles
+
+- 媒体层、遮罩层、文字层的顺序必须明确；不要用多个嵌套卡片模拟深度。
+- 首页阴影偏黑且透明；应用内阴影偏蓝灰，避免脏重。
+- 玻璃效果只用于媒体背景上的小控件，不扩散到所有内容面板。
+- 模态框有强分层，普通表单和列表保持安静。
+
+## 7. Do&#39;s and Don&#39;ts
+
+### Do
+
+- 用真实生成结果作为首屏和入口卡主视觉。
+- 让创作入口直接对应用户任务：商品主图、模特穿搭、详情页、带货视频。
+- 保持图标、颜色和文案的动作语义一致。
+- 为跑马灯提供 hover/focus 暂停和 reduced-motion 降级。
+- 保留登录和生成流程中的企业用途、版权责任与协议确认。
+
+### Don&#39;t
+
+- 不复制“赢海”名称、Logo、OSS 媒体、案例或原站文案作为新产品资产。
+- 不把首页扩成堆叠卡片的通用 SaaS 营销长页。
+- 不在 Hero 上叠放白色实心大卡，也不使用抽象渐变图替代真实商品结果。
+- 不为中文标题使用负字距或随视口线性缩放正文。
+- 不把公开案例中的 `prompt` 误称为原站系统提示词。
+
+## 8. Responsive Behavior
+
+### Breakpoints
+
+| Name | Width | Key Changes |
+| --- | --- | --- |
+| Mobile | `&lt; 640px` | 左右 16px；Hero 48px；卡宽 260px；页脚换为 84px；弹窗宽约 `100vw - 16px` |
+| Tablet | `640-1279px` | 边距升至 32px；卡宽 320px；副标题升至 24px |
+| Desktop | `&gt;= 1280px` | 边距 40px；卡宽 360-430px；Hero 由 8vw 控制，上限 120px |
+
+### Touch Targets
+
+- 主要 CTA 56px；登录按钮 38px；应用主操作建议不小于 44px。
+- 浮动客服为 52px；复选框视觉为 16px，但整行 label 必须可点击。
+- 横向入口区允许触控滚动，并避免拖动与点击冲突。
+
+### Collapsing Strategy
+
+- Desktop: 首屏固定在单屏内，Hero 居中，入口跑马灯位于下半部，页脚 36px。
+- Tablet: 保持同一构图，缩小入口卡并增加水平触控能力。
+- Mobile: Hero 标题锁定 48px，副标题两行；入口卡仍横排而非单列；页面总高约 892px（390x844 实测）。
+- 登录弹窗: 最高不超过动态视口减安全区；高度不足 720px 时隐藏次级描述并压缩控件。
+- 不隐藏核心功能入口；通过横向移动保持功能完整性。
+
+## 9. Agent Prompt Guide
+
+### Quick Color Reference
+
+- Primary CTA: `#1478FF -&gt; #20C8FF -&gt; #24D6C8`
+- Background: `#F4F6F6`
+- Heading text: `#252B35`
+- Body text: `#69778D`
+- Border or ring: `#D8E3F7`
+- Hero foreground: `#FFFFFF`
+- Login surface: `#3E4856 -&gt; #323C4A`
+
+### Quick Summary
+
+构建一个面向电商经营者的 AIGC 创作平台。公开首页是一屏全幅真实商品视频，透明页头、居中品牌标题、单一玻璃 CTA，以及底部自动横移的媒体功能卡。登录后的工作界面切换为浅蓝灰背景、白色半透明表面和蓝青渐变动作色。字体使用中文系统无衬线，字距为 0；圆角从 10px 输入到 24px 卡片，主按钮为全圆角。交互只做轻微上浮、图片缩放和克制软阴影。
+
+### Example Component Prompts
+
+- Hero: “创建一屏高的电商 AIGC Hero，以真实商品生成视频全幅铺底，叠加深色可读性遮罩；中间放 48-120px 白色品牌名、两行内价值描述和 56px 高玻璃 CTA，首屏底部必须露出创作入口。”
+- Card: “创建 260-430px 宽、198px 高的媒体入口卡，24px 圆角，图片 cover；上方是玻璃类别 badge 与图标，下方是白色标题、两行描述和箭头动作，使用底部与左侧双暗化遮罩。”
+- Navigation: “创建 64px 透明绝对定位页头，左侧 36px 品牌图和站名，右侧仅一个图标+登录按钮；移动端保持同一结构，不添加汉堡菜单。”
+- Login: “创建 430px 深灰蓝登录弹窗，24px 圆角，包含品牌、两段登录方式、输入与验证码、三条合规确认和全宽提交按钮；控件使用白色低透明表面与灰绿焦点环。”
+
+### Ready-to-Use Prompt
+
+以本 `DESIGN.md` 为唯一视觉规则，设计一个原创的电商 AIGC 创作平台。保留媒体先行、一屏 Hero、横向创作入口、深色登录弹窗和浅色工具工作台的设计语言，但使用全新的品牌、文案与已授权媒体。实现 desktop/tablet/mobile 响应式、键盘焦点、reduced-motion、入口跑马灯暂停，以及完整的登录、任务状态和资产操作状态。不得下载或复用原站 OSS 素材。
+
+### Iteration Guide
+
+1. 先验证背景媒体与前景文字对比度，再调整阴影和玻璃透明度。
+2. 保证首屏同时看见品牌、CTA 和至少一部分创作入口，不让 Hero 吞没下一步。
+3. 登录后提高信息密度，用语义色区分生成、重试、下载、付费和危险操作。
+4. 每次新增工具沿用同一卡片/表单结构，不增加新的视觉语法。
+
+## Optional Appendix: Interaction Patterns
+
+- Scroll behavior: 首页禁用常规页面滚动条，主要动态来自入口横向轨道；移动端因页脚换行产生少量纵向高度。
+- Hover behavior: 卡片上移 2px、阴影增强、图片缩放 105%、箭头右移；跑马灯暂停。
+- Click behavior: 未登录的 Header 登录、Hero CTA 和入口卡都会进入登录流程。
+- Animation tone: 入口 46 秒线性循环；一般状态转换约 150ms，图片缩放 300ms，弹窗约 200ms。
+- Reduced motion: 入口跑马灯停止并恢复静态横向列表。
+
+## Optional Appendix: Content &amp; Messaging Patterns
+
+- Headline pattern: 品牌名或字面任务名，不用“重新定义未来”式口号。
+- CTA language: “开始使用”“登录后使用”“获取”“下载”等明确动词。
+- Trust signal pattern: 企业/个体工商户用途、知识产权责任、用户协议与隐私政策逐项确认。
+- Voice and tone: 专业、直接、结果导向；描述“生成什么”和“适合什么电商场景”。
+
+## Optional Appendix: Observed Pages
+
+- `https://yinghai.xin/`: 首页 Hero、8 个创作入口、透明页头、页脚、浮动客服与响应式规则。
+- 登录弹窗（公开交互）: 账号密码/短信登录、图形验证码、短信验证码、企业用途声明和协议确认。
+- 公开样式表: 登录后应用壳的颜色 token、按钮语义、浅/暗表面规则；未登录状态下未验证具体工作台布局。
+
+## Evidence Notes
+
+- Observed: 1440x1000 时 Hero 标题 115.2px，卡片约 360x198px，页脚 36px；390x844 时 Hero 48px，卡片 260x198px，页脚 84px。
+- Observed: 根 token 包含 `--yh-action-primary: #1478ff`、`--yh-mist: #20c8ff`、`--yh-sage: #24d6c8`、`--yh-bg: #f4f6f6`、`--yh-ink: #252b35`、`--yh-line: #d8e3f7`。
+- Observed: 登录弹窗约 430x660px，深灰蓝渐变、1px 白色 16% 边框与强模态阴影。
+- Observed: 首页媒体来自公开 OSS URL，但本规则只记录视觉处理，不保留或授权复制这些资产。
+- Not observed: 登录后的真实页面结构、完整暗色切换路径、付费成功/失败和任务异常状态。
+
+</pre>
+              <article class="rendered-view" id="previewView" hidden><section><h2>1. Visual Theme &amp; Atmosphere</h2><p>这是一个“媒体先行、工具后置”的电商 AIGC 门户。首屏以全屏商品视频承担情绪和能力展示，界面层只保留白色品牌字、半透明玻璃控件和一条持续移动的创作入口。视觉密度集中在下半屏卡片带，上半屏保持极简且居中，让用户先看见结果质感，再选择工具。品牌姿态偏专业、克制和商业化，不使用娱乐化 AI 插画或复杂营销长页。</p><h3>Key Characteristics</h3><ul><li>全屏视频/图片是真正的背景和首要视觉资产，深色遮罩保证前景文字可读。</li><li>透明白玻璃控件叠在媒体上；登录后工具界面转为浅色蓝灰表面和高饱和蓝青操作色。</li><li>创作能力用大幅媒体卡表达，信息覆盖在图片上，不使用纯图标功能宫格。</li><li>交互运动短促：按钮轻微上浮，卡片图片放大；入口跑马灯以 46 秒匀速循环。</li><li>中文文案直接描述任务与产物，避免抽象 AI 术语堆砌。</li></ul></section><section><h2>2. Color Palette &amp; Roles</h2><table><thead><tr><th>Role</th><th>Semantic Name</th><th>Value</th><th>Usage</th></tr></thead><tbody><tr><td>Primary action</td><td>Electric Blue</td><td><code>#1478FF</code></td><td>登录后主要操作、焦点、保存与查看</td></tr><tr><td>Secondary accent</td><td>Cyan</td><td><code>#20C8FF</code></td><td>蓝青渐变中段、下载、成功反馈</td></tr><tr><td>Supporting accent</td><td>Aqua</td><td><code>#24D6C8</code></td><td>蓝青渐变尾部、成功和服务入口</td></tr><tr><td>Premium accent</td><td>Violet</td><td><code>#7357FF</code></td><td>付费、账户操作和特殊工具</td></tr><tr><td>Warm signal</td><td>Clay Orange</td><td><code>#FF9D27</code></td><td>重试、提示与警示性动作</td></tr><tr><td>Destructive</td><td>Rose</td><td><code>#FF4E67</code></td><td>删除、危险和错误动作</td></tr><tr><td>App background</td><td>Cool Fog</td><td><code>#F4F6F6</code></td><td>登录后页面主背景</td></tr><tr><td>App surface</td><td>Porcelain</td><td><code>#FFFFFF</code></td><td>卡片、弹层和内容表面</td></tr><tr><td>Primary text</td><td>Rock</td><td><code>#252B35</code></td><td>浅色界面标题与正文</td></tr><tr><td>Muted text</td><td>Steel</td><td><code>#69778D</code></td><td>辅助描述和元数据</td></tr><tr><td>Border</td><td>Blue Hairline</td><td><code>#D8E3F7</code></td><td>表面分隔与输入框边界</td></tr><tr><td>Hero card base</td><td>Ink Navy</td><td><code>#1D2433</code></td><td>媒体卡图片加载前底色</td></tr><tr><td>Login surface</td><td>Graphite</td><td><code>#323C4A</code> to <code>#3E4856</code></td><td>登录弹窗渐变底</td></tr><tr><td>Hero micro-accent</td><td>Soft Gold</td><td><code>#E7CA82</code></td><td>Sparkles 图标、小范围高级感提示</td></tr></tbody></table><h3>Primary</h3><ul><li>主要操作渐变：<code>linear-gradient(135deg, #1478FF 0%, #20C8FF 52%, #24D6C8 100%)</code>。</li><li>首页不直接使用蓝色实心 CTA；CTA 保持白色玻璃态，避免与背景视频争夺注意力。</li></ul><h3>Interactive</h3><ul><li>焦点环：<code>#1478FF</code>；登录弹窗输入框使用偏灰绿 <code>rgba(139, 198, 187, .88)</code> 与 3px 外环。</li><li>首页 hover 主要改变白色透明度并上浮 <code>2px</code>；登录后按钮 hover 提高饱和度与亮度。</li><li>危险、重试、付费等动作使用不同语义色，不把所有操作染成同一种蓝色。</li></ul><h3>Neutral Scale</h3><ul><li>标题/正文：<code>#252B35</code>。</li><li>次级正文：<code>#69778D</code>。</li><li>边框：<code>#D8E3F7</code>。</li><li>背景：<code>#F4F6F6</code>。</li><li>深色弹层文字：白色的 <code>94% / 86% / 66% / 42%</code> 透明度层级。</li></ul><h3>Surface &amp; Overlay</h3><ul><li>英雄区媒体遮罩应从顶部的轻白雾过渡到底部的 <code>rgba(7,10,16,.68)</code>，文字区域可追加左侧暗化。</li><li>首页玻璃控件使用 <code>rgba(255,255,255,.12-.24)</code>，白色边框 <code>24%-42%</code>，<code>backdrop-filter: blur(12px)</code>。</li><li>登录后内容表面使用约 <code>rgba(255,255,255,.78-.90)</code>，搭配轻蓝边框，不使用厚重灰边。</li></ul><h3>Theme Modes</h3><p>#### Light Mode</p><ul><li>Background: <code>#F4F6F6</code>，可叠加很淡的蓝/青径向光。</li><li>Surface: <code>rgba(255,255,255,.78-.90)</code>。</li><li>Text: <code>#252B35</code> / <code>#69778D</code>。</li><li>Accent: <code>#1478FF</code> 到 <code>#24D6C8</code>。</li><li>Notes: 公开首页本身始终由深色视频决定明暗；此模式主要适用于登录后工具界面。</li></ul><p>#### Dark Mode</p><ul><li>Background: 观察到的样式表使用约 <code>#080B10</code> 与 <code>#101521</code>。</li><li>Surface: 约 <code>rgba(18,22,32,.72-.88)</code>。</li><li>Text: <code>rgba(238,245,255,.90)</code> / <code>rgba(238,245,255,.68)</code>。</li><li>Accent: 蓝青渐变保持不变，成功色提升至浅青。</li><li>Notes: 首页没有公开的主题切换控件；暗色规则来自可读取的站点样式表，而非首页交互验证。</li></ul><h3>Shadows &amp; Depth</h3><ul><li>首页玻璃 CTA：<code>0 18px 42px rgba(0,0,0,.20)</code>。</li><li>入口卡默认：<code>0 16px 34px rgba(37,43,53,.08)</code>；hover：<code>0 22px 48px rgba(37,43,53,.12)</code>。</li><li>登录弹窗：<code>0 28px 76px rgba(0,0,0,.46)</code>。</li><li>登录后通用卡（观察到的样式规则）：<code>0 18px 44px rgba(29,36,51,.08)</code>。</li><li>阴影只负责分层，边界仍由 1px 半透明边框定义。</li></ul></section><section><h2>3. Typography Rules</h2><h3>Font Family</h3><ul><li>Primary: <code>&quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, ui-sans-serif, system-ui, sans-serif</code>。</li><li>Monospace: 仅在技术数据需要时使用系统等宽字体；首页未观察到等宽字体。</li><li>OpenType Features: 无特殊设置；所有可见标题 <code>letter-spacing: 0</code>，仅英文 eyebrow 使用正向字距。</li></ul><h3>Hierarchy</h3><table><thead><tr><th>Role</th><th>Font</th><th>Size</th><th>Weight</th><th>Line Height</th><th>Letter Spacing</th><th>Notes</th></tr></thead><tbody><tr><td>Hero headline</td><td>系统中文无衬线</td><td><code>clamp(48px, 8vw, 120px)</code></td><td>700</td><td>1.0</td><td><code>0</code></td><td>桌面实测 115.2px，移动 48px</td></tr><tr><td>Hero subtitle</td><td>同上</td><td>16px mobile / 24px desktop</td><td>500</td><td>32px</td><td><code>0</code></td><td>居中，白色 86%</td></tr><tr><td>Section heading</td><td>同上</td><td>18px mobile / 24px desktop</td><td>600</td><td>28/32px</td><td><code>0</code></td><td>入口跑马灯标题</td></tr><tr><td>Card title</td><td>同上</td><td>20px</td><td>700</td><td>28px</td><td><code>0</code></td><td>白字带轻投影</td></tr><tr><td>Body</td><td>同上</td><td>14-16px</td><td>400</td><td>24px</td><td><code>0</code></td><td>卡片描述限制两行</td></tr><tr><td>Label / Eyebrow</td><td>同上</td><td>12px</td><td>600</td><td>16px</td><td><code>2.64px</code></td><td>大写英文 <code>CREATIVE ENTRIES</code></td></tr><tr><td>Control</td><td>同上</td><td>14-18px</td><td>500-600</td><td>20-28px</td><td><code>0</code></td><td>按钮依据层级放大</td></tr><tr><td>Caption / Meta</td><td>同上</td><td>12px</td><td>400-600</td><td>17-20px</td><td><code>0</code></td><td>协议、帮助与状态</td></tr></tbody></table><h3>Principles</h3><ul><li>中文标题不使用负字距；靠字号、字重和留白构建层级。</li><li>Hero 标题极大但只有品牌名；价值描述放在副标题中。</li><li>卡片标题和描述使用短句，覆盖在媒体的暗化区域上。</li><li>英文只作为克制的结构标签，不承担主要信息。</li></ul></section><section><h2>4. Component Stylings</h2><h3>Buttons and Links</h3><ul><li>Primary hero CTA: 56px 高、左右 40px、全圆角、18px/600 白字、白色 16% 背景和 42% 边框；hover 上移 2px并将背景提高到 24%。</li><li>Header login: 38px 高、16px 圆角、14px/500，白色 14% 背景，左侧 16px Lucide 登录图标。</li><li>App primary: 蓝到青绿的 135 度渐变，白字、全圆角，约 48px 高。</li><li>Secondary: 白色 86% 表面、蓝色文字、淡蓝边框和轻阴影。</li><li>Text links: 无常驻下划线；协议类链接使用较高字重区分。</li><li>Iconography: 2px 线宽的 Lucide 风格图标；按钮图标通常 16-20px。</li></ul><h3>Cards and Containers</h3><ul><li>首页入口卡：260px mobile、320px tablet、<code>clamp(360px,22vw,430px)</code> desktop；实测高度 198px。</li><li>Radius: 首页媒体卡 24px；登录弹窗桌面约 24-30px，移动 20px。</li><li>Border: 1px <code>#D8E3F7</code>，叠在媒体上时可使用白色 28%-36%。</li><li>Internal spacing: 20px；信息分为顶部标签/图标和底部标题/描述/行动三层。</li><li>图片 <code>object-fit: cover</code>；下方和左侧各叠一层线性暗化，不把文字放进额外内嵌卡片。</li></ul><h3>Inputs and Interactive Controls</h3><ul><li>登录弹窗输入框：36px 常规高度，验证码位可达 48px；10px 圆角、12px 水平内边距。</li><li>深色表面输入：白色 8% 背景、白色 14% 边框、白色 94% 输入文字、42% placeholder。</li><li>Focus: 灰绿边框加 <code>0 0 0 3px rgba(139,198,187,.20)</code>。</li><li>Tabs: 两列分段控件，40px 高、16px 外圆角；选中项为白色 90% 表面与深色字。</li><li>Checkbox: 16px，4px 圆角；重要合规声明逐条确认，不能合并成一个模糊总开关。</li></ul><h3>Navigation</h3><ul><li>公开首页头部为 64px 绝对定位透明栏，左右各 16px 内边距。</li><li>左侧 36px 方形品牌图标和粗体站名；右侧只放登录主动作。</li><li>不使用长导航菜单。功能选择在首屏下方的入口带完成。</li><li>登录后的应用壳推断应使用紧凑工具导航，避免沿用营销大标题。</li></ul><h3>Image Treatment</h3><ul><li>使用真实商品图、模特图、详情页或视频结果，不用抽象渐变插画替代产品证据。</li><li>入口图保持自然色，只做轻微 <code>brightness(1.03) saturate(1.02)</code>。</li><li>Hover 将入口图缩放至约 105%，持续 300ms；容器保持裁切。</li><li>自建版本必须使用有授权的素材或自行生成资产，不能镜像原站 OSS 文件。</li></ul><h3>Distinctive Components</h3><ul><li>Hero badge: 白色 12% 玻璃胶囊，配一个金色 Sparkles 图标，文案枚举三类产物。</li><li>Creative marquee: 两份入口卡序列拼接，46 秒线性向左移动；hover/focus-within 暂停，reduced-motion 时静止。</li><li>Floating support: 右下角 52px mobile / 60px desktop 圆形按钮，支持拖动；客服信息悬浮展开。</li><li>Login modal: 深灰蓝独立表面，品牌头、登录方式分段控件、验证码、企业用途声明与协议确认完整收拢在 430px 宽窗口内。</li></ul></section><section><h2>5. Layout Principles</h2><h3>Spacing System</h3><ul><li>Base unit: 4px。</li><li>高频值：8、12、16、20、24、32、40px。</li><li>Hero 元素间距：badge 到标题 24px，标题到副标题 20px，副标题到 CTA 32px。</li></ul><h3>Grid &amp; Container</h3><ul><li>Hero 内容最大宽度约 1280px，居中；副标题最大宽度更窄。</li><li>页面高度围绕 <code>100dvh</code> 组织，桌面内容和 36px 页脚合计一屏。</li><li>入口区不采用网格换行，而采用横向单行卡片轨道；间隙 16px。</li><li>首页两侧安全边距：16px mobile、32px tablet、40px desktop。</li></ul><h3>Whitespace Philosophy</h3><ul><li>上半屏大面积留白来自背景媒体，不额外添加装饰模块。</li><li>信息始终向中轴或卡片暗区对齐；不要把文字随机漂浮在图像亮部。</li><li>公开入口强调快速扫描；登录后工具表单应提高密度并保持清晰分组。</li></ul><h3>Border Radius Scale</h3><ul><li>Micro: 4px（checkbox）。</li><li>Input: 10px。</li><li>Standard: 12-16px（普通按钮、标签、工具卡）。</li><li>Large: 20-24px（媒体卡、移动弹窗）。</li><li>Modal: 24-30px desktop。</li><li>Pill: <code>9999px</code>（主 CTA、状态标签、分段高亮）。</li></ul></section><section><h2>6. Depth &amp; Elevation</h2><table><thead><tr><th>Level</th><th>Treatment</th><th>Use</th></tr></thead><tbody><tr><td>Flat</td><td>无阴影，透明背景</td><td>页头、正文和页脚链接</td></tr><tr><td>Ring</td><td>1px 半透明白/蓝边框</td><td>输入、badge、玻璃按钮</td></tr><tr><td>Card</td><td>16-44px 软阴影，低 alpha</td><td>功能入口、登录后内容表面</td></tr><tr><td>Modal</td><td>28px 76px 黑色 46% 阴影</td><td>登录和关键流程弹窗</td></tr><tr><td>Focus</td><td>3px 外环</td><td>键盘焦点和输入状态</td></tr></tbody></table><h3>Depth Principles</h3><ul><li>媒体层、遮罩层、文字层的顺序必须明确；不要用多个嵌套卡片模拟深度。</li><li>首页阴影偏黑且透明；应用内阴影偏蓝灰，避免脏重。</li><li>玻璃效果只用于媒体背景上的小控件，不扩散到所有内容面板。</li><li>模态框有强分层，普通表单和列表保持安静。</li></ul></section><section><h2>7. Do&#39;s and Don&#39;ts</h2><h3>Do</h3><ul><li>用真实生成结果作为首屏和入口卡主视觉。</li><li>让创作入口直接对应用户任务：商品主图、模特穿搭、详情页、带货视频。</li><li>保持图标、颜色和文案的动作语义一致。</li><li>为跑马灯提供 hover/focus 暂停和 reduced-motion 降级。</li><li>保留登录和生成流程中的企业用途、版权责任与协议确认。</li></ul><h3>Don&#39;t</h3><ul><li>不复制“赢海”名称、Logo、OSS 媒体、案例或原站文案作为新产品资产。</li><li>不把首页扩成堆叠卡片的通用 SaaS 营销长页。</li><li>不在 Hero 上叠放白色实心大卡，也不使用抽象渐变图替代真实商品结果。</li><li>不为中文标题使用负字距或随视口线性缩放正文。</li><li>不把公开案例中的 <code>prompt</code> 误称为原站系统提示词。</li></ul></section><section><h2>8. Responsive Behavior</h2><h3>Breakpoints</h3><table><thead><tr><th>Name</th><th>Width</th><th>Key Changes</th></tr></thead><tbody><tr><td>Mobile</td><td><code>&lt; 640px</code></td><td>左右 16px；Hero 48px；卡宽 260px；页脚换为 84px；弹窗宽约 <code>100vw - 16px</code></td></tr><tr><td>Tablet</td><td><code>640-1279px</code></td><td>边距升至 32px；卡宽 320px；副标题升至 24px</td></tr><tr><td>Desktop</td><td><code>&gt;= 1280px</code></td><td>边距 40px；卡宽 360-430px；Hero 由 8vw 控制，上限 120px</td></tr></tbody></table><h3>Touch Targets</h3><ul><li>主要 CTA 56px；登录按钮 38px；应用主操作建议不小于 44px。</li><li>浮动客服为 52px；复选框视觉为 16px，但整行 label 必须可点击。</li><li>横向入口区允许触控滚动，并避免拖动与点击冲突。</li></ul><h3>Collapsing Strategy</h3><ul><li>Desktop: 首屏固定在单屏内，Hero 居中，入口跑马灯位于下半部，页脚 36px。</li><li>Tablet: 保持同一构图，缩小入口卡并增加水平触控能力。</li><li>Mobile: Hero 标题锁定 48px，副标题两行；入口卡仍横排而非单列；页面总高约 892px（390x844 实测）。</li><li>登录弹窗: 最高不超过动态视口减安全区；高度不足 720px 时隐藏次级描述并压缩控件。</li><li>不隐藏核心功能入口；通过横向移动保持功能完整性。</li></ul></section><section><h2>9. Agent Prompt Guide</h2><h3>Quick Color Reference</h3><ul><li>Primary CTA: <code>#1478FF -&gt; #20C8FF -&gt; #24D6C8</code></li><li>Background: <code>#F4F6F6</code></li><li>Heading text: <code>#252B35</code></li><li>Body text: <code>#69778D</code></li><li>Border or ring: <code>#D8E3F7</code></li><li>Hero foreground: <code>#FFFFFF</code></li><li>Login surface: <code>#3E4856 -&gt; #323C4A</code></li></ul><h3>Quick Summary</h3><p>构建一个面向电商经营者的 AIGC 创作平台。公开首页是一屏全幅真实商品视频，透明页头、居中品牌标题、单一玻璃 CTA，以及底部自动横移的媒体功能卡。登录后的工作界面切换为浅蓝灰背景、白色半透明表面和蓝青渐变动作色。字体使用中文系统无衬线，字距为 0；圆角从 10px 输入到 24px 卡片，主按钮为全圆角。交互只做轻微上浮、图片缩放和克制软阴影。</p><h3>Example Component Prompts</h3><ul><li>Hero: “创建一屏高的电商 AIGC Hero，以真实商品生成视频全幅铺底，叠加深色可读性遮罩；中间放 48-120px 白色品牌名、两行内价值描述和 56px 高玻璃 CTA，首屏底部必须露出创作入口。”</li><li>Card: “创建 260-430px 宽、198px 高的媒体入口卡，24px 圆角，图片 cover；上方是玻璃类别 badge 与图标，下方是白色标题、两行描述和箭头动作，使用底部与左侧双暗化遮罩。”</li><li>Navigation: “创建 64px 透明绝对定位页头，左侧 36px 品牌图和站名，右侧仅一个图标+登录按钮；移动端保持同一结构，不添加汉堡菜单。”</li><li>Login: “创建 430px 深灰蓝登录弹窗，24px 圆角，包含品牌、两段登录方式、输入与验证码、三条合规确认和全宽提交按钮；控件使用白色低透明表面与灰绿焦点环。”</li></ul><h3>Ready-to-Use Prompt</h3><p>以本 <code>DESIGN.md</code> 为唯一视觉规则，设计一个原创的电商 AIGC 创作平台。保留媒体先行、一屏 Hero、横向创作入口、深色登录弹窗和浅色工具工作台的设计语言，但使用全新的品牌、文案与已授权媒体。实现 desktop/tablet/mobile 响应式、键盘焦点、reduced-motion、入口跑马灯暂停，以及完整的登录、任务状态和资产操作状态。不得下载或复用原站 OSS 素材。</p><h3>Iteration Guide</h3><ol><li>先验证背景媒体与前景文字对比度，再调整阴影和玻璃透明度。</li><li>保证首屏同时看见品牌、CTA 和至少一部分创作入口，不让 Hero 吞没下一步。</li><li>登录后提高信息密度，用语义色区分生成、重试、下载、付费和危险操作。</li><li>每次新增工具沿用同一卡片/表单结构，不增加新的视觉语法。</li></ol></section><section><h2>Optional Appendix: Interaction Patterns</h2><ul><li>Scroll behavior: 首页禁用常规页面滚动条，主要动态来自入口横向轨道；移动端因页脚换行产生少量纵向高度。</li><li>Hover behavior: 卡片上移 2px、阴影增强、图片缩放 105%、箭头右移；跑马灯暂停。</li><li>Click behavior: 未登录的 Header 登录、Hero CTA 和入口卡都会进入登录流程。</li><li>Animation tone: 入口 46 秒线性循环；一般状态转换约 150ms，图片缩放 300ms，弹窗约 200ms。</li><li>Reduced motion: 入口跑马灯停止并恢复静态横向列表。</li></ul></section><section><h2>Optional Appendix: Content &amp; Messaging Patterns</h2><ul><li>Headline pattern: 品牌名或字面任务名，不用“重新定义未来”式口号。</li><li>CTA language: “开始使用”“登录后使用”“获取”“下载”等明确动词。</li><li>Trust signal pattern: 企业/个体工商户用途、知识产权责任、用户协议与隐私政策逐项确认。</li><li>Voice and tone: 专业、直接、结果导向；描述“生成什么”和“适合什么电商场景”。</li></ul></section><section><h2>Optional Appendix: Observed Pages</h2><ul><li><code>https://yinghai.xin/</code>: 首页 Hero、8 个创作入口、透明页头、页脚、浮动客服与响应式规则。</li><li>登录弹窗（公开交互）: 账号密码/短信登录、图形验证码、短信验证码、企业用途声明和协议确认。</li><li>公开样式表: 登录后应用壳的颜色 token、按钮语义、浅/暗表面规则；未登录状态下未验证具体工作台布局。</li></ul></section><section><h2>Evidence Notes</h2><ul><li>Observed: 1440x1000 时 Hero 标题 115.2px，卡片约 360x198px，页脚 36px；390x844 时 Hero 48px，卡片 260x198px，页脚 84px。</li><li>Observed: 根 token 包含 <code>--yh-action-primary: #1478ff</code>、<code>--yh-mist: #20c8ff</code>、<code>--yh-sage: #24d6c8</code>、<code>--yh-bg: #f4f6f6</code>、<code>--yh-ink: #252b35</code>、<code>--yh-line: #d8e3f7</code>。</li><li>Observed: 登录弹窗约 430x660px，深灰蓝渐变、1px 白色 16% 边框与强模态阴影。</li><li>Observed: 首页媒体来自公开 OSS URL，但本规则只记录视觉处理，不保留或授权复制这些资产。</li><li>Not observed: 登录后的真实页面结构、完整暗色切换路径、付费成功/失败和任务异常状态。</li></ul></section></article>
+            </div>
+          </article>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const sourceView = document.getElementById("sourceView");
+      const previewView = document.getElementById("previewView");
+      const copyButton = document.getElementById("copyButton");
+      const copyState = document.getElementById("copyState");
+      const viewButtons = document.querySelectorAll("[data-view]");
+
+      function setActiveView(view) {
+        const showSource = view === "source";
+        sourceView.hidden = !showSource;
+        previewView.hidden = showSource;
+        viewButtons.forEach((button) => {
+          button.classList.toggle("is-active", button.dataset.view === view);
+        });
+      }
+
+      viewButtons.forEach((button) => {
+        button.addEventListener("click", () => setActiveView(button.dataset.view));
+      });
+
+      copyButton.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(sourceView.textContent || "");
+          copyState.textContent = "Copied";
+        } catch (error) {
+          copyState.textContent = "Clipboard unavailable";
+        }
+
+        setTimeout(() => {
+          copyState.textContent = "";
+        }, 1400);
+      });
+    </script>
+  </body>
+</html>
