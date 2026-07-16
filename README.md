@@ -29,7 +29,7 @@ npm run build
 - Redis 7 + BullMQ
 - systemd 服务 `aigc-web`
 - 本地监听 `127.0.0.1:3010`
-- Nginx 公开路径 `/aigc/`
+- Nginx 正式地址 `https://aigc.bigapple.store/`
 
 仓库 Secrets：`DEPLOY_HOST`、`DEPLOY_USER`、`DEPLOY_PATH`、`DEPLOY_SSH_KEY`。
 

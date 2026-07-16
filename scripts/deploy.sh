@@ -3,8 +3,6 @@ set -euo pipefail
 
 cd /home/ubuntu/project/AIGC_web
 
-export NEXT_PUBLIC_BASE_PATH=/aigc
-
 if [[ -f .env.production ]]; then
   set -a
   source .env.production
@@ -27,7 +25,7 @@ fi
 sudo systemctl restart aigc-web
 
 for attempt in {1..20}; do
-  if curl --fail --silent http://127.0.0.1:3010/aigc/api/health/ >/dev/null; then
+  if curl --fail --silent http://127.0.0.1:3010/api/health/ >/dev/null; then
     echo "AIGC Web deployment is healthy"
     exit 0
   fi
