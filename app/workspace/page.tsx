@@ -8,7 +8,7 @@ import { AppShell, LoadingScreen } from "@/app/components/app-shell";
 
 const tools = [
   { name: "商品主图", note: "生成电商首屏视觉", icon: ImageIcon, color: "blue", href: "/create/product-hero", available: true },
-  { name: "模特穿搭", note: "服装自然上身展示", icon: Shirt, color: "violet", available: false },
+  { name: "模特穿搭", note: "服装自然上身展示", icon: Shirt, color: "violet", href: "/create/model-wear", available: true },
   { name: "场景延展", note: "匹配营销使用场景", icon: WandSparkles, color: "cyan", href: "/create/scene-image", available: true },
   { name: "详情页套图", note: "组织统一卖点表达", icon: Layers3, color: "orange", available: false },
 ];

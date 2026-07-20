@@ -167,6 +167,26 @@ a { color: inherit; text-decoration: none; }
 .creator-points { height: 34px; padding: 0 12px; display: flex; align-items: center; gap: 6px; border: 1px solid rgba(255,91,110,.18); border-radius: 999px; color: #b74150; background: #fff3f4; font-size: 12px; font-weight: 600; }
 .creator-layout { width: min(1320px, calc(100% - 48px)); min-height: calc(100dvh - 116px); margin: 24px auto; display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 20px; }
 .upload-stage { position: relative; min-height: 640px; overflow: hidden; display: grid; place-items: center; border: 1px solid rgba(20,120,255,.15); border-radius: 12px; background: rgba(255,255,255,.7); box-shadow: 0 18px 44px rgba(29,36,51,.06); }
+.wear-stage { position: relative; min-height: 640px; overflow: hidden; border: 1px solid rgba(20,120,255,.15); border-radius: 12px; background: rgba(255,255,255,.7); box-shadow: 0 18px 44px rgba(29,36,51,.06); }
+.wear-inputs { min-height: 640px; padding: 28px; display: grid; grid-template-columns: minmax(220px, .84fr) minmax(0, 1.16fr); gap: 22px; }
+.wear-source { min-width: 0; display: grid; align-content: start; gap: 14px; }
+.wear-source + .wear-source { padding-left: 22px; border-left: 1px solid #edf1f6; }
+.wear-source-title { display: flex; align-items: center; gap: 10px; }
+.wear-source-title > span { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; color: white; background: var(--brand); font-size: 12px; font-weight: 700; }
+.wear-source-title > div { display: grid; gap: 3px; }
+.wear-source-title strong { font-size: 14px; }
+.wear-source-title small { color: var(--muted); font-size: 11px; }
+.wear-drop { position: relative; min-height: 410px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; border: 1px dashed #b7c8df; border-radius: 10px; color: var(--muted); background: #f8fbff; cursor: pointer; transition: .18s; }
+.wear-drop:hover { border-color: var(--brand); color: var(--brand); background: #fff7f8; }
+.wear-drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.wear-drop span { font-size: 12px; font-weight: 600; }
+.wear-product-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.wear-drop.compact { min-height: 188px; }
+.wear-preview { position: relative; min-height: 188px; overflow: hidden; border: 1px solid #e2e9f1; border-radius: 10px; background: #edf1f4; }
+.wear-preview.single { min-height: 410px; }
+.wear-preview img { width: 100%; height: 100%; min-height: 188px; display: block; object-fit: cover; }
+.wear-preview.single img { min-height: 410px; }
+.wear-preview button { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 50%; color: white; background: rgba(32,38,48,.68); }
 .upload-drop { width: min(470px, calc(100% - 40px)); min-height: 300px; display: flex; align-items: center; justify-content: center; flex-direction: column; border: 1px dashed #b7c8df; border-radius: 12px; color: var(--muted); background: rgba(248,251,255,.78); cursor: pointer; transition: .18s; }
 .upload-drop:hover { border-color: var(--brand); background: #fff7f8; }
 .upload-drop > span { width: 58px; height: 58px; display: grid; place-items: center; border-radius: 14px; color: var(--brand); background: #ffecee; }
@@ -322,6 +342,7 @@ a { color: inherit; text-decoration: none; }
   .creator-layout { grid-template-columns: 1fr; }
   .creator-panel { order: -1; width: 100%; }
   .upload-stage, .source-preview { min-height: 560px; }
+  .wear-stage, .wear-inputs { min-height: auto; }
   .asset-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .catalog-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .task-record { grid-template-columns: 54px minmax(140px, 1fr) 100px 18px; }
@@ -383,6 +404,11 @@ a { color: inherit; text-decoration: none; }
   .creator-layout { width: calc(100% - 24px); margin: 12px auto; gap: 12px; }
   .creator-panel { padding: 16px; }
   .upload-stage, .source-preview { min-height: 440px; }
+  .wear-inputs { padding: 16px; grid-template-columns: 1fr; gap: 18px; }
+  .wear-source + .wear-source { padding-top: 18px; padding-left: 0; border-top: 1px solid #edf1f6; border-left: 0; }
+  .wear-drop, .wear-preview.single, .wear-preview.single img { min-height: 330px; }
+  .wear-product-grid { gap: 9px; }
+  .wear-drop.compact, .wear-preview, .wear-preview img { min-height: 142px; }
   .result-grid { padding: 10px; grid-template-columns: 1fr; }
   .result-grid article, .result-grid img { min-height: 340px; }
 }

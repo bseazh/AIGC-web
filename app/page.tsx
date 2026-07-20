@@ -40,6 +40,7 @@ const features: Array<{
     description: "保留服装细节，快速获得自然真实的上身效果。",
     image: "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?auto=format&fit=crop&w=900&q=88",
     icon: Shirt,
+    href: "/create/model-wear",
   },
   {
     title: "场景延展",

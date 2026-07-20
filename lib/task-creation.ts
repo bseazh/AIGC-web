@@ -14,23 +14,31 @@ type ImageWorkflow = {
   styles: readonly string[];
 };
 
-export async function createImageTask(request: NextRequest, workflow: ImageWorkflow) {
+type AssetSelector = (body: Record<string, unknown>) => string[];
+
+export async function createImageTask(request: NextRequest, workflow: ImageWorkflow, selectAssets: AssetSelector = (body) => [typeof body.assetId === "string" ? body.assetId : ""]) {
   const user = await authenticatedUser(request);
   if (!user) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401 });
   if (!workflow.enabled) return NextResponse.json({ code: "PROVIDER_NOT_CONFIGURED", message: "生成服务暂未开放" }, { status: 503 });
 
-  const body = await request.json().catch(() => null);
-  const assetId = typeof body?.assetId === "string" ? body.assetId : "";
+  const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+  if (!body) return NextResponse.json({ code: "INVALID_REQUEST", message: "请求参数不正确" }, { status: 400 });
+  const assetIds = [...new Set(selectAssets(body).filter((id) => typeof id === "string" && id.length > 0))];
+  if (assetIds.length === 0) return NextResponse.json({ code: "ASSET_NOT_READY", message: "请先完成图片上传" }, { status: 400 });
   const prompt = typeof body?.prompt === "string" ? body.prompt.trim().slice(0, 1200) : "";
-  const aspectRatio = workflow.aspectRatios.includes(body?.aspectRatio) ? body.aspectRatio : workflow.aspectRatios[0];
-  const scene = workflow.scenes.includes(body?.scene) ? body.scene : workflow.scenes[0];
-  const style = workflow.styles.includes(body?.style) ? body.style : workflow.styles[0];
+  const requestedAspectRatio = typeof body.aspectRatio === "string" ? body.aspectRatio : "";
+  const requestedScene = typeof body.scene === "string" ? body.scene : "";
+  const requestedStyle = typeof body.style === "string" ? body.style : "";
+  const aspectRatio = workflow.aspectRatios.includes(requestedAspectRatio) ? requestedAspectRatio : workflow.aspectRatios[0];
+  const scene = workflow.scenes.includes(requestedScene) ? requestedScene : workflow.scenes[0];
+  const style = workflow.styles.includes(requestedStyle) ? requestedStyle : workflow.styles[0];
   const assetResult = await db.query<{ id: string; storage_key: string }>(
-    "SELECT id, storage_key FROM assets WHERE id = $1 AND owner_id = $2 AND audit_status = 'READY' AND kind = 'INPUT'",
-    [assetId, user.id],
+    "SELECT id, storage_key FROM assets WHERE id = ANY($1::uuid[]) AND owner_id = $2 AND audit_status = 'READY' AND kind = 'INPUT'",
+    [assetIds, user.id],
   );
-  const asset = assetResult.rows[0];
-  if (!asset) return NextResponse.json({ code: "ASSET_NOT_READY", message: "请先完成图片上传" }, { status: 400 });
+  const assetsById = new Map(assetResult.rows.map((asset) => [asset.id, asset]));
+  const assets = assetIds.map((id) => assetsById.get(id)).filter((asset): asset is { id: string; storage_key: string } => Boolean(asset));
+  if (assets.length !== assetIds.length) return NextResponse.json({ code: "ASSET_NOT_READY", message: "请先完成图片上传" }, { status: 400 });
 
   const taskId = randomUUID();
   const idempotencyKey = request.headers.get("Idempotency-Key") || randomUUID();
@@ -44,7 +52,7 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
       await client.query("ROLLBACK");
       return NextResponse.json({ code: "INSUFFICIENT_POINTS", message: "积分不足" }, { status: 402 });
     }
-    const input = { assetId: asset.id, storageKey: asset.storage_key, prompt, aspectRatio, scene, style, outputs: workflow.outputsPerTask };
+    const input = { assetId: assets[0].id, storageKey: assets[0].storage_key, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), prompt, aspectRatio, scene, style, outputs: workflow.outputsPerTask };
     await client.query(
       `INSERT INTO generation_tasks (id, user_id, workflow_key, status, points, input_json, idempotency_key)
        VALUES ($1, $2, $3, 'QUEUED', $4, $5::jsonb, $6)`,

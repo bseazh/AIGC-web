@@ -27,3 +27,17 @@ export const sceneImageWorkflow = {
   styles: ["明亮生活方式", "低饱和质感", "轻奢商业", "清新自然"],
   refundOnFailure: true,
 } as const;
+
+export const modelWearWorkflow = {
+  key: "model-wear",
+  name: "模特穿搭",
+  enabled: Boolean(process.env.AI_API_KEY && process.env.COS_SECRET_ID),
+  pointsPerTask: Number(process.env.MODEL_WEAR_TASK_POINTS || 10),
+  outputsPerTask: 4,
+  acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
+  maxFileBytes: 10 * 1024 * 1024,
+  aspectRatios: ["1:1", "3:4", "4:3", "9:16"],
+  scenes: ["简约棚拍", "通勤街拍", "自然居家", "精品店试穿"],
+  styles: ["自然真实", "轻奢时尚", "清新日常", "电商展示"],
+  refundOnFailure: true,
+} as const;

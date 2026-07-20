@@ -47,10 +47,10 @@ async function sophnet(path, init = {}) {
   return payload;
 }
 
-async function createImageTask(inputUrl, prompt) {
+async function createImageTask(inputUrls, prompt) {
   const payload = await sophnet("/task", {
     method: "POST",
-    body: JSON.stringify({ model: process.env.AI_MODEL, input: { prompt, images: [inputUrl] } }),
+    body: JSON.stringify({ model: process.env.AI_MODEL, input: { prompt, images: inputUrls } }),
   });
   const taskId = payload?.output?.taskId;
   if (!taskId) throw new Error("SophNet did not return taskId");
@@ -75,14 +75,16 @@ async function waitForImage(taskId) {
   throw new Error("SophNet task timed out");
 }
 
-async function generateOne(inputUrl, input, index, workflowKey) {
+async function generateOne(inputUrls, input, index, workflowKey) {
   const variation = ["正面居中构图", "轻微侧角构图", "留出营销文案空间", "更强调商品材质细节"][index] || "商业构图";
   const shared = "保持商品主体的形状、颜色、商标和关键细节准确，不改变产品本身，不添加文字、水印或额外商品。";
-  const taskPrompt = workflowKey === "scene-image"
+  const taskPrompt = workflowKey === "model-wear"
+    ? `以第一张图片中的模特为主体，将后续图片中的服装或商品自然穿戴到模特身上。保持模特身份、面部、体型和人体结构自然，服装版型、材质、颜色和图案准确。场景为${input.scene}，风格为${input.style}，${variation}，画幅比例${input.aspectRatio}。`
+    : workflowKey === "scene-image"
     ? `将商品自然融入${input.scene}场景，风格为${input.style}，${variation}，画幅比例${input.aspectRatio}，真实商业摄影，场景光线与商品接触阴影自然，突出商品主体。`
     : `生成${input.scene}环境中的${input.style}电商商品主图，${variation}，画幅比例${input.aspectRatio}，真实摄影，干净背景，柔和自然阴影。`;
   const prompt = [shared, taskPrompt, input.prompt ? `用户补充要求：${input.prompt}` : ""].filter(Boolean).join("\n");
-  const providerTaskId = await createImageTask(inputUrl, prompt);
+  const providerTaskId = await createImageTask(inputUrls, prompt);
   return waitForImage(providerTaskId);
 }
 
@@ -156,8 +158,9 @@ const worker = new Worker("generation", async (job) => {
   await pool.query("UPDATE generation_tasks SET status = 'RUNNING', updated_at = NOW() WHERE id = $1 AND status = 'QUEUED'", [task.id]);
   const savedKeys = [];
   try {
-    const inputUrl = await cosUrl(task.input_json.storageKey, "GET", 3600);
-    const temporaryUrls = await Promise.all(Array.from({ length: task.input_json.outputs || 4 }, (_, index) => generateOne(inputUrl, task.input_json, index, task.workflow_key)));
+    const storageKeys = task.input_json.storageKeys || [task.input_json.storageKey];
+    const inputUrls = await Promise.all(storageKeys.map((key) => cosUrl(key, "GET", 3600)));
+    const temporaryUrls = await Promise.all(Array.from({ length: task.input_json.outputs || 4 }, (_, index) => generateOne(inputUrls, task.input_json, index, task.workflow_key)));
     const savedAssets = [];
     for (const [index, url] of temporaryUrls.entries()) {
       const response = await fetch(url);
