@@ -18,13 +18,21 @@ import {
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-const features = [
+const features: Array<{
+  title: string;
+  tag: string;
+  description: string;
+  image: string;
+  icon: typeof ImageIcon;
+  href?: string;
+}> = [
   {
     title: "商品主图",
     tag: "AI 生图",
     description: "聚焦卖点与构图，生成适配电商首屏的商品视觉。",
     image: "https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&w=900&q=88",
     icon: ImageIcon,
+    href: "/create/product-hero",
   },
   {
     title: "模特穿搭",
@@ -98,6 +106,8 @@ export default function Home() {
   const [sendingCode, setSendingCode] = useState(false);
   const [authError, setAuthError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [targetHref, setTargetHref] = useState("/workspace");
 
   useEffect(() => {
     document.body.style.overflow = loginOpen ? "hidden" : "";
@@ -105,13 +115,25 @@ export default function Home() {
   }, [loginOpen]);
 
   useEffect(() => {
+    fetch(`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/api/auth/session/`, { cache: "no-store" })
+      .then((response) => setAuthenticated(response.ok))
+      .catch(() => setAuthenticated(false));
+  }, []);
+
+  useEffect(() => {
     if (codeCooldown <= 0) return;
     const timer = window.setInterval(() => setCodeCooldown((current) => Math.max(0, current - 1)), 1000);
     return () => window.clearInterval(timer);
   }, [codeCooldown]);
 
-  const enterWorkspace = () => router.push("/workspace");
+  const enterWorkspace = () => router.push(targetHref);
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
+  const openDestination = (href = "/workspace") => {
+    if (authenticated) return router.push(href);
+    setTargetHref(href);
+    setLoginOpen(true);
+  };
 
   const switchMode = (nextMode: "login" | "register") => {
     setMode(nextMode);
@@ -173,8 +195,8 @@ export default function Home() {
 
       <header className="public-header">
         <Brand />
-        <button className="glass-button header-login" onClick={() => setLoginOpen(true)}>
-          <LogIn size={17} />登录
+        <button className="glass-button header-login" onClick={() => openDestination("/workspace")}>
+          <LogIn size={17} />{authenticated ? "进入平台" : "登录"}
         </button>
       </header>
 
@@ -182,7 +204,7 @@ export default function Home() {
         <div className="hero-badge"><Sparkles size={16} />商品视觉 · 营销视频 · 内容资产</div>
         <h1>好商品，<br />值得更好的画面</h1>
         <p>芭乐AIGC 面向电商团队，从一张商品素材出发，快速生成主图、模特穿搭、场景图与营销内容。</p>
-        <button className="hero-cta" onClick={() => setLoginOpen(true)}>
+        <button className="hero-cta" onClick={() => openDestination("/workspace")}>
           开始创作<ArrowRight size={20} />
         </button>
       </section>
@@ -197,7 +219,7 @@ export default function Home() {
             {[...features, ...features].map((feature, index) => {
               const Icon = feature.icon;
               return (
-                <button className="feature-card" key={`${feature.title}-${index}`} onClick={() => setLoginOpen(true)}>
+                <button className="feature-card" key={`${feature.title}-${index}`} onClick={() => openDestination(feature.href || "/workspace")}>
                   <img src={feature.image} alt="" />
                   <span className="card-shade" />
                   <span className="card-top"><span className="card-tag">{feature.tag}</span><span className="card-icon"><Icon size={17} /></span></span>
