@@ -3,6 +3,7 @@ export const workflowNames: Record<string, string> = {
   "scene-image": "场景图生成",
   "model-wear": "模特穿搭",
   "hd-enhance": "高清优化",
+  "product-detail-page": "商品详情页",
 };
 
 export const taskStatusLabels: Record<string, string> = {

@@ -56,6 +56,7 @@ const features: Array<{
     description: "围绕商品卖点生成结构统一的详情页视觉素材。",
     image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=88",
     icon: Layers3,
+    href: "/create/product-detail",
   },
   {
     title: "带货视频",

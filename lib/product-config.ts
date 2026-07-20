@@ -55,3 +55,17 @@ export const hdEnhanceWorkflow = {
   styles: ["自然细节", "商品质感", "人像清晰", "降噪净化"],
   refundOnFailure: true,
 } as const;
+
+export const detailPageWorkflow = {
+  key: "product-detail-page",
+  name: "商品详情页",
+  enabled: Boolean(process.env.AI_API_KEY && process.env.COS_SECRET_ID),
+  pointsPerTask: Number(process.env.DETAIL_PAGE_TASK_POINTS || 10),
+  outputsPerTask: 4,
+  acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
+  maxFileBytes: 10 * 1024 * 1024,
+  aspectRatios: ["1:1", "3:4", "4:3", "9:16"],
+  scenes: ["简约品牌", "自然生活", "轻奢质感", "科技清爽"],
+  styles: ["清晰卖点", "克制留白", "真实摄影", "高转化电商"],
+  refundOnFailure: true,
+} as const;

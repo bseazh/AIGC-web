@@ -11,7 +11,7 @@ const tools = [
   { name: "模特穿搭", note: "服装自然上身展示", icon: Shirt, color: "violet", href: "/create/model-wear", available: true },
   { name: "场景延展", note: "匹配营销使用场景", icon: WandSparkles, color: "cyan", href: "/create/scene-image", available: true },
   { name: "高清优化", note: "修复细节并提升清晰度", icon: ScanSearch, color: "blue", href: "/create/hd-enhance", available: true },
-  { name: "详情页套图", note: "组织统一卖点表达", icon: Layers3, color: "orange", available: false },
+  { name: "详情页套图", note: "生成四张统一卖点视觉", icon: Layers3, color: "orange", href: "/create/product-detail", available: true },
 ];
 
 type Account = { user: { identifier: string; displayName: string }; wallet: { availablePoints: number; frozenPoints: number } };
