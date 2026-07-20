@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSignedObjectUrl } from "@/lib/cos";
 import { db } from "@/lib/db";
 import { authenticatedUser } from "@/lib/session";
+import { taskStatusLabel } from "@/lib/presenters";
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const user = await authenticatedUser(request);
@@ -28,6 +29,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   return NextResponse.json({
     taskId: task.id,
     status: task.status,
+    statusLabel: taskStatusLabel(task.status),
     points: task.points,
     outputs,
     errorCode: task.error_code,
