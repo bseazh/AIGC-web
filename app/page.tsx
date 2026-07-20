@@ -47,6 +47,7 @@ const features: Array<{
     description: "为商品匹配居家、户外和商业棚拍等营销场景。",
     image: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=900&q=88",
     icon: WandSparkles,
+    href: "/create/scene-image",
   },
   {
     title: "详情页套图",

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
-import { heroImageWorkflow } from "@/lib/product-config";
+import { sceneImageWorkflow } from "@/lib/product-config";
 import { createImageTask } from "@/lib/task-creation";
 
 export async function POST(request: NextRequest) {
-  return createImageTask(request, heroImageWorkflow);
+  return createImageTask(request, sceneImageWorkflow);
 }

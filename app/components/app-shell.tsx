@@ -14,7 +14,7 @@ type AppShellProps = {
 
 const navItems = [
   { key: "workspace", label: "工作台", href: "/workspace", icon: Home },
-  { key: "tools", label: "创作工具", href: "/create/product-hero", icon: Sparkles },
+  { key: "tools", label: "创作工具", href: "/tools", icon: Sparkles },
   { key: "tasks", label: "任务中心", href: "/tasks", icon: Clock3 },
   { key: "assets", label: "内容资产", href: "/assets", icon: Boxes },
 ] as const;
@@ -50,7 +50,7 @@ export function AppShell({ active, account, taskCount = 0, children }: AppShellP
         <header className="workspace-header app-page-header">
           <button className="icon-button mobile-menu" aria-label="打开菜单" onClick={() => setSidebarOpen(true)}><Menu size={21} /></button>
           <Link href="/workspace" className="mobile-brand"><img src="/brand/bala-aigc-mark.png" alt="" /><strong>芭乐AIGC</strong></Link>
-          <div className="header-actions"><Link className="header-create" href="/create/product-hero"><ImageIcon size={17} />创作商品主图</Link><span className="avatar">{account.user.displayName.slice(0, 1)}</span></div>
+          <div className="header-actions"><Link className="header-create" href="/tools"><ImageIcon size={17} />开始创作</Link><span className="avatar">{account.user.displayName.slice(0, 1)}</span></div>
         </header>
         {children}
       </section>

@@ -3,6 +3,7 @@ import { createSignedObjectUrl } from "@/lib/cos";
 import { db } from "@/lib/db";
 import { authenticatedUser } from "@/lib/session";
 import { taskStatusLabel } from "@/lib/presenters";
+import { workflowName } from "@/lib/presenters";
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const user = await authenticatedUser(request);
@@ -10,6 +11,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const { id } = await context.params;
   const result = await db.query<{
     id: string;
+    workflow_key: string;
     status: string;
     points: number;
     output_json: { assets?: Array<{ assetId: string; storageKey: string }> };
@@ -17,7 +19,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     created_at: string;
     updated_at: string;
   }>(
-    "SELECT id, status, points, output_json, error_code, created_at, updated_at FROM generation_tasks WHERE id = $1 AND user_id = $2",
+    "SELECT id, workflow_key, status, points, output_json, error_code, created_at, updated_at FROM generation_tasks WHERE id = $1 AND user_id = $2",
     [id, user.id],
   );
   const task = result.rows[0];
@@ -28,6 +30,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   })));
   return NextResponse.json({
     taskId: task.id,
+    workflowName: workflowName(task.workflow_key),
     status: task.status,
     statusLabel: taskStatusLabel(task.status),
     points: task.points,

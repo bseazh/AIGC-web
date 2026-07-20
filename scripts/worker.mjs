@@ -75,13 +75,13 @@ async function waitForImage(taskId) {
   throw new Error("SophNet task timed out");
 }
 
-async function generateOne(inputUrl, input, index) {
+async function generateOne(inputUrl, input, index, workflowKey) {
   const variation = ["正面居中构图", "轻微侧角构图", "留出营销文案空间", "更强调商品材质细节"][index] || "商业构图";
-  const prompt = [
-    "保持商品主体的形状、颜色、商标和关键细节准确，不改变产品本身，不添加文字或水印。",
-    `生成${input.scene}环境中的${input.style}电商商品主图，${variation}，画幅比例${input.aspectRatio}，真实摄影，干净背景，柔和自然阴影。`,
-    input.prompt ? `用户补充要求：${input.prompt}` : "",
-  ].filter(Boolean).join("\n");
+  const shared = "保持商品主体的形状、颜色、商标和关键细节准确，不改变产品本身，不添加文字、水印或额外商品。";
+  const taskPrompt = workflowKey === "scene-image"
+    ? `将商品自然融入${input.scene}场景，风格为${input.style}，${variation}，画幅比例${input.aspectRatio}，真实商业摄影，场景光线与商品接触阴影自然，突出商品主体。`
+    : `生成${input.scene}环境中的${input.style}电商商品主图，${variation}，画幅比例${input.aspectRatio}，真实摄影，干净背景，柔和自然阴影。`;
+  const prompt = [shared, taskPrompt, input.prompt ? `用户补充要求：${input.prompt}` : ""].filter(Boolean).join("\n");
   const providerTaskId = await createImageTask(inputUrl, prompt);
   return waitForImage(providerTaskId);
 }
@@ -150,14 +150,14 @@ async function settleFailure(taskId, message) {
 }
 
 const worker = new Worker("generation", async (job) => {
-  const taskResult = await pool.query("SELECT id, user_id, points, input_json FROM generation_tasks WHERE id = $1", [job.data.taskId]);
+  const taskResult = await pool.query("SELECT id, user_id, workflow_key, points, input_json FROM generation_tasks WHERE id = $1", [job.data.taskId]);
   const task = taskResult.rows[0];
   if (!task) throw new Error("Task not found");
   await pool.query("UPDATE generation_tasks SET status = 'RUNNING', updated_at = NOW() WHERE id = $1 AND status = 'QUEUED'", [task.id]);
   const savedKeys = [];
   try {
     const inputUrl = await cosUrl(task.input_json.storageKey, "GET", 3600);
-    const temporaryUrls = await Promise.all(Array.from({ length: task.input_json.outputs || 4 }, (_, index) => generateOne(inputUrl, task.input_json, index)));
+    const temporaryUrls = await Promise.all(Array.from({ length: task.input_json.outputs || 4 }, (_, index) => generateOne(inputUrl, task.input_json, index, task.workflow_key)));
     const savedAssets = [];
     for (const [index, url] of temporaryUrls.entries()) {
       const response = await fetch(url);
@@ -171,7 +171,7 @@ const worker = new Worker("generation", async (job) => {
       const asset = await pool.query(
         `INSERT INTO assets (owner_id, kind, storage_key, mime_type, byte_size, audit_status, original_name, metadata_json)
          VALUES ($1, 'OUTPUT', $2, $3, $4, 'READY', $5, $6::jsonb) RETURNING id`,
-        [task.user_id, key, contentType, buffer.length, `result-${index + 1}.${extension}`, JSON.stringify({ taskId: task.id, provider: "sophnet", model: process.env.AI_MODEL })],
+        [task.user_id, key, contentType, buffer.length, `${task.workflow_key}-${index + 1}.${extension}`, JSON.stringify({ taskId: task.id, workflowKey: task.workflow_key, provider: "sophnet", model: process.env.AI_MODEL })],
       );
       savedAssets.push({ assetId: asset.rows[0].id, storageKey: key });
     }

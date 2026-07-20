@@ -227,6 +227,28 @@ a { color: inherit; text-decoration: none; }
 .asset-shortcut strong { font-size: 14px; }
 .asset-shortcut p { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
 .asset-shortcut > a { display: flex; align-items: center; gap: 4px; color: var(--blue); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.inspiration-band { margin-top: 30px; padding: 22px; border: 1px solid rgba(20,120,255,.16); border-radius: 12px; background: rgba(255,255,255,.82); box-shadow: 0 18px 44px rgba(29,36,51,.06); }
+.inspiration-grid { margin-top: 18px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.inspiration-card { position: relative; min-width: 0; min-height: 232px; overflow: hidden; display: flex; align-items: flex-end; border-radius: 12px; color: white; background: #1d2433; }
+.inspiration-card > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .25s; }
+.inspiration-card:hover > img { transform: scale(1.04); }
+.inspiration-card::after { position: absolute; inset: 0; content: ""; background: linear-gradient(180deg, rgba(11,17,25,.04), rgba(11,17,25,.78)); }
+.inspiration-card > span { position: absolute; z-index: 1; left: 12px; top: 12px; padding: 5px 8px; border: 1px solid rgba(255,255,255,.3); border-radius: 999px; background: rgba(8,11,16,.42); backdrop-filter: blur(8px); font-size: 10px; font-weight: 600; }
+.inspiration-card > div { position: relative; z-index: 1; padding: 15px; }
+.inspiration-card strong { font-size: 15px; }
+.inspiration-card p { margin: 5px 0 0; color: rgba(255,255,255,.78); font-size: 11px; line-height: 1.55; }
+.inspiration-card a { margin-top: 10px; display: inline-flex; align-items: center; gap: 4px; color: white; font-size: 11px; font-weight: 600; }
+.catalog-grid { margin-top: 26px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.catalog-card { min-height: 198px; padding: 20px; display: flex; flex-direction: column; border: 1px solid rgba(20,120,255,.16); border-radius: 12px; color: var(--ink); background: rgba(255,255,255,.86); box-shadow: 0 14px 34px rgba(29,36,51,.06); transition: transform .18s, box-shadow .18s; }
+.catalog-card:hover { transform: translateY(-3px); box-shadow: 0 20px 44px rgba(29,36,51,.11); }
+.catalog-card.disabled { opacity: .68; cursor: default; background: rgba(248,250,252,.86); }
+.catalog-card.disabled:hover { transform: none; box-shadow: 0 14px 34px rgba(29,36,51,.06); }
+.catalog-copy { margin-top: 15px; display: grid; gap: 7px; }
+.catalog-copy small { color: var(--blue); font-size: 11px; font-weight: 600; }
+.catalog-copy strong { display: flex; align-items: center; gap: 7px; font-size: 16px; }
+.catalog-copy strong em { padding: 3px 6px; border-radius: 999px; color: #967000; background: #fff4c7; font-size: 9px; font-style: normal; }
+.catalog-copy p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.catalog-action { margin-top: auto; color: var(--blue); font-size: 12px; font-weight: 600; }
 
 .app-page-content { width: min(1180px, calc(100% - 60px)); margin: 0 auto; padding: 38px 0 64px; }
 .page-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
@@ -301,6 +323,7 @@ a { color: inherit; text-decoration: none; }
   .creator-panel { order: -1; width: 100%; }
   .upload-stage, .source-preview { min-height: 560px; }
   .asset-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .catalog-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .task-record { grid-template-columns: 54px minmax(140px, 1fr) 100px 18px; }
   .record-points, .record-output { display: none; }
 }
@@ -355,6 +378,7 @@ a { color: inherit; text-decoration: none; }
   .dashboard-task { grid-template-columns: 46px minmax(0, 1fr) 17px; gap: 9px; }
   .dashboard-task > .record-status, .dashboard-task > span:not(.record-status) { display: none; }
   .asset-shortcut { align-items: flex-start; flex-direction: column; }
+  .inspiration-grid, .catalog-grid { grid-template-columns: 1fr; }
   .creator-header { padding: 0 14px; }
   .creator-layout { width: calc(100% - 24px); margin: 12px auto; gap: 12px; }
   .creator-panel { padding: 16px; }
