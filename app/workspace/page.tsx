@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Boxes, ChevronRight, Clock3, ImageIcon, Layers3, PackageOpen, Shirt, WandSparkles } from "lucide-react";
+import { ArrowRight, Boxes, ChevronRight, Clock3, ImageIcon, Layers3, PackageOpen, ScanSearch, Shirt, WandSparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -10,6 +10,7 @@ const tools = [
   { name: "商品主图", note: "生成电商首屏视觉", icon: ImageIcon, color: "blue", href: "/create/product-hero", available: true },
   { name: "模特穿搭", note: "服装自然上身展示", icon: Shirt, color: "violet", href: "/create/model-wear", available: true },
   { name: "场景延展", note: "匹配营销使用场景", icon: WandSparkles, color: "cyan", href: "/create/scene-image", available: true },
+  { name: "高清优化", note: "修复细节并提升清晰度", icon: ScanSearch, color: "blue", href: "/create/hd-enhance", available: true },
   { name: "详情页套图", note: "组织统一卖点表达", icon: Layers3, color: "orange", available: false },
 ];
 

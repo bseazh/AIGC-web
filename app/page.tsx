@@ -70,6 +70,7 @@ const features: Array<{
     description: "修复细节并提升分辨率，满足店铺和投放需求。",
     image: "https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=900&q=88",
     icon: Sparkles,
+    href: "/create/hd-enhance",
   },
   {
     title: "内容资产",

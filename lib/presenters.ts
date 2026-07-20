@@ -2,6 +2,7 @@ export const workflowNames: Record<string, string> = {
   "product-hero-image": "商品主图",
   "scene-image": "场景图生成",
   "model-wear": "模特穿搭",
+  "hd-enhance": "高清优化",
 };
 
 export const taskStatusLabels: Record<string, string> = {

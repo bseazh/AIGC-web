@@ -41,3 +41,17 @@ export const modelWearWorkflow = {
   styles: ["自然真实", "轻奢时尚", "清新日常", "电商展示"],
   refundOnFailure: true,
 } as const;
+
+export const hdEnhanceWorkflow = {
+  key: "hd-enhance",
+  name: "高清优化",
+  enabled: Boolean(process.env.AI_API_KEY && process.env.COS_SECRET_ID),
+  pointsPerTask: Number(process.env.HD_ENHANCE_TASK_POINTS || 5),
+  outputsPerTask: 1,
+  acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
+  maxFileBytes: 10 * 1024 * 1024,
+  aspectRatios: ["保持原比例"],
+  scenes: ["2 倍增强", "4 倍增强"],
+  styles: ["自然细节", "商品质感", "人像清晰", "降噪净化"],
+  refundOnFailure: true,
+} as const;
