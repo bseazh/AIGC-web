@@ -93,6 +93,9 @@ export default function Home() {
   const [agreed, setAgreed] = useState(true);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [codeCooldown, setCodeCooldown] = useState(0);
+  const [sendingCode, setSendingCode] = useState(false);
   const [authError, setAuthError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -101,8 +104,43 @@ export default function Home() {
     return () => { document.body.style.overflow = ""; };
   }, [loginOpen]);
 
+  useEffect(() => {
+    if (codeCooldown <= 0) return;
+    const timer = window.setInterval(() => setCodeCooldown((current) => Math.max(0, current - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [codeCooldown]);
+
   const enterWorkspace = () => router.push("/workspace");
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
+  const switchMode = (nextMode: "login" | "register") => {
+    setMode(nextMode);
+    setAuthError("");
+    setVerificationCode("");
+  };
+
+  const sendEmailCode = async () => {
+    if (sendingCode || codeCooldown > 0) return;
+    setSendingCode(true);
+    setAuthError("");
+    try {
+      const response = await fetch(`${basePath}/api/auth/email-code/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: identifier }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setAuthError(result.message || "验证码发送失败，请稍后再试");
+        return;
+      }
+      setCodeCooldown(result.retryAfter || 60);
+    } catch {
+      setAuthError("网络连接失败，请稍后再试");
+    } finally {
+      setSendingCode(false);
+    }
+  };
 
   const submitAccount = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -113,7 +151,7 @@ export default function Home() {
       const response = await fetch(`${basePath}/api/auth/${mode}/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier, password }),
+        body: JSON.stringify({ identifier, password, code: mode === "register" ? verificationCode : undefined }),
       });
       const result = await response.json();
       if (!response.ok) {
@@ -185,11 +223,12 @@ export default function Home() {
             <Brand />
             <div className="login-heading"><span><Sparkles size={18} /></span><h2 id="login-title">{mode === "login" ? "欢迎回来" : "创建账户"}</h2><p>{mode === "login" ? "登录后继续你的创作任务" : "注册即赠送 100 积分"}</p></div>
             <div className="segmented" role="tablist">
-              <button className={mode === "login" ? "active" : ""} onClick={() => { setMode("login"); setAuthError(""); }}>登录</button>
-              <button className={mode === "register" ? "active" : ""} onClick={() => { setMode("register"); setAuthError(""); }}>注册</button>
+              <button className={mode === "login" ? "active" : ""} onClick={() => switchMode("login")}>登录</button>
+              <button className={mode === "register" ? "active" : ""} onClick={() => switchMode("register")}>注册</button>
             </div>
             <form onSubmit={submitAccount}>
-              <label>手机号或邮箱<input value={identifier} onChange={(event) => setIdentifier(event.target.value)} autoComplete="username" placeholder="请输入手机号或邮箱" required /></label>
+              <label>{mode === "register" ? "邮箱" : "手机号或邮箱"}<input value={identifier} onChange={(event) => setIdentifier(event.target.value)} type={mode === "register" ? "email" : "text"} autoComplete="username" placeholder={mode === "register" ? "请输入邮箱地址" : "请输入手机号或邮箱"} required /></label>
+              {mode === "register" && <label>邮箱验证码<span className="input-action"><input value={verificationCode} onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" placeholder="请输入 6 位验证码" pattern="\d{6}" required /><button type="button" onClick={sendEmailCode} disabled={sendingCode || codeCooldown > 0}>{sendingCode ? "发送中..." : codeCooldown > 0 ? `${codeCooldown} 秒后重发` : "发送验证码"}</button></span></label>}
               <label>密码<input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder="8-72 位密码" minLength={8} maxLength={72} required /></label>
               <label className="consent"><button type="button" className={agreed ? "checked" : ""} onClick={() => setAgreed(!agreed)} aria-label="同意协议">{agreed && <Check size={13} />}</button><span>我已阅读并同意《用户协议》和《隐私政策》</span></label>
               {authError && <p className="auth-error" role="alert">{authError}</p>}
