@@ -12,12 +12,13 @@ type Props = {
   styles: readonly string[];
   sourceTitle: string;
   sourceHint: string;
+  submitLabel: string;
 };
 type Account = { wallet: { availablePoints: number } };
 type TaskResult = { taskId: string; status: string; outputs: Array<{ assetId: string; url: string }>; errorCode?: string };
 const ratios = ["1:1", "3:4", "4:3", "9:16"];
 
-export function ImageWorkflowPage({ title, description, submitUrl, scenes, styles, sourceTitle, sourceHint }: Props) {
+export function ImageWorkflowPage({ title, description, submitUrl, scenes, styles, sourceTitle, sourceHint, submitLabel }: Props) {
   const router = useRouter();
   const [account, setAccount] = useState<Account | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -88,7 +89,7 @@ export function ImageWorkflowPage({ title, description, submitUrl, scenes, style
         <label className="field-label">视觉风格<select value={style} onChange={(event) => setStyle(event.target.value)}>{styles.map((item) => <option key={item}>{item}</option>)}</select></label>
         <label className="field-label">补充要求<textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={1200} placeholder="例如：商品放在窗边桌面，保留自然投影与留白" /><small>{prompt.length}/1200</small></label>
         {error && <p className="creator-error" role="alert">{error}</p>}{phase === "succeeded" && <p className="creator-success"><Check size={16} />4 张结果已保存到内容资产</p>}
-        <button className="generate-button" type="submit" disabled={!file || busy || account.wallet.availablePoints < 10}><Upload size={18} />{busy ? "任务处理中" : account.wallet.availablePoints < 10 ? "积分不足" : `生成${title}`}</button>
+        <button className="generate-button" type="submit" disabled={!file || busy || account.wallet.availablePoints < 10}><Upload size={18} />{busy ? "任务处理中" : account.wallet.availablePoints < 10 ? "积分不足" : submitLabel}</button>
       </aside>
     </form>
   </main>;
