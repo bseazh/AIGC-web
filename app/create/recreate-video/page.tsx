@@ -1,5 +1,5 @@
-import { VideoWorkflowPage } from "@/app/components/video-workflow-page";
+import { RecreateVideoPage as RecreateVideoWorkspace } from "@/app/components/recreate-video-page";
 
 export default function RecreateVideoPage() {
-  return <VideoWorkflowPage template="recreate" />;
+  return <RecreateVideoWorkspace />;
 }
