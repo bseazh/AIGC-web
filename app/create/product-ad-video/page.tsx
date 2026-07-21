@@ -1,5 +1,5 @@
-import { VideoWorkflowPage } from "@/app/components/video-workflow-page";
+import { ProductAdVideoPage as ProductAdVideoWorkspace } from "@/app/components/product-ad-video-page";
 
 export default function ProductAdVideoPage() {
-  return <VideoWorkflowPage template="ad" />;
+  return <ProductAdVideoWorkspace />;
 }
