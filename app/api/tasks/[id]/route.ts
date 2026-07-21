@@ -24,17 +24,24 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   );
   const task = result.rows[0];
   if (!task) return NextResponse.json({ code: "TASK_NOT_FOUND" }, { status: 404 });
-  const outputs = await Promise.all((task.output_json?.assets || []).map(async (asset) => ({
-    assetId: asset.assetId,
-    url: await createSignedObjectUrl(asset.storageKey, "GET", 3600),
-  })));
+  const outputAssets = task.output_json?.assets || [];
+  const assetIds = outputAssets.map((asset) => asset.assetId);
+  const assetRows = assetIds.length ? await db.query<{ id: string; storage_key: string; mime_type: string; original_name: string | null }>(
+    "SELECT id, storage_key, mime_type, original_name FROM assets WHERE id = ANY($1::uuid[]) AND owner_id = $2 AND kind = 'OUTPUT' AND audit_status = 'READY'", [assetIds, user.id],
+  ) : { rows: [] };
+  const assetsById = new Map(assetRows.rows.map((asset) => [asset.id, asset]));
+  const outputs = await Promise.all(outputAssets.map(async (output) => {
+    const asset = assetsById.get(output.assetId);
+    if (!asset) return null;
+    return { assetId: asset.id, mimeType: asset.mime_type, name: asset.original_name || "生成结果", url: await createSignedObjectUrl(asset.storage_key, "GET", 3600) };
+  }));
   return NextResponse.json({
     taskId: task.id,
     workflowName: workflowName(task.workflow_key),
     status: task.status,
     statusLabel: taskStatusLabel(task.status),
     points: task.points,
-    outputs,
+    outputs: outputs.filter((output): output is NonNullable<typeof output> => Boolean(output)),
     errorCode: task.error_code,
     createdAt: task.created_at,
     updatedAt: task.updated_at,

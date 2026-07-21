@@ -62,7 +62,7 @@ export default function TasksPage() {
   return (
     <AppShell active="tasks" account={account} taskCount={activeCount}>
       <div className="app-page-content">
-        <section className="page-intro"><div><span className="page-kicker"><Clock3 size={15} />创作记录</span><h1>任务中心</h1><p>查看生成进度、积分状态与历史结果；进行中的任务会自动刷新。</p></div><button className="secondary-command" onClick={() => loadTasks()} disabled={loading}><RefreshCw size={16} />刷新</button></section>
+        <section className="page-intro"><div><span className="page-kicker"><Clock3 size={15} />创作记录</span><h1>任务中心</h1><p>查看生成进度、积分状态与历史结果；进行中的任务会自动刷新。任务完成或失败通知仅在此处展示。</p></div><button className="secondary-command" onClick={() => loadTasks()} disabled={loading}><RefreshCw size={16} />刷新</button></section>
         <section className="filter-bar">
           <div className="filter-tabs">{filters.map((item) => <button key={item.key} className={filter === item.key ? "active" : ""} onClick={() => setFilter(item.key)}>{item.label}</button>)}</div>
           <span>共 {tasks.length} 条记录</span>

@@ -12,6 +12,35 @@ for (const name of required) {
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5 });
 const cos = new COS({ SecretId: process.env.COS_SECRET_ID, SecretKey: process.env.COS_SECRET_KEY });
 const redisUrl = new URL(process.env.REDIS_URL);
+const workerId = `${process.env.HOSTNAME || "worker"}:${process.pid}`;
+
+async function heartbeat() {
+  await pool.query(
+    "INSERT INTO worker_heartbeats (worker_id, last_seen_at, details_json) VALUES ($1, NOW(), $2::jsonb) ON CONFLICT (worker_id) DO UPDATE SET last_seen_at = EXCLUDED.last_seen_at, details_json = EXCLUDED.details_json",
+    [workerId, JSON.stringify({ pid: process.pid, concurrency: 2 })],
+  );
+}
+
+function redactForLog(value) {
+  if (typeof value === "string") {
+    if (/^https?:\/\//i.test(value)) {
+      try { const url = new URL(value); return `${url.origin}${url.pathname}`; } catch { return "[url]"; }
+    }
+    return value.slice(0, 1000);
+  }
+  if (Array.isArray(value)) return value.map(redactForLog);
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, child]) => (/authorization|token|secret|signature/i.test(key) ? [key, "[redacted]"] : [key, redactForLog(child)])));
+  return value;
+}
+
+async function logProviderCall(taskId, operation, request, responseStatus, response, errorCode = null) {
+  try {
+    await pool.query(
+      "INSERT INTO provider_call_logs (task_id, provider, operation, request_json, response_status, response_json, error_code) VALUES ($1, 'ark', $2, $3::jsonb, $4, $5::jsonb, $6)",
+      [taskId, operation, JSON.stringify(redactForLog(request)), responseStatus, JSON.stringify(redactForLog(response || {})), errorCode],
+    );
+  } catch (error) { console.error("provider call log failed", error); }
+}
 
 function cosUrl(Key, Method = "GET", Expires = 3600) {
   return new Promise((resolve, reject) => {
@@ -71,14 +100,10 @@ function findVideoUrl(value) {
   return null;
 }
 
-async function createVideoTask(inputUrls, input, workflowKey) {
+async function createVideoTask(inputUrls, input, workflowKey, taskId) {
   if (!process.env.ARK_API_KEY) throw new Error("ARK_API_KEY is required for video generation");
   const mimeTypes = input.assetMimeTypes || [];
-  const templateDirection = workflowKey === "product-ad-video"
-    ? "将输入的产品图片制作成高品质商品广告大片。综合识别全部图片中的材质、颜色、细节与卖点，围绕商品设计开场、细节、使用或氛围镜头和收束镜头。"
-    : workflowKey === "recreate-video"
-    ? "参考视频只用于提取镜头节奏、景别、运镜与转场结构。不得复制原视频中的人物、品牌、商品、文案或具体画面；使用输入商品生成原创带货短片。参考音频仅用于节奏参考，生成全新的声音内容。"
-    : "按用户脚本和全部参考素材生成原创 15 秒短片，优先遵循首帧、尾帧、参考视频与参考音频的角色定义。";
+  const templateDirection = typeof input.promptConfig?.template === "string" ? input.promptConfig.template : "按用户脚本和全部参考素材生成原创短片。";
   const content = [{ type: "text", text: [
     `生成一支${input.scene}方向的电商带货短视频，整体节奏为${input.style}，画幅比例${input.aspectRatio}，时长 ${input.duration} 秒，分辨率 ${input.resolution}。`,
     templateDirection,
@@ -90,21 +115,24 @@ async function createVideoTask(inputUrls, input, workflowKey) {
     if (mime === "video/mp4") content.push({ type: "video_url", video_url: { url }, role: "reference_video" });
     if (mime.startsWith("audio/")) content.push({ type: "audio_url", audio_url: { url }, role: "reference_audio" });
   });
+  const requestBody = { model: process.env.ARK_MODEL || "doubao-seedance-2-0-260128", content, generate_audio: true, ratio: input.aspectRatio, duration: input.duration, resolution: input.resolution, watermark: input.promptConfig?.watermark === true };
   const response = await fetch("https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks", {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.ARK_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "doubao-seedance-2-0-260128", content, generate_audio: true, ratio: input.aspectRatio, duration: input.duration, resolution: input.resolution, watermark: false }),
+    body: JSON.stringify(requestBody),
   });
   const payload = await response.json().catch(() => null);
+  await logProviderCall(taskId, "create_video_task", { model: requestBody.model, ratio: requestBody.ratio, duration: requestBody.duration, resolution: requestBody.resolution, watermark: requestBody.watermark, promptConfig: input.promptConfig ? { id: input.promptConfig.id, version: input.promptConfig.version, variantKey: input.promptConfig.variantKey } : null, assetTypes: mimeTypes }, response.status, payload, response.ok ? null : "ARK_CREATE_FAILED");
   if (!response.ok || !payload?.id) throw new Error(`Ark ${response.status}: ${payload?.error?.message || "task creation failed"}`);
   return payload.id;
 }
 
-async function waitForVideo(taskId) {
+async function waitForVideo(taskId, generationTaskId) {
   const deadline = Date.now() + 15 * 60 * 1000;
   while (Date.now() < deadline) {
     const response = await fetch(`https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks/${taskId}`, { headers: { Authorization: `Bearer ${process.env.ARK_API_KEY}` } });
     const payload = await response.json().catch(() => null);
+    await logProviderCall(generationTaskId, "get_video_task", { providerTaskId: taskId }, response.status, payload, response.ok ? null : "ARK_QUERY_FAILED");
     if (!response.ok) throw new Error(`Ark ${response.status}: ${payload?.error?.message || "task query failed"}`);
     const status = String(payload?.status || "").toLowerCase();
     if (["succeeded", "success", "completed"].includes(status)) {
@@ -156,8 +184,8 @@ async function generateOne(inputUrls, input, index, workflowKey) {
   return waitForImage(providerTaskId);
 }
 
-async function generateVideo(inputUrls, input, workflowKey) {
-  return waitForVideo(await createVideoTask(inputUrls, input, workflowKey));
+async function generateVideo(inputUrls, input, workflowKey, taskId) {
+  return waitForVideo(await createVideoTask(inputUrls, input, workflowKey, taskId), taskId);
 }
 
 async function settleSuccess(task, savedAssets) {
@@ -233,7 +261,7 @@ const worker = new Worker("generation", async (job) => {
     const storageKeys = task.input_json.storageKeys || [task.input_json.storageKey];
     const inputUrls = await Promise.all(storageKeys.map((key) => cosUrl(key, "GET", 3600)));
     const temporaryUrls = ["product-ad-video", "recreate-video", "seedance-video"].includes(task.workflow_key)
-      ? [await generateVideo(inputUrls, task.input_json, task.workflow_key)]
+      ? [await generateVideo(inputUrls, task.input_json, task.workflow_key, task.id)]
       : await Promise.all(Array.from({ length: task.input_json.outputs || 4 }, (_, index) => generateOne(inputUrls, task.input_json, index, task.workflow_key)));
     const savedAssets = [];
     for (const [index, url] of temporaryUrls.entries()) {
@@ -249,7 +277,7 @@ const worker = new Worker("generation", async (job) => {
       const asset = await pool.query(
         `INSERT INTO assets (owner_id, kind, storage_key, mime_type, byte_size, audit_status, original_name, metadata_json)
          VALUES ($1, 'OUTPUT', $2, $3, $4, 'READY', $5, $6::jsonb) RETURNING id`,
-        [task.user_id, key, contentType, buffer.length, `${task.workflow_key}-${index + 1}.${extension}`, JSON.stringify({ taskId: task.id, workflowKey: task.workflow_key, provider: isVideoTask ? "ark" : "sophnet", model: isVideoTask ? "doubao-seedance-2-0-260128" : process.env.AI_MODEL })],
+        [task.user_id, key, contentType, buffer.length, `${task.workflow_key}-${index + 1}.${extension}`, JSON.stringify({ taskId: task.id, workflowKey: task.workflow_key, provider: isVideoTask ? "ark" : "sophnet", model: isVideoTask ? (process.env.ARK_MODEL || "doubao-seedance-2-0-260128") : process.env.AI_MODEL })],
       );
       savedAssets.push({ assetId: asset.rows[0].id, storageKey: key });
     }
@@ -268,9 +296,13 @@ const worker = new Worker("generation", async (job) => {
 worker.on("completed", (job) => console.log(`task ${job.id} completed`));
 worker.on("failed", (job, error) => console.error(`task ${job?.id || "unknown"} failed`, error.message));
 
+heartbeat().catch((error) => console.error("initial worker heartbeat failed", error));
+const heartbeatTimer = setInterval(() => heartbeat().catch((error) => console.error("worker heartbeat failed", error)), 30_000);
+
 for (const signal of ["SIGTERM", "SIGINT"]) {
   process.on(signal, async () => {
     await worker.close();
+    clearInterval(heartbeatTimer);
     await pool.end();
     process.exit(0);
   });

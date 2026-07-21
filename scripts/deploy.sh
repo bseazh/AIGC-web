@@ -13,8 +13,9 @@ fi
 
 npm ci --include=dev --no-audit --no-fund
 npm run typecheck
-npm run build
+env -u TURBOPACK -u __NEXT_PRIVATE_STANDALONE_CONFIG -u __NEXT_PRIVATE_ORIGIN npm run build
 node scripts/migrate.mjs
+npm run verify:production
 
 mkdir -p .next/standalone/.next
 cp -R .next/static .next/standalone/.next/static

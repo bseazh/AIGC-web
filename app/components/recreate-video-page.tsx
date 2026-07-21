@@ -1,13 +1,13 @@
 "use client";
 
-import { ArrowLeft, ChevronDown, Film, FolderOpen, ImagePlus, LoaderCircle, ShieldCheck, Sparkles, Upload, Video, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, Download, Film, FolderOpen, ImagePlus, LoaderCircle, ShieldCheck, Sparkles, Upload, Video, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
-type Item = { preview: string; name: string; byteSize: number; file?: File; assetId?: string };
-type Asset = { id: string; mimeType: string; byteSize: number; originalName: string; url: string };
+type Item = { preview: string; name: string; byteSize: number; file?: File; assetId?: string; durationSeconds?: number };
+type Asset = { id: string; mimeType: string; byteSize: number; originalName: string; url: string; durationSeconds?: number | null };
 type Account = { wallet: { availablePoints: number } };
-type Result = { outputs: Array<{ url: string }> };
+type Result = { outputs: Array<{ assetId: string; url: string }> };
 type SourceKind = "video" | "product" | "scene";
 const imageAccept = "image/jpeg,image/png,image/webp";
 
@@ -27,6 +27,7 @@ export function RecreateVideoPage() {
   const [ratio, setRatio] = useState("9:16");
   const [duration, setDuration] = useState("15");
   const [resolution, setResolution] = useState("720p");
+  const [usageAuthorized, setUsageAuthorized] = useState(false);
   const [phase, setPhase] = useState<"idle" | "uploading" | "generating" | "succeeded" | "failed">("idle");
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
@@ -34,14 +35,26 @@ export function RecreateVideoPage() {
   useEffect(() => { fetch("/api/auth/session/", { cache: "no-store" }).then(async (response) => { if (!response.ok) throw new Error(); setAccount(await response.json()); }).catch(() => router.replace("/")); }, [router]);
 
   const resetTask = () => { setError(""); setResult(null); setPhase("idle"); };
-  const choose = (kind: SourceKind, files?: FileList | null) => {
+  const readVideoDuration = (file: File) => new Promise<number>((resolve, reject) => {
+    const video = document.createElement("video");
+    const objectUrl = URL.createObjectURL(file);
+    video.preload = "metadata";
+    video.onloadedmetadata = () => { const seconds = video.duration; URL.revokeObjectURL(objectUrl); Number.isFinite(seconds) && seconds > 0 ? resolve(seconds) : reject(new Error("无法读取视频时长")); };
+    video.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("无法读取视频时长，请选择可正常播放的 MP4 文件")); };
+    video.src = objectUrl;
+  });
+  const choose = async (kind: SourceKind, files?: FileList | null) => {
     if (!files?.length) return;
     const list = Array.from(files);
     if (kind === "video") {
       const file = list[0];
       if (file.type !== "video/mp4") return setError("对标视频仅支持 MP4 格式");
       if (file.size > 100 * 1024 * 1024) return setError("对标视频不能超过 100MB");
-      setReference({ file, preview: URL.createObjectURL(file), name: file.name, byteSize: file.size });
+      try {
+        const durationSeconds = await readVideoDuration(file);
+        if (durationSeconds < 3 || durationSeconds > 20) return setError(`对标视频时长为 ${durationSeconds.toFixed(1)} 秒，需在 3–20 秒之间`);
+        setReference({ file, preview: URL.createObjectURL(file), name: file.name, byteSize: file.size, durationSeconds });
+      } catch (caught) { setError(caught instanceof Error ? caught.message : "无法读取视频时长"); }
     } else {
       const valid = list.filter((file) => ["image/jpeg", "image/png", "image/webp"].includes(file.type) && file.size <= 10 * 1024 * 1024).map((file) => ({ file, preview: URL.createObjectURL(file), name: file.name, byteSize: file.size }));
       if (!valid.length) return setError("请上传 10MB 以内的 JPG、PNG 或 WebP 图片");
@@ -55,7 +68,8 @@ export function RecreateVideoPage() {
     try { const response = await fetch("/api/assets/?kind=ALL", { cache: "no-store" }); const body = await response.json(); if (!response.ok) throw new Error(); setAssets((body.assets || []).filter((asset: Asset) => kind === "video" ? asset.mimeType === "video/mp4" : asset.mimeType.startsWith("image/"))); } catch { setError("素材库加载失败，请稍后再试"); }
   };
   const select = (asset: Asset) => {
-    const selected = { assetId: asset.id, preview: asset.url, name: asset.originalName, byteSize: asset.byteSize };
+    if (tab === "video" && (!asset.durationSeconds || asset.durationSeconds < 3 || asset.durationSeconds > 20)) return setError("该视频未记录有效时长或不在 3–20 秒内，请重新上传后使用");
+    const selected = { assetId: asset.id, preview: asset.url, name: asset.originalName, byteSize: asset.byteSize, durationSeconds: asset.durationSeconds || undefined };
     if (tab === "video") setReference(selected);
     if (tab === "scene") setScene(selected);
     if (tab === "product") setProducts((current) => current.some((item) => item.assetId === asset.id) ? current.filter((item) => item.assetId !== asset.id) : current.length < 5 ? [...current, selected] : current);
@@ -68,7 +82,8 @@ export function RecreateVideoPage() {
     const response = await fetch("/api/uploads/presign/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: item.file.name, mimeType: item.file.type, byteSize: item.file.size }) });
     const presign = await response.json(); if (!response.ok) throw new Error(presign.message || "上传失败");
     if (!(await fetch(presign.uploadUrl, { method: "PUT", headers: { "Content-Type": item.file.type }, body: item.file })).ok) throw new Error("上传失败");
-    if (!(await fetch("/api/uploads/confirm/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assetId: presign.assetId }) })).ok) throw new Error("素材校验失败");
+    const confirmed = await fetch("/api/uploads/confirm/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assetId: presign.assetId, ...(item.file.type === "video/mp4" ? { videoDurationSeconds: item.durationSeconds } : {}) }) });
+    if (!confirmed.ok) { const body = await confirmed.json().catch(() => null); throw new Error(body?.message || "素材校验失败"); }
     return presign.assetId as string;
   };
   const poll = async (taskId: string) => {
@@ -83,12 +98,12 @@ export function RecreateVideoPage() {
     throw new Error("视频仍在生成中，请稍后在任务中心查看");
   };
   const submit = async (event: FormEvent) => {
-    event.preventDefault(); if (!reference || !products.length || phase !== "idle") return;
+    event.preventDefault(); if (!reference || !products.length || !usageAuthorized || phase !== "idle") return;
     setError(""); setResult(null); setPhase("uploading");
     try {
       const assetIds = [...await Promise.all(products.map(upload)), await upload(reference), ...(scene ? [await upload(scene)] : [])];
       const prompt = [`产品信息：${info.trim()}`, `视频特殊要求：${special.trim()}`, modelOn && modelInfo.trim() ? `自定义模特信息：${modelInfo.trim()}` : ""].filter((line) => !line.endsWith("：")).join("\n");
-      const response = await fetch("/api/tasks/recreate-video/", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ assetIds, prompt, aspectRatio: ratio, duration: Number(duration), resolution, scene: "镜头节奏复刻", style: "自然带货" }) });
+      const response = await fetch("/api/tasks/recreate-video/", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ assetIds, prompt, aspectRatio: ratio, duration: Number(duration), resolution, scene: "镜头节奏复刻", style: "自然带货", usageAuthorized: true }) });
       const created = await response.json(); if (!response.ok) throw new Error(created.message || created.code || "创建任务失败");
       setPhase("generating"); await poll(created.taskId);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "创建失败"); setPhase("failed"); }
@@ -99,5 +114,5 @@ export function RecreateVideoPage() {
   };
   const busy = phase === "uploading" || phase === "generating";
   if (!account) return <main className="workspace-loading"><Sparkles /></main>;
-  return <main className="recreate-studio"><header className="ad-studio-header"><button type="button" onClick={() => router.push("/create/product-video")}><ArrowLeft size={19} />返回视频创作</button></header><form className="recreate-card" onSubmit={submit}><div className="ad-studio-title"><Film size={22} /><strong>复刻爆款带货视频-新版</strong></div><div className="ad-studio-body">{box("video", "对标视频", true, "视频时长需在 3–20 秒之间", Video)}{box("product", "商品图", true, "上传商品图片，支持多张", ImagePlus)}{products.length > 0 && <div className="ad-selected-images">{products.map((product, index) => <article key={`${product.assetId || product.name}-${index}`}><img src={product.preview} alt="商品图片预览" /><button type="button" onClick={() => { removeProduct(index); resetTask(); }} aria-label="移除商品图"><X size={14} /></button><span>{index + 1}</span></article>)}</div>}<label className="recreate-toggle">自定义模特信息 <input type="checkbox" checked={modelOn} onChange={(event) => { setModelOn(event.target.checked); resetTask(); }} /><i /></label><p className="recreate-review"><ShieldCheck size={15} />真人模特内容将按平台规则进行审核</p>{modelOn && <label className="ad-form-field">模特信息（可选）<textarea value={modelInfo} onChange={(event) => setModelInfo(event.target.value)} maxLength={300} placeholder="例如：女性，25 岁，自然亲和，居家穿搭" /></label>}{box("scene", "场景图（选填）", false, "上传希望出现的商品场景", ImagePlus)}<label className="ad-form-field">产品信息（可选）<textarea value={info} onChange={(event) => setInfo(event.target.value)} maxLength={600} placeholder="例如：产品名称、核心卖点、材质、目标人群" /></label><label className="ad-form-field">视频特殊要求（可选）<textarea value={special} onChange={(event) => setSpecial(event.target.value)} maxLength={600} placeholder="例如：突出金属质感、镜头缓慢推进、电影级光影" /></label><div className="ad-select-grid"><label>视频比例 <em>*</em><span className="ad-select"><select value={ratio} onChange={(event) => setRatio(event.target.value)}><option value="9:16">竖屏（9:16）</option><option value="16:9">横屏（16:9）</option></select><ChevronDown size={16} /></span></label><label>视频时长 <em>*</em><span className="ad-select"><select value={duration} onChange={(event) => setDuration(event.target.value)}><option value="5">5 秒</option><option value="10">10 秒</option><option value="15">15 秒</option></select><ChevronDown size={16} /></span></label><label>视频分辨率 <em>*</em><span className="ad-select"><select value={resolution} onChange={(event) => setResolution(event.target.value)}><option>480p</option><option>720p</option><option>1080p</option></select><ChevronDown size={16} /></span></label></div><p className="ad-credit"><Sparkles size={16} />预计积分：{reference && products.length ? "40 积分" : "待填写：对标视频和商品图"}</p>{error && <p className="creator-error" role="alert">{error}</p>}{phase === "succeeded" && result?.outputs[0] && <div className="ad-result"><video src={result.outputs[0].url} controls playsInline /></div>}<div className="ad-actions"><button className="ad-generate" type="submit" disabled={!reference || !products.length || busy}>{busy ? <LoaderCircle size={18} /> : <Film size={18} />}{busy ? "任务处理中" : "生成复刻带货视频"}</button><button className="ad-reset" type="button" onClick={() => { setReference(null); setProducts([]); setScene(null); setInfo(""); setSpecial(""); setModelInfo(""); setModelOn(false); resetTask(); }}>重置</button></div></div></form></main>;
+  return <main className="recreate-studio"><header className="ad-studio-header"><button type="button" onClick={() => router.push("/create/product-video")}><ArrowLeft size={19} />返回视频创作</button></header><form className="recreate-card" onSubmit={submit}><div className="ad-studio-title"><Film size={22} /><strong>复刻爆款带货视频-新版</strong></div><div className="ad-studio-body">{box("video", "对标视频", true, "视频时长需在 3–20 秒之间", Video)}{reference?.durationSeconds && <p className="recreate-review"><Video size={15} />已读取对标视频时长：{reference.durationSeconds.toFixed(1)} 秒</p>}{box("product", "商品图", true, "上传商品图片，支持多张", ImagePlus)}{products.length > 0 && <div className="ad-selected-images">{products.map((product, index) => <article key={`${product.assetId || product.name}-${index}`}><img src={product.preview} alt="商品图片预览" /><button type="button" onClick={() => { removeProduct(index); resetTask(); }} aria-label="移除商品图"><X size={14} /></button><span>{index + 1}</span></article>)}</div>}<label className="recreate-consent"><input type="checkbox" checked={usageAuthorized} onChange={(event) => { setUsageAuthorized(event.target.checked); resetTask(); }} />我确认拥有对标视频、商品图及其他上传素材的合法使用授权，并同意平台记录本次确认。</label><label className="recreate-toggle">自定义模特信息 <input type="checkbox" checked={modelOn} onChange={(event) => { setModelOn(event.target.checked); resetTask(); }} /><i /></label><p className="recreate-review"><ShieldCheck size={15} />真人模特内容将按平台规则进行审核</p>{modelOn && <label className="ad-form-field">模特信息（可选）<textarea value={modelInfo} onChange={(event) => setModelInfo(event.target.value)} maxLength={300} placeholder="例如：女性，25 岁，自然亲和，居家穿搭" /></label>}{box("scene", "场景图（选填）", false, "上传希望出现的商品场景", ImagePlus)}<label className="ad-form-field">产品信息（可选）<textarea value={info} onChange={(event) => setInfo(event.target.value)} maxLength={600} placeholder="例如：产品名称、核心卖点、材质、目标人群" /></label><label className="ad-form-field">视频特殊要求（可选）<textarea value={special} onChange={(event) => setSpecial(event.target.value)} maxLength={600} placeholder="例如：突出金属质感、镜头缓慢推进、电影级光影" /></label><div className="ad-select-grid"><label>视频比例 <em>*</em><span className="ad-select"><select value={ratio} onChange={(event) => setRatio(event.target.value)}><option value="9:16">竖屏（9:16）</option><option value="16:9">横屏（16:9）</option></select><ChevronDown size={16} /></span></label><label>视频时长 <em>*</em><span className="ad-select"><select value={duration} onChange={(event) => setDuration(event.target.value)}><option value="5">5 秒</option><option value="10">10 秒</option><option value="15">15 秒</option></select><ChevronDown size={16} /></span></label><label>视频分辨率 <em>*</em><span className="ad-select"><select value={resolution} onChange={(event) => setResolution(event.target.value)}><option>480p</option><option>720p</option><option>1080p</option></select><ChevronDown size={16} /></span></label></div><p className="ad-credit"><Sparkles size={16} />预计积分：{reference && products.length ? "40 积分" : "待填写：对标视频和商品图"}</p>{error && <p className="creator-error" role="alert">{error}</p>}{phase === "succeeded" && result?.outputs[0] && <div className="ad-result"><video src={result.outputs[0].url} controls playsInline /><a href={`/api/assets/${result.outputs[0].assetId}/download/`}><Download size={16} />下载视频</a></div>}<div className="ad-actions"><button className="ad-generate" type="submit" disabled={!reference || !products.length || !usageAuthorized || busy}>{busy ? <LoaderCircle size={18} /> : <Film size={18} />}{busy ? "任务处理中" : "生成复刻带货视频"}</button><button className="ad-reset" type="button" onClick={() => { setReference(null); setProducts([]); setScene(null); setInfo(""); setSpecial(""); setModelInfo(""); setModelOn(false); setUsageAuthorized(false); resetTask(); }}>重置</button></div></div></form></main>;
 }

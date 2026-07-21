@@ -71,7 +71,7 @@ export const detailPageWorkflow = {
 } as const;
 
 const videoWorkflowBase = {
-  enabled: Boolean(process.env.ARK_API_KEY && process.env.COS_SECRET_ID),
+  enabled: Boolean(process.env.ARK_API_KEY && process.env.COS_BUCKET && process.env.COS_REGION && process.env.COS_SECRET_ID && process.env.COS_SECRET_KEY),
   pointsPerTask: Number(process.env.VIDEO_TASK_POINTS || 40),
   outputsPerTask: 1,
   aspectRatios: ["16:9", "9:16"],

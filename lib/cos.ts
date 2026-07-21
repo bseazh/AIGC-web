@@ -48,3 +48,10 @@ export async function inspectObject(Key: string) {
     });
   });
 }
+
+export async function removeObject(Key: string) {
+  const { Bucket, Region } = config();
+  return new Promise<void>((resolve, reject) => {
+    getCosClient().deleteObject({ Bucket, Region, Key }, (error) => error ? reject(error) : resolve());
+  });
+}

@@ -24,7 +24,12 @@ export async function POST(request: NextRequest) {
     if (actualSize !== Number(asset.byte_size) || (actualType && actualType !== asset.mime_type)) {
       return NextResponse.json({ code: "UPLOAD_MISMATCH", message: "上传文件校验失败" }, { status: 400 });
     }
-    await db.query("UPDATE assets SET audit_status = 'READY' WHERE id = $1", [asset.id]);
+    const videoDurationSeconds = Number(body?.videoDurationSeconds);
+    if (asset.mime_type === "video/mp4" && (!Number.isFinite(videoDurationSeconds) || videoDurationSeconds <= 0 || videoDurationSeconds > 24 * 60 * 60)) {
+      return NextResponse.json({ code: "VIDEO_METADATA_REQUIRED", message: "无法读取视频时长，请重新选择可正常播放的 MP4 文件" }, { status: 400 });
+    }
+    const metadataJson = asset.mime_type === "video/mp4" ? { durationSeconds: Math.round(videoDurationSeconds * 1000) / 1000 } : {};
+    await db.query("UPDATE assets SET audit_status = 'READY', metadata_json = metadata_json || $2::jsonb WHERE id = $1", [asset.id, JSON.stringify(metadataJson)]);
     return NextResponse.json({ assetId: asset.id, status: "READY" });
   } catch (error) {
     console.error("upload confirmation failed", error);

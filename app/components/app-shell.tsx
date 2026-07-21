@@ -1,13 +1,13 @@
 "use client";
 
-import { ArrowLeft, Boxes, Clock3, Coins, Home, ImageIcon, LogOut, Menu, Sparkles } from "lucide-react";
+import { ArrowLeft, Boxes, ChevronDown, Clock3, Coins, Home, ImageIcon, LogOut, Menu, Settings2, Sparkles, UserRound, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ReactNode, useState } from "react";
 
 type AppShellProps = {
-  active: "workspace" | "tools" | "tasks" | "assets";
-  account: { user: { displayName: string }; wallet: { availablePoints: number } };
+  active: "workspace" | "tools" | "tasks" | "assets" | "wallet" | "account";
+  account: { user: { displayName: string; isAdministrator?: boolean }; wallet: { availablePoints: number } };
   taskCount?: number;
   children: ReactNode;
 };
@@ -17,11 +17,13 @@ const navItems = [
   { key: "tools", label: "创作工具", href: "/tools", icon: Sparkles },
   { key: "tasks", label: "任务中心", href: "/tasks", icon: Clock3 },
   { key: "assets", label: "内容资产", href: "/assets", icon: Boxes },
+  { key: "wallet", label: "积分钱包", href: "/wallet", icon: WalletCards },
 ] as const;
 
 export function AppShell({ active, account, taskCount = 0, children }: AppShellProps) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const logout = async () => {
     await fetch("/api/auth/logout/", { method: "POST" });
     router.replace("/");
@@ -38,9 +40,10 @@ export function AppShell({ active, account, taskCount = 0, children }: AppShellP
               <Icon size={19} />{item.label}{item.key === "tasks" && taskCount > 0 && <span className="nav-count">{taskCount > 99 ? "99+" : taskCount}</span>}
             </Link>
           ); })}
+          {account.user.isAdministrator && <><Link href="/admin/wallets" onClick={() => setSidebarOpen(false)}><Settings2 size={19} />积分后台</Link><Link href="/admin/prompts" onClick={() => setSidebarOpen(false)}><Settings2 size={19} />提示词运营</Link></>}
         </nav>
         <div className="sidebar-bottom">
-          <div className="credit-card"><span>可用积分</span><strong><Coins size={18} />{account.wallet.availablePoints.toLocaleString()}</strong><em>测试积分</em></div>
+          <div className="credit-card"><span>可用积分</span><strong><Coins size={18} />{account.wallet.availablePoints.toLocaleString()}</strong><em>1 元 = 10 积分</em></div>
           <Link href="/"><ArrowLeft size={17} />返回首页</Link>
           <button className="logout-link" onClick={logout}><LogOut size={16} />退出登录</button>
         </div>
@@ -50,7 +53,7 @@ export function AppShell({ active, account, taskCount = 0, children }: AppShellP
         <header className="workspace-header app-page-header">
           <button className="icon-button mobile-menu" aria-label="打开菜单" onClick={() => setSidebarOpen(true)}><Menu size={21} /></button>
           <Link href="/workspace" className="mobile-brand"><img src="/brand/bala-aigc-mark.png" alt="" /><strong>芭乐AIGC</strong></Link>
-          <div className="header-actions"><Link className="header-create" href="/tools"><ImageIcon size={17} />开始创作</Link><span className="avatar">{account.user.displayName.slice(0, 1)}</span></div>
+          <div className="header-actions"><Link className="header-create" href="/tools"><ImageIcon size={17} />开始创作</Link><div className="header-account"><button className="avatar" type="button" aria-label="打开账户菜单" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen((open) => !open)}>{account.user.displayName.slice(0, 1)}<ChevronDown size={13} /></button>{accountMenuOpen && <div className="account-menu"><div><strong>{account.user.displayName}</strong><small>{account.wallet.availablePoints.toLocaleString()} 积分可用</small></div><Link href="/account" onClick={() => setAccountMenuOpen(false)}><UserRound size={16} />账号设置</Link><Link href="/wallet" onClick={() => setAccountMenuOpen(false)}><WalletCards size={16} />积分钱包</Link><button type="button" onClick={logout}><LogOut size={16} />退出登录</button></div>}</div></div>
         </header>
         {children}
       </section>

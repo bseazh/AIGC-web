@@ -11,6 +11,12 @@ npm run dev
 
 打开 `http://localhost:3000`。
 
+## 积分与后台管理
+
+- 积分换算固定为 `1 元 = 10 积分`；当前不接入微信支付。
+- 在服务器环境变量中配置 `ADMIN_IDENTIFIERS=admin@example.com,13800138000` 后，对应已登录账号可进入 `/admin/wallets`，执行人工充值或发放测试积分。两种操作都会独立写入积分流水。
+- 任务完成与失败状态只在任务中心展示，不发送站外通知。
+
 ## 验证
 
 ```bash
@@ -39,3 +45,15 @@ npm run build
 
 - `DESIGN.md`：公开页面设计系统。
 - `SYSTEM-BLUEPRINT.md`：用户、任务、积分、API 与提示词系统蓝图。
+## 视频生产验收
+
+在生产机写入 `ARK_API_KEY`、`ARK_MODEL` 和全部 COS 变量后，先执行以下检查；脚本不会输出密钥：
+
+```bash
+set -a; source .env.production; set +a
+npm run verify:production
+sudo systemctl restart aigc-worker
+sudo systemctl status aigc-worker --no-pager
+```
+
+通过后在「复刻带货视频」用已授权素材分别提交已开通的 5 / 10 / 15 秒及 480p / 720p / 1080p 组合。任务详情将显示视频播放器，并可从下载按钮获取原始产物；产物私有保存于 COS 的 `users/<用户ID>/outputs/<任务ID>/`，不会公开桶路径。

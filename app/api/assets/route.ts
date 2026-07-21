@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createSignedObjectUrl } from "@/lib/cos";
+import { createSignedObjectUrl, removeObject } from "@/lib/cos";
 import { db } from "@/lib/db";
 import { authenticatedUser } from "@/lib/session";
 
@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
     byteSize: Number(asset.byte_size),
     originalName: asset.original_name || "未命名素材",
     taskId: typeof asset.metadata_json?.taskId === "string" ? asset.metadata_json.taskId : null,
+    durationSeconds: typeof asset.metadata_json?.durationSeconds === "number" ? asset.metadata_json.durationSeconds : null,
     url: await createSignedObjectUrl(asset.storage_key, "GET", 3600),
     createdAt: asset.created_at,
   })));
@@ -37,4 +38,17 @@ export async function GET(request: NextRequest) {
     "SELECT COALESCE(SUM(byte_size), 0)::text AS bytes FROM assets WHERE owner_id = $1 AND audit_status = 'READY'", [user.id],
   );
   return NextResponse.json({ assets, totalBytes: Number(usage.rows[0]?.bytes || 0) });
+}
+
+export async function DELETE(request: NextRequest) {
+  const user = await authenticatedUser(request);
+  if (!user) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401 });
+  const body = await request.json().catch(() => null);
+  if (typeof body?.assetId !== "string") return NextResponse.json({ code: "INVALID_ASSET" }, { status: 400 });
+  const found = await db.query<{ storage_key: string }>("SELECT storage_key FROM assets WHERE id = $1 AND owner_id = $2", [body.assetId, user.id]);
+  const asset = found.rows[0];
+  if (!asset) return NextResponse.json({ code: "ASSET_NOT_FOUND" }, { status: 404 });
+  await removeObject(asset.storage_key);
+  await db.query("DELETE FROM assets WHERE id = $1 AND owner_id = $2", [body.assetId, user.id]);
+  return NextResponse.json({ ok: true });
 }

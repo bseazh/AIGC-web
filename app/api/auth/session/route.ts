@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import { isAdministrator } from "@/lib/admin";
 import { db } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
@@ -33,6 +34,7 @@ export async function GET(request: NextRequest) {
       id: user.id,
       identifier: user.email || user.phone,
       displayName: user.display_name,
+      isAdministrator: isAdministrator(user.email || user.phone),
     },
     wallet: {
       availablePoints: user.available_points,

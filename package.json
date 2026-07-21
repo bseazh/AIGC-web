@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify:production": "node scripts/production-preflight.mjs",
+    "verify:ark-video": "node scripts/ark-video-acceptance.mjs"
   },
   "dependencies": {
     "bullmq": "^5.34.10",

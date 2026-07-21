@@ -85,6 +85,46 @@ try {
     ALTER TABLE assets ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb;
     ALTER TABLE assets DROP CONSTRAINT IF EXISTS assets_byte_size_check;
     ALTER TABLE assets ADD CONSTRAINT assets_byte_size_check CHECK (byte_size >= 0 AND byte_size <= 104857600);
+
+    CREATE TABLE IF NOT EXISTS prompt_config_versions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      workflow_key TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      variant_key TEXT NOT NULL DEFAULT 'control',
+      rollout_percent INTEGER NOT NULL DEFAULT 100 CHECK (rollout_percent >= 0 AND rollout_percent <= 100),
+      config_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      created_by UUID REFERENCES users(id),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (workflow_key, version, variant_key)
+    );
+    CREATE INDEX IF NOT EXISTS prompt_config_versions_active_idx ON prompt_config_versions (workflow_key, enabled, version DESC);
+
+    CREATE TABLE IF NOT EXISTS provider_call_logs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      task_id UUID REFERENCES generation_tasks(id) ON DELETE SET NULL,
+      provider TEXT NOT NULL,
+      operation TEXT NOT NULL,
+      request_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      response_status INTEGER,
+      response_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      error_code TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS provider_call_logs_task_created_idx ON provider_call_logs (task_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS worker_heartbeats (
+      worker_id TEXT PRIMARY KEY,
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      details_json JSONB NOT NULL DEFAULT '{}'::jsonb
+    );
+
+    INSERT INTO prompt_config_versions (workflow_key, version, variant_key, rollout_percent, config_json)
+    VALUES
+      ('product-ad-video', 1, 'control', 100, '{"template":"将输入的产品图片制作成高品质商品广告大片。综合识别全部图片中的材质、颜色、细节与卖点，围绕商品设计开场、细节、使用或氛围镜头和收束镜头。","watermark":false}'),
+      ('recreate-video', 1, 'control', 100, '{"template":"参考视频只用于提取镜头节奏、景别、运镜与转场结构。不得复制原视频中的人物、品牌、商品、文案或具体画面；使用输入商品生成原创带货短片。参考音频仅用于节奏参考，生成全新的声音内容。","watermark":false}'),
+      ('seedance-video', 1, 'control', 100, '{"template":"按用户脚本和全部参考素材生成原创 15 秒短片，优先遵循首帧、尾帧、参考视频与参考音频的角色定义。","watermark":false}')
+    ON CONFLICT (workflow_key, version, variant_key) DO NOTHING;
   `);
   await client.query("COMMIT");
   console.log("Database migrations completed");

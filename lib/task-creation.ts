@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getGenerationQueue } from "@/lib/queue";
 import { authenticatedUser } from "@/lib/session";
+import { resolvePromptConfig } from "@/lib/prompt-config";
 
 type ImageWorkflow = {
   key: string;
@@ -18,16 +19,20 @@ type ImageWorkflow = {
 };
 
 type AssetSelector = (body: Record<string, unknown>) => string[];
-type ReadyAsset = { id: string; storage_key: string; mime_type: string };
+type ReadyAsset = { id: string; storage_key: string; mime_type: string; metadata_json: Record<string, unknown> };
 type AssetValidator = (assets: ReadyAsset[]) => string | null;
+type RequestValidator = (body: Record<string, unknown>) => string | null;
+type InputExtras = (body: Record<string, unknown>) => Record<string, unknown>;
 
-export async function createImageTask(request: NextRequest, workflow: ImageWorkflow, selectAssets: AssetSelector = (body) => [typeof body.assetId === "string" ? body.assetId : ""], validateAssets?: AssetValidator) {
+export async function createImageTask(request: NextRequest, workflow: ImageWorkflow, selectAssets: AssetSelector = (body) => [typeof body.assetId === "string" ? body.assetId : ""], validateAssets?: AssetValidator, validateRequest?: RequestValidator, inputExtras?: InputExtras) {
   const user = await authenticatedUser(request);
   if (!user) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401 });
   if (!workflow.enabled) return NextResponse.json({ code: "PROVIDER_NOT_CONFIGURED", message: "生成服务暂未开放" }, { status: 503 });
 
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!body) return NextResponse.json({ code: "INVALID_REQUEST", message: "请求参数不正确" }, { status: 400 });
+  const requestError = validateRequest?.(body);
+  if (requestError) return NextResponse.json({ code: "INVALID_REQUEST", message: requestError }, { status: 400 });
   const assetIds = [...new Set(selectAssets(body).filter((id) => typeof id === "string" && id.length > 0))];
   if (assetIds.length < (workflow.minAssets ?? 1)) return NextResponse.json({ code: "ASSET_NOT_READY", message: "请补充必传素材" }, { status: 400 });
   const prompt = typeof body?.prompt === "string" ? body.prompt.trim().slice(0, 1200) : "";
@@ -42,7 +47,7 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
   const duration = workflow.durations?.includes(requestedDuration) ? requestedDuration : workflow.durations?.[workflow.durations.length - 1] || 15;
   const resolution = workflow.resolutions?.includes(requestedResolution) ? requestedResolution : workflow.resolutions?.[1] || "720p";
   const assetResult = await db.query<ReadyAsset>(
-    "SELECT id, storage_key, mime_type FROM assets WHERE id = ANY($1::uuid[]) AND owner_id = $2 AND audit_status = 'READY' AND kind = 'INPUT'",
+    "SELECT id, storage_key, mime_type, metadata_json FROM assets WHERE id = ANY($1::uuid[]) AND owner_id = $2 AND audit_status = 'READY' AND kind = 'INPUT'",
     [assetIds, user.id],
   );
   const assetsById = new Map(assetResult.rows.map((asset) => [asset.id, asset]));
@@ -63,7 +68,8 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
       await client.query("ROLLBACK");
       return NextResponse.json({ code: "INSUFFICIENT_POINTS", message: "积分不足" }, { status: 402 });
     }
-    const input = { assetId: assets[0].id, storageKey: assets[0].storage_key, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), assetMimeTypes: assets.map((asset) => asset.mime_type), prompt, aspectRatio, duration, resolution, scene, style, outputs: workflow.outputsPerTask };
+    const promptConfig = workflow.key.includes("video") ? await resolvePromptConfig(client, workflow.key, user.id) : undefined;
+    const input = { assetId: assets[0].id, storageKey: assets[0].storage_key, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), assetMimeTypes: assets.map((asset) => asset.mime_type), prompt, aspectRatio, duration, resolution, scene, style, outputs: workflow.outputsPerTask, ...(promptConfig ? { promptConfig } : {}), ...(inputExtras?.(body) || {}) };
     await client.query(
       `INSERT INTO generation_tasks (id, user_id, workflow_key, status, points, input_json, idempotency_key)
        VALUES ($1, $2, $3, 'QUEUED', $4, $5::jsonb, $6)`,
