@@ -52,12 +52,17 @@ export default function TasksPage() {
     }).catch(() => router.replace("/"));
   }, [router]);
   useEffect(() => { if (account) loadTasks(filter); }, [account, filter]);
+  useEffect(() => {
+    if (!account || activeCount === 0) return;
+    const timer = window.setInterval(() => loadTasks(filter), 8000);
+    return () => window.clearInterval(timer);
+  }, [account, activeCount, filter]);
 
   if (!account) return <LoadingScreen />;
   return (
     <AppShell active="tasks" account={account} taskCount={activeCount}>
       <div className="app-page-content">
-        <section className="page-intro"><div><span className="page-kicker"><Clock3 size={15} />创作记录</span><h1>任务中心</h1><p>查看生成进度、积分状态与历史结果。</p></div><button className="secondary-command" onClick={() => loadTasks()} disabled={loading}><RefreshCw size={16} />刷新</button></section>
+        <section className="page-intro"><div><span className="page-kicker"><Clock3 size={15} />创作记录</span><h1>任务中心</h1><p>查看生成进度、积分状态与历史结果；进行中的任务会自动刷新。</p></div><button className="secondary-command" onClick={() => loadTasks()} disabled={loading}><RefreshCw size={16} />刷新</button></section>
         <section className="filter-bar">
           <div className="filter-tabs">{filters.map((item) => <button key={item.key} className={filter === item.key ? "active" : ""} onClick={() => setFilter(item.key)}>{item.label}</button>)}</div>
           <span>共 {tasks.length} 条记录</span>
@@ -71,7 +76,7 @@ export default function TasksPage() {
               <div className="record-main"><strong>{task.workflowName}</strong><span>{[task.params.scene, task.params.style, task.params.aspectRatio].filter(Boolean).join(" · ") || "默认生成设置"}</span><time>{new Date(task.createdAt).toLocaleString("zh-CN")}</time></div>
               <span className={`record-status status-${task.status.toLowerCase()}`}>{statusIcon(task.status)}{task.statusLabel}</span>
               <span className="record-points">{task.points} 积分</span>
-              <span className="record-output">{task.outputCount ? `${task.outputCount} 个结果` : task.errorCode || "等待结果"}</span>
+              <span className="record-output">{["FAILED", "REJECTED", "CANCELED"].includes(task.status) ? `失败已退回 ${task.points} 积分` : task.outputCount ? `${task.outputCount} 个结果` : task.errorCode || "等待结果"}</span>
               <ChevronRight size={18} />
             </Link>
           ))}</div>}
