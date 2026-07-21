@@ -1,0 +1,45 @@
+name: Sync video production environment
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Configure SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+      - name: Sync video provider configuration
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          VIDEO_PRODUCTION_ENV: ${{ secrets.VIDEO_PRODUCTION_ENV }}
+        run: |
+          printf '%s\n' "$VIDEO_PRODUCTION_ENV" | ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" "
+            set -euo pipefail
+            cd '$DEPLOY_PATH'
+            umask 077
+            touch .env.production
+            while IFS='=' read -r key value; do
+              [ -z \"\$key\" ] && continue
+              tmp=\$(mktemp .env.production.XXXXXX)
+              grep -v \"^\${key}=\" .env.production > \"\$tmp\" || true
+              printf '%s=%s\\n' \"\$key\" \"\$value\" >> \"\$tmp\"
+              mv \"\$tmp\" .env.production
+            done
+            chmod 600 .env.production
+            ./scripts/deploy.sh
+          "
