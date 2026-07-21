@@ -61,7 +61,7 @@ export const detailPageWorkflow = {
   name: "商品详情页",
   enabled: Boolean(process.env.AI_API_KEY && process.env.COS_SECRET_ID),
   pointsPerTask: Number(process.env.DETAIL_PAGE_TASK_POINTS || 10),
-  outputsPerTask: 4,
+  outputsPerTask: 5,
   acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
   maxFileBytes: 10 * 1024 * 1024,
   aspectRatios: ["1:1", "3:4", "4:3", "9:16"],

@@ -4,16 +4,16 @@ import { ArrowLeft, Check, Download, FolderOpen, ImagePlus, LoaderCircle, Sparkl
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 
-type Props = { title: string; description: string; submitUrl: string; scenes: readonly string[]; styles: readonly string[]; sourceTitle: string; sourceHint: string; submitLabel: string; pointsPerTask?: number; outputCount?: number; showAspectRatio?: boolean; sceneLabel?: string; styleLabel?: string; nextStepHref?: string; nextStepLabel?: string };
+type Props = { title: string; description: string; submitUrl: string; scenes: readonly string[]; styles: readonly string[]; sourceTitle: string; sourceHint: string; submitLabel: string; pointsPerTask?: number; outputCount?: number; showAspectRatio?: boolean; defaultRatio?: string; sceneLabel?: string; styleLabel?: string; nextStepHref?: string; nextStepLabel?: string };
 type Account = { wallet: { availablePoints: number } };
 type TaskResult = { taskId: string; status: string; outputs: Array<{ assetId: string; url: string }>; errorCode?: string };
 type Asset = { id: string; mimeType: string; byteSize: number; originalName: string; url: string; kind: string };
 const ratios = ["1:1", "3:4", "4:3", "9:16"];
 
-export function ImageWorkflowPage({ title, description, submitUrl, scenes, styles, sourceTitle, sourceHint, submitLabel, pointsPerTask = 10, outputCount = 4, showAspectRatio = true, sceneLabel = "使用场景", styleLabel = "视觉风格", nextStepHref, nextStepLabel }: Props) {
+export function ImageWorkflowPage({ title, description, submitUrl, scenes, styles, sourceTitle, sourceHint, submitLabel, pointsPerTask = 10, outputCount = 4, showAspectRatio = true, defaultRatio = "1:1", sceneLabel = "使用场景", styleLabel = "视觉风格", nextStepHref, nextStepLabel }: Props) {
   const router = useRouter();
   const [account, setAccount] = useState<Account | null>(null); const [file, setFile] = useState<File | null>(null); const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null); const [preview, setPreview] = useState(""); const [assets, setAssets] = useState<Asset[]>([]); const [libraryOpen, setLibraryOpen] = useState(false); const [assetsLoading, setAssetsLoading] = useState(false);
-  const [ratio, setRatio] = useState("1:1"); const [scene, setScene] = useState(scenes[0]); const [style, setStyle] = useState(styles[0]); const [prompt, setPrompt] = useState(""); const [phase, setPhase] = useState<"idle" | "uploading" | "generating" | "succeeded" | "failed">("idle"); const [error, setError] = useState(""); const [task, setTask] = useState<TaskResult | null>(null);
+  const [ratio, setRatio] = useState(defaultRatio); const [scene, setScene] = useState(scenes[0]); const [style, setStyle] = useState(styles[0]); const [prompt, setPrompt] = useState(""); const [phase, setPhase] = useState<"idle" | "uploading" | "generating" | "succeeded" | "failed">("idle"); const [error, setError] = useState(""); const [task, setTask] = useState<TaskResult | null>(null);
   useEffect(() => { fetch("/api/auth/session/", { cache: "no-store" }).then(async (response) => { if (!response.ok) throw new Error(); setAccount(await response.json()); }).catch(() => router.replace("/")); }, [router]);
   useEffect(() => () => { if (preview.startsWith("blob:")) URL.revokeObjectURL(preview); }, [preview]);
   useEffect(() => { const id = new URLSearchParams(window.location.search).get("assetId"); if (!account || !id || selectedAsset || file) return; fetch("/api/assets/?kind=ALL", { cache: "no-store" }).then(async (response) => { const body = await response.json(); const asset = (body.assets || []).find((item: Asset) => item.id === id && item.mimeType.startsWith("image/")); if (asset) { setSelectedAsset(asset); setPreview(asset.url); } }).catch(() => undefined); }, [account, file, selectedAsset]);
