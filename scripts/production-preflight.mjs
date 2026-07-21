@@ -1,6 +1,7 @@
 import COS from "cos-nodejs-sdk-v5";
 
-const required = ["ARK_API_KEY", "ARK_MODEL", "COS_BUCKET", "COS_REGION", "COS_SECRET_ID", "COS_SECRET_KEY"];
+const required = ["ARK_API_KEY", "COS_BUCKET", "COS_REGION", "COS_SECRET_ID", "COS_SECRET_KEY"];
+const arkModel = process.env.ARK_MODEL || "doubao-seedance-2-0-260128";
 const missing = required.filter((name) => !process.env[name]);
 if (missing.length) {
   console.error(`Production preflight failed: missing ${missing.join(", ")}`);
@@ -17,6 +18,6 @@ const response = await fetch("https://ark.cn-beijing.volces.com/api/v3/models", 
 if (!response.ok) throw new Error(`Ark credential check failed: HTTP ${response.status}`);
 const payload = await response.json().catch(() => ({}));
 const models = Array.isArray(payload?.data) ? payload.data.map((model) => model?.id) : [];
-if (models.length && !models.includes(process.env.ARK_MODEL)) throw new Error(`Ark model is not enabled for this key: ${process.env.ARK_MODEL}`);
-console.log(`Ark access: OK (${process.env.ARK_MODEL})`);
+if (models.length && !models.includes(arkModel)) throw new Error(`Ark model is not enabled for this key: ${arkModel}`);
+console.log(`Ark access: OK (${arkModel})`);
 console.log("Preflight passed. Restart the worker, then submit one real task for each approved duration/resolution combination.");
