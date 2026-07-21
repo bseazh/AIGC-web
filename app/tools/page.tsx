@@ -1,6 +1,6 @@
 "use client";
 
-import { ImageIcon, Layers3, ScanSearch, Shirt, Sparkles, WandSparkles } from "lucide-react";
+import { ImageIcon, Layers3, ScanSearch, Shirt, Sparkles, Video, WandSparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -13,6 +13,7 @@ const tools = [
   { name: "模特穿搭", group: "AI 带货模特", description: "模特图加商品图，生成自然上身展示效果。", href: "/create/model-wear", icon: Shirt, color: "violet", ready: true },
   { name: "商品详情页", group: "电商商品图", description: "围绕卖点组织四张统一风格的详情页视觉。", href: "/create/product-detail", icon: Layers3, color: "orange", ready: true },
   { name: "高清优化", group: "图片处理", description: "修复细节、放大分辨率并提升商品展示质感。", href: "/create/hd-enhance", icon: ScanSearch, color: "blue", ready: true },
+  { name: "视频创作中心", group: "AI 视频", description: "产品广告大片、复刻带货与 Seedance2 高级视频创作。", href: "/create/product-video", icon: Video, color: "violet", ready: true },
 ];
 
 export default function ToolsPage() {

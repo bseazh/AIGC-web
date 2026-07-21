@@ -2,13 +2,26 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createSignedObjectUrl } from "@/lib/cos";
 import { db } from "@/lib/db";
-import { heroImageWorkflow } from "@/lib/product-config";
 import { authenticatedUser } from "@/lib/session";
 
 const extensionByMime: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
+  "video/mp4": "mp4",
+  "audio/mpeg": "mp3",
+  "audio/mp3": "mp3",
+  "audio/wav": "wav",
+};
+
+const maxBytesByMime: Record<string, number> = {
+  "image/jpeg": 10 * 1024 * 1024,
+  "image/png": 10 * 1024 * 1024,
+  "image/webp": 10 * 1024 * 1024,
+  "video/mp4": 100 * 1024 * 1024,
+  "audio/mpeg": 30 * 1024 * 1024,
+  "audio/mp3": 30 * 1024 * 1024,
+  "audio/wav": 30 * 1024 * 1024,
 };
 
 export async function POST(request: NextRequest) {
@@ -19,11 +32,11 @@ export async function POST(request: NextRequest) {
   const byteSize = Number(body?.byteSize);
   const originalName = typeof body?.fileName === "string" ? body.fileName.slice(0, 255) : "upload";
   const extension = extensionByMime[mimeType];
-  if (!extension || !heroImageWorkflow.acceptedMimeTypes.includes(mimeType as never)) {
-    return NextResponse.json({ code: "UNSUPPORTED_FILE", message: "仅支持 JPG、PNG、WebP" }, { status: 400 });
+  if (!extension) {
+    return NextResponse.json({ code: "UNSUPPORTED_FILE", message: "仅支持 JPG、PNG、WebP、MP4、MP3、WAV" }, { status: 400 });
   }
-  if (!Number.isInteger(byteSize) || byteSize <= 0 || byteSize > heroImageWorkflow.maxFileBytes) {
-    return NextResponse.json({ code: "FILE_TOO_LARGE", message: "图片不能超过 10MB" }, { status: 400 });
+  if (!Number.isInteger(byteSize) || byteSize <= 0 || byteSize > maxBytesByMime[mimeType]) {
+    return NextResponse.json({ code: "FILE_TOO_LARGE", message: "图片最大 10MB，视频最大 100MB，音频最大 30MB" }, { status: 400 });
   }
 
   const key = `users/${user.id}/inputs/${randomUUID()}.${extension}`;

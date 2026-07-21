@@ -1,6 +1,6 @@
 "use client";
 
-import { Boxes, Download, FileImage, LoaderCircle, Search } from "lucide-react";
+import { AudioLines, Boxes, Download, FileImage, FileVideo, LoaderCircle, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -35,11 +35,14 @@ export default function AssetsPage() {
     return () => window.clearTimeout(timer);
   }, [account, kind, query, router]);
   if (!account) return <LoadingScreen />;
+  const imageAssets = assets.filter((asset) => asset.mimeType.startsWith("image/"));
+  const mediaAssets = assets.filter((asset) => asset.mimeType.startsWith("video/") || asset.mimeType.startsWith("audio/"));
+  const assetCard = (asset: Asset) => <article className="asset-card" key={asset.id}><a className="asset-media" href={asset.url} target="_blank" rel="noreferrer">{asset.mimeType.startsWith("video/") ? <video src={asset.url} muted preload="metadata" /> : asset.mimeType.startsWith("audio/") ? <span className="asset-file-icon"><AudioLines size={35} /></span> : <img src={asset.url} alt={asset.originalName} />}<span>{asset.mimeType.startsWith("video/") ? <FileVideo size={13} /> : asset.kind === "OUTPUT" ? "生成结果" : "上传素材"}</span></a><div className="asset-card-footer"><div><strong title={asset.originalName}>{asset.originalName}</strong><small>{formatBytes(asset.byteSize)} · {new Date(asset.createdAt).toLocaleDateString("zh-CN")}</small></div><a className="icon-button" aria-label="下载资产" href={asset.url} target="_blank" rel="noreferrer"><Download size={17} /></a></div>{asset.taskId && <Link className="asset-task-link" href={`/tasks/${asset.taskId}`}>查看来源任务</Link>}</article>;
   return <AppShell active="assets" account={account}>
     <div className="app-page-content">
       <section className="page-intro"><div><span className="page-kicker"><Boxes size={15} />创作素材</span><h1>内容资产</h1><p>管理上传素材和已生成内容，当前共使用 {formatBytes(totalBytes)}。</p></div><Link className="primary-command" href="/create/product-hero"><FileImage size={17} />上传并创作</Link></section>
       <section className="asset-toolbar"><div className="filter-tabs">{kinds.map((item) => <button key={item.key} className={kind === item.key ? "active" : ""} onClick={() => setKind(item.key)}>{item.label}</button>)}</div><label className="asset-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索资产名称" /></label><span>共 {assets.length} 项</span></section>
-      {loading ? <div className="records-loading"><LoaderCircle size={22} />正在载入资产</div> : assets.length === 0 ? <div className="page-empty standalone"><span><Boxes size={27} /></span><strong>暂无匹配资产</strong><p>上传商品素材或完成生成后，内容会自动保存在这里。</p><Link href="/create/product-hero">开始创作</Link></div> : <section className="asset-grid">{assets.map((asset) => <article className="asset-card" key={asset.id}><a className="asset-media" href={asset.url} target="_blank" rel="noreferrer"><img src={asset.url} alt={asset.originalName} /><span>{asset.kind === "OUTPUT" ? "生成结果" : "上传素材"}</span></a><div className="asset-card-footer"><div><strong title={asset.originalName}>{asset.originalName}</strong><small>{formatBytes(asset.byteSize)} · {new Date(asset.createdAt).toLocaleDateString("zh-CN")}</small></div><a className="icon-button" aria-label="下载资产" href={asset.url} target="_blank" rel="noreferrer"><Download size={17} /></a></div>{asset.taskId && <Link className="asset-task-link" href={`/tasks/${asset.taskId}`}>查看来源任务</Link>}</article>)}</section>}
+      {loading ? <div className="records-loading"><LoaderCircle size={22} />正在载入资产</div> : assets.length === 0 ? <div className="page-empty standalone"><span><Boxes size={27} /></span><strong>暂无匹配资产</strong><p>上传商品素材或完成生成后，内容会自动保存在这里。</p><Link href="/create/product-hero">开始创作</Link></div> : <div className="asset-sections"><section className="asset-section"><div className="asset-section-title"><div><span>IMAGE ASSETS</span><h2>图片素材</h2></div><p>{imageAssets.length} 项</p></div>{imageAssets.length ? <div className="asset-grid">{imageAssets.map(assetCard)}</div> : <div className="asset-section-empty">暂无图片素材</div>}</section><div className="asset-section-divider" /><section className="asset-section"><div className="asset-section-title"><div><span>VIDEO &amp; AUDIO</span><h2>视频与音频素材</h2></div><p>{mediaAssets.length} 项</p></div>{mediaAssets.length ? <div className="asset-grid">{mediaAssets.map(assetCard)}</div> : <div className="asset-section-empty">暂无视频或音频素材</div>}</section></div>}
     </div>
   </AppShell>;
 }

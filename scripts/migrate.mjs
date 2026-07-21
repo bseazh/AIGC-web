@@ -74,7 +74,7 @@ try {
       kind TEXT NOT NULL,
       storage_key TEXT NOT NULL UNIQUE,
       mime_type TEXT NOT NULL,
-      byte_size BIGINT NOT NULL CHECK (byte_size >= 0 AND byte_size <= 10485760),
+      byte_size BIGINT NOT NULL CHECK (byte_size >= 0 AND byte_size <= 104857600),
       audit_status TEXT NOT NULL DEFAULT 'PENDING',
       original_name TEXT,
       metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -83,6 +83,8 @@ try {
 
     ALTER TABLE assets ADD COLUMN IF NOT EXISTS original_name TEXT;
     ALTER TABLE assets ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb;
+    ALTER TABLE assets DROP CONSTRAINT IF EXISTS assets_byte_size_check;
+    ALTER TABLE assets ADD CONSTRAINT assets_byte_size_check CHECK (byte_size >= 0 AND byte_size <= 104857600);
   `);
   await client.query("COMMIT");
   console.log("Database migrations completed");

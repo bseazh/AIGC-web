@@ -4,7 +4,7 @@ import COS from "cos-nodejs-sdk-v5";
 import pg from "pg";
 
 const { Pool } = pg;
-const required = ["DATABASE_URL", "REDIS_URL", "COS_BUCKET", "COS_REGION", "COS_SECRET_ID", "COS_SECRET_KEY", "AI_API_KEY", "AI_MODEL", "AI_BASE_URL"];
+const required = ["DATABASE_URL", "REDIS_URL", "COS_BUCKET", "COS_REGION", "COS_SECRET_ID", "COS_SECRET_KEY"];
 for (const name of required) {
   if (!process.env[name]) throw new Error(`${name} is required`);
 }
@@ -38,6 +38,9 @@ function deleteObject(Key) {
 }
 
 async function sophnet(path, init = {}) {
+  if (!process.env.AI_API_KEY || !process.env.AI_MODEL || !process.env.AI_BASE_URL) {
+    throw new Error("Image provider is not configured");
+  }
   const response = await fetch(`${process.env.AI_BASE_URL}${path}`, {
     ...init,
     headers: { Authorization: `Bearer ${process.env.AI_API_KEY}`, "Content-Type": "application/json", ...(init.headers || {}) },
@@ -55,6 +58,64 @@ async function createImageTask(inputUrls, prompt) {
   const taskId = payload?.output?.taskId;
   if (!taskId) throw new Error("SophNet did not return taskId");
   return taskId;
+}
+
+function findVideoUrl(value) {
+  if (!value || typeof value !== "object") return null;
+  if (typeof value.video_url === "string") return value.video_url;
+  if (typeof value.url === "string" && /\.(mp4|mov|webm)(\?|$)/i.test(value.url)) return value.url;
+  for (const child of Object.values(value)) {
+    const found = findVideoUrl(child);
+    if (found) return found;
+  }
+  return null;
+}
+
+async function createVideoTask(inputUrls, input, workflowKey) {
+  if (!process.env.ARK_API_KEY) throw new Error("ARK_API_KEY is required for video generation");
+  const mimeTypes = input.assetMimeTypes || [];
+  const templateDirection = workflowKey === "product-ad-video"
+    ? "将商品制作成 15 秒广告大片。围绕商品卖点设计清晰的开场、细节、使用或氛围镜头和收束尾帧；如提供第二张图片，以其作为尾帧参考。"
+    : workflowKey === "recreate-video"
+    ? "参考视频只用于提取镜头节奏、景别、运镜与转场结构。不得复制原视频中的人物、品牌、商品、文案或具体画面；使用输入商品生成原创带货短片。参考音频仅用于节奏参考，生成全新的声音内容。"
+    : "按用户脚本和全部参考素材生成原创 15 秒短片，优先遵循首帧、尾帧、参考视频与参考音频的角色定义。";
+  const content = [{ type: "text", text: [
+    `生成一支${input.scene}方向的电商带货短视频，整体节奏为${input.style}，画幅比例${input.aspectRatio}，固定时长 15 秒。`,
+    templateDirection,
+    input.prompt || "保持商品主体、颜色、标识与关键细节准确，不添加水印。",
+  ].join("\n") }];
+  inputUrls.forEach((url, index) => {
+    const mime = mimeTypes[index] || "";
+    if (mime.startsWith("image/")) content.push({ type: "image_url", image_url: { url }, role: "reference_image" });
+    if (mime === "video/mp4") content.push({ type: "video_url", video_url: { url }, role: "reference_video" });
+    if (mime.startsWith("audio/")) content.push({ type: "audio_url", audio_url: { url }, role: "reference_audio" });
+  });
+  const response = await fetch("https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.ARK_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "doubao-seedance-2-0-260128", content, generate_audio: true, ratio: input.aspectRatio, duration: 15, watermark: false }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.id) throw new Error(`Ark ${response.status}: ${payload?.error?.message || "task creation failed"}`);
+  return payload.id;
+}
+
+async function waitForVideo(taskId) {
+  const deadline = Date.now() + 15 * 60 * 1000;
+  while (Date.now() < deadline) {
+    const response = await fetch(`https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks/${taskId}`, { headers: { Authorization: `Bearer ${process.env.ARK_API_KEY}` } });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(`Ark ${response.status}: ${payload?.error?.message || "task query failed"}`);
+    const status = String(payload?.status || "").toLowerCase();
+    if (["succeeded", "success", "completed"].includes(status)) {
+      const url = findVideoUrl(payload);
+      if (!url) throw new Error("Ark task succeeded without a video URL");
+      return url;
+    }
+    if (["failed", "rejected", "canceled", "cancelled", "expired"].includes(status)) throw new Error(`Ark task ${payload?.status}: ${payload?.error?.message || "generation failed"}`);
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+  }
+  throw new Error("Ark video task timed out");
 }
 
 async function waitForImage(taskId) {
@@ -93,6 +154,10 @@ async function generateOne(inputUrls, input, index, workflowKey) {
   const prompt = [shared, taskPrompt, input.prompt ? `用户补充要求：${input.prompt}` : ""].filter(Boolean).join("\n");
   const providerTaskId = await createImageTask(inputUrls, prompt);
   return waitForImage(providerTaskId);
+}
+
+async function generateVideo(inputUrls, input, workflowKey) {
+  return waitForVideo(await createVideoTask(inputUrls, input, workflowKey));
 }
 
 async function settleSuccess(task, savedAssets) {
@@ -167,21 +232,24 @@ const worker = new Worker("generation", async (job) => {
   try {
     const storageKeys = task.input_json.storageKeys || [task.input_json.storageKey];
     const inputUrls = await Promise.all(storageKeys.map((key) => cosUrl(key, "GET", 3600)));
-    const temporaryUrls = await Promise.all(Array.from({ length: task.input_json.outputs || 4 }, (_, index) => generateOne(inputUrls, task.input_json, index, task.workflow_key)));
+    const temporaryUrls = ["product-ad-video", "recreate-video", "seedance-video"].includes(task.workflow_key)
+      ? [await generateVideo(inputUrls, task.input_json, task.workflow_key)]
+      : await Promise.all(Array.from({ length: task.input_json.outputs || 4 }, (_, index) => generateOne(inputUrls, task.input_json, index, task.workflow_key)));
     const savedAssets = [];
     for (const [index, url] of temporaryUrls.entries()) {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`Could not download provider output ${response.status}`);
       const buffer = Buffer.from(await response.arrayBuffer());
-      const contentType = response.headers.get("content-type")?.split(";")[0] || "image/png";
-      const extension = contentType === "image/jpeg" ? "jpg" : contentType === "image/webp" ? "webp" : "png";
+      const isVideoTask = ["product-ad-video", "recreate-video", "seedance-video"].includes(task.workflow_key);
+      const contentType = response.headers.get("content-type")?.split(";")[0] || (isVideoTask ? "video/mp4" : "image/png");
+      const extension = contentType === "image/jpeg" ? "jpg" : contentType === "image/webp" ? "webp" : contentType === "video/webm" ? "webm" : contentType.startsWith("video/") ? "mp4" : "png";
       const key = `users/${task.user_id}/outputs/${task.id}/${index + 1}-${randomUUID()}.${extension}`;
       await putObject(key, buffer, contentType);
       savedKeys.push(key);
       const asset = await pool.query(
         `INSERT INTO assets (owner_id, kind, storage_key, mime_type, byte_size, audit_status, original_name, metadata_json)
          VALUES ($1, 'OUTPUT', $2, $3, $4, 'READY', $5, $6::jsonb) RETURNING id`,
-        [task.user_id, key, contentType, buffer.length, `${task.workflow_key}-${index + 1}.${extension}`, JSON.stringify({ taskId: task.id, workflowKey: task.workflow_key, provider: "sophnet", model: process.env.AI_MODEL })],
+        [task.user_id, key, contentType, buffer.length, `${task.workflow_key}-${index + 1}.${extension}`, JSON.stringify({ taskId: task.id, workflowKey: task.workflow_key, provider: isVideoTask ? "ark" : "sophnet", model: isVideoTask ? "doubao-seedance-2-0-260128" : process.env.AI_MODEL })],
       );
       savedAssets.push({ assetId: asset.rows[0].id, storageKey: key });
     }

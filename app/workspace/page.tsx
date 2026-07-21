@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Boxes, ChevronRight, Clock3, ImageIcon, Layers3, PackageOpen, ScanSearch, Shirt, WandSparkles } from "lucide-react";
+import { ArrowRight, Boxes, ChevronRight, Clock3, ImageIcon, Layers3, PackageOpen, ScanSearch, Shirt, Video, WandSparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -12,6 +12,7 @@ const tools = [
   { name: "场景延展", note: "匹配营销使用场景", icon: WandSparkles, color: "cyan", href: "/create/scene-image", available: true },
   { name: "高清优化", note: "修复细节并提升清晰度", icon: ScanSearch, color: "blue", href: "/create/hd-enhance", available: true },
   { name: "详情页套图", note: "生成四张统一卖点视觉", icon: Layers3, color: "orange", href: "/create/product-detail", available: true },
+  { name: "视频创作中心", note: "广告大片、复刻与高级创作", icon: Video, color: "violet", href: "/create/product-video", available: true },
 ];
 
 type Account = { user: { identifier: string; displayName: string }; wallet: { availablePoints: number; frozenPoints: number } };

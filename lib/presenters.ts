@@ -4,6 +4,9 @@ export const workflowNames: Record<string, string> = {
   "model-wear": "模特穿搭",
   "hd-enhance": "高清优化",
   "product-detail-page": "商品详情页",
+  "product-ad-video": "产品广告大片",
+  "recreate-video": "复刻带货视频",
+  "seedance-video": "Seedance2 视频",
 };
 
 export const taskStatusLabels: Record<string, string> = {

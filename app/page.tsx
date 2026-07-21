@@ -59,11 +59,12 @@ const features: Array<{
     href: "/create/product-detail",
   },
   {
-    title: "带货视频",
+    title: "视频创作中心",
     tag: "AI 视频",
-    description: "从商品素材生成节奏稳定、便于投放的短视频。",
+    description: "广告大片、复刻带货与 Seedance2 高级创作入口。",
     image: "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=900&q=88",
     icon: Zap,
+    href: "/create/product-video",
   },
   {
     title: "高清优化",

@@ -69,3 +69,38 @@ export const detailPageWorkflow = {
   styles: ["清晰卖点", "克制留白", "真实摄影", "高转化电商"],
   refundOnFailure: true,
 } as const;
+
+const videoWorkflowBase = {
+  enabled: Boolean(process.env.ARK_API_KEY && process.env.COS_SECRET_ID),
+  pointsPerTask: Number(process.env.VIDEO_TASK_POINTS || 40),
+  outputsPerTask: 1,
+  aspectRatios: ["16:9", "9:16"],
+  refundOnFailure: true,
+} as const;
+
+export const productAdVideoWorkflow = {
+  ...videoWorkflowBase,
+  key: "product-ad-video",
+  name: "产品广告大片",
+  minAssets: 1,
+  scenes: ["商品特写", "使用瞬间", "开箱展示", "氛围陈列"],
+  styles: ["质感广告", "轻快节奏", "清新生活", "高端大片"],
+} as const;
+
+export const recreateVideoWorkflow = {
+  ...videoWorkflowBase,
+  key: "recreate-video",
+  name: "复刻带货视频",
+  minAssets: 2,
+  scenes: ["镜头节奏复刻", "商品展示复刻", "种草讲解复刻", "场景切换复刻"],
+  styles: ["自然带货", "轻快节奏", "质感种草", "促销转化"],
+} as const;
+
+export const seedanceVideoWorkflow = {
+  ...videoWorkflowBase,
+  key: "seedance-video",
+  name: "Seedance2 视频",
+  minAssets: 1,
+  scenes: ["商品特写", "第一人称", "生活方式", "自由创作"],
+  styles: ["轻快节奏", "质感广告", "真实记录", "电影感"],
+} as const;
