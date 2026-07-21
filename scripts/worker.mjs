@@ -75,12 +75,12 @@ async function createVideoTask(inputUrls, input, workflowKey) {
   if (!process.env.ARK_API_KEY) throw new Error("ARK_API_KEY is required for video generation");
   const mimeTypes = input.assetMimeTypes || [];
   const templateDirection = workflowKey === "product-ad-video"
-    ? "将商品制作成 15 秒广告大片。围绕商品卖点设计清晰的开场、细节、使用或氛围镜头和收束尾帧；如提供第二张图片，以其作为尾帧参考。"
+    ? "将输入的产品图片制作成高品质商品广告大片。综合识别全部图片中的材质、颜色、细节与卖点，围绕商品设计开场、细节、使用或氛围镜头和收束镜头。"
     : workflowKey === "recreate-video"
     ? "参考视频只用于提取镜头节奏、景别、运镜与转场结构。不得复制原视频中的人物、品牌、商品、文案或具体画面；使用输入商品生成原创带货短片。参考音频仅用于节奏参考，生成全新的声音内容。"
     : "按用户脚本和全部参考素材生成原创 15 秒短片，优先遵循首帧、尾帧、参考视频与参考音频的角色定义。";
   const content = [{ type: "text", text: [
-    `生成一支${input.scene}方向的电商带货短视频，整体节奏为${input.style}，画幅比例${input.aspectRatio}，固定时长 15 秒。`,
+    `生成一支${input.scene}方向的电商带货短视频，整体节奏为${input.style}，画幅比例${input.aspectRatio}，时长 ${input.duration} 秒，分辨率 ${input.resolution}。`,
     templateDirection,
     input.prompt || "保持商品主体、颜色、标识与关键细节准确，不添加水印。",
   ].join("\n") }];
@@ -93,7 +93,7 @@ async function createVideoTask(inputUrls, input, workflowKey) {
   const response = await fetch("https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks", {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.ARK_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "doubao-seedance-2-0-260128", content, generate_audio: true, ratio: input.aspectRatio, duration: 15, watermark: false }),
+    body: JSON.stringify({ model: "doubao-seedance-2-0-260128", content, generate_audio: true, ratio: input.aspectRatio, duration: input.duration, resolution: input.resolution, watermark: false }),
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.id) throw new Error(`Ark ${response.status}: ${payload?.error?.message || "task creation failed"}`);

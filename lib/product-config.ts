@@ -75,6 +75,8 @@ const videoWorkflowBase = {
   pointsPerTask: Number(process.env.VIDEO_TASK_POINTS || 40),
   outputsPerTask: 1,
   aspectRatios: ["16:9", "9:16"],
+  durations: [5, 10, 15],
+  resolutions: ["480p", "720p", "1080p"],
   refundOnFailure: true,
 } as const;
 
@@ -83,8 +85,8 @@ export const productAdVideoWorkflow = {
   key: "product-ad-video",
   name: "产品广告大片",
   minAssets: 1,
-  scenes: ["商品特写", "使用瞬间", "开箱展示", "氛围陈列"],
-  styles: ["质感广告", "轻快节奏", "清新生活", "高端大片"],
+  scenes: ["产品广告大片"],
+  styles: ["商业广告"],
 } as const;
 
 export const recreateVideoWorkflow = {

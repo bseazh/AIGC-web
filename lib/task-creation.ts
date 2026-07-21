@@ -11,6 +11,8 @@ type ImageWorkflow = {
   outputsPerTask: number;
   minAssets?: number;
   aspectRatios: readonly string[];
+  durations?: readonly number[];
+  resolutions?: readonly string[];
   scenes: readonly string[];
   styles: readonly string[];
 };
@@ -32,9 +34,13 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
   const requestedAspectRatio = typeof body.aspectRatio === "string" ? body.aspectRatio : "";
   const requestedScene = typeof body.scene === "string" ? body.scene : "";
   const requestedStyle = typeof body.style === "string" ? body.style : "";
+  const requestedDuration = Number(body.duration);
+  const requestedResolution = typeof body.resolution === "string" ? body.resolution : "";
   const aspectRatio = workflow.aspectRatios.includes(requestedAspectRatio) ? requestedAspectRatio : workflow.aspectRatios[0];
   const scene = workflow.scenes.includes(requestedScene) ? requestedScene : workflow.scenes[0];
   const style = workflow.styles.includes(requestedStyle) ? requestedStyle : workflow.styles[0];
+  const duration = workflow.durations?.includes(requestedDuration) ? requestedDuration : workflow.durations?.[workflow.durations.length - 1] || 15;
+  const resolution = workflow.resolutions?.includes(requestedResolution) ? requestedResolution : workflow.resolutions?.[1] || "720p";
   const assetResult = await db.query<ReadyAsset>(
     "SELECT id, storage_key, mime_type FROM assets WHERE id = ANY($1::uuid[]) AND owner_id = $2 AND audit_status = 'READY' AND kind = 'INPUT'",
     [assetIds, user.id],
@@ -57,7 +63,7 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
       await client.query("ROLLBACK");
       return NextResponse.json({ code: "INSUFFICIENT_POINTS", message: "积分不足" }, { status: 402 });
     }
-    const input = { assetId: assets[0].id, storageKey: assets[0].storage_key, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), assetMimeTypes: assets.map((asset) => asset.mime_type), prompt, aspectRatio, scene, style, outputs: workflow.outputsPerTask };
+    const input = { assetId: assets[0].id, storageKey: assets[0].storage_key, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), assetMimeTypes: assets.map((asset) => asset.mime_type), prompt, aspectRatio, duration, resolution, scene, style, outputs: workflow.outputsPerTask };
     await client.query(
       `INSERT INTO generation_tasks (id, user_id, workflow_key, status, points, input_json, idempotency_key)
        VALUES ($1, $2, $3, 'QUEUED', $4, $5::jsonb, $6)`,
