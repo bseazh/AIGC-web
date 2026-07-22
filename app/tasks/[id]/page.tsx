@@ -8,7 +8,7 @@ import { AppShell, LoadingScreen } from "@/app/components/app-shell";
 
 type Account = { user: { displayName: string }; wallet: { availablePoints: number } };
 type TaskDetail = { taskId: string; workflowName: string; status: string; statusLabel: string; points: number; outputs: Array<{ assetId: string; url: string; mimeType: string; name: string }>; errorCode?: string; createdAt: string; updatedAt: string };
-const failureReasons: Record<string, string> = { QUEUE_UNAVAILABLE: "任务队列暂不可用", PROVIDER_TIMEOUT: "生成服务响应超时", PROVIDER_ERROR: "生成服务返回异常", CONTENT_REJECTED: "内容未通过审核" };
+const failureReasons: Record<string, string> = { QUEUE_UNAVAILABLE: "任务队列暂不可用", PROVIDER_TIMEOUT: "生成服务响应超时", PROVIDER_ERROR: "生成服务返回异常", CONTENT_REJECTED: "内容未通过审核", TASK_TIMEOUT: "任务超时，积分已自动退回" };
 
 export default function TaskDetailPage() {
   const params = useParams<{ id: string }>();

@@ -5,8 +5,8 @@ const baseUrl = "https://api.mch.weixin.qq.com";
 
 export const rechargePackages = [
   { key: "starter", title: "基础积分包", amountFen: 1000, points: 100, description: "100 积分" },
-  { key: "standard", title: "标准积分包", amountFen: 5000, points: 550, description: "赠送 50 积分" },
-  { key: "pro", title: "进阶积分包", amountFen: 10000, points: 1200, description: "赠送 200 积分" },
+  { key: "standard", title: "标准积分包", amountFen: 5000, points: 500, description: "500 积分" },
+  { key: "pro", title: "进阶积分包", amountFen: 10000, points: 1000, description: "1,000 积分" },
 ] as const;
 
 type WechatConfig = { mchId: string; appId: string; serialNo: string; apiV3Key: string; notifyUrl: string; privateKey: string; platformPublicKey: string };

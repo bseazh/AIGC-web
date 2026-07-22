@@ -193,9 +193,9 @@ async function settleSuccess(task, savedAssets) {
   try {
     await client.query("BEGIN");
     const current = await client.query("SELECT status FROM generation_tasks WHERE id = $1 FOR UPDATE", [task.id]);
-    if (current.rows[0]?.status === "SUCCEEDED") {
+    if (!["QUEUED", "RUNNING"].includes(current.rows[0]?.status)) {
       await client.query("ROLLBACK");
-      return;
+      return false;
     }
     await client.query(
       "UPDATE generation_tasks SET status = 'SUCCEEDED', output_json = $2::jsonb, error_code = NULL, updated_at = NOW() WHERE id = $1",
@@ -212,6 +212,7 @@ async function settleSuccess(task, savedAssets) {
       [task.user_id, wallet.rows[0].available_points, task.id, `settle:${task.id}`],
     );
     await client.query("COMMIT");
+    return true;
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -251,11 +252,28 @@ async function settleFailure(taskId, message) {
   }
 }
 
+async function reconcileStaleTasks() {
+  // The longest provider poll is 15 minutes. A 30-minute grace period avoids
+  // reclaiming normal work while returning reservations stranded by a crash.
+  const stale = await pool.query(
+    `SELECT id FROM generation_tasks
+     WHERE status IN ('QUEUED', 'RUNNING')
+       AND updated_at < NOW() - INTERVAL '30 minutes'
+     ORDER BY updated_at ASC
+     LIMIT 100`,
+  );
+  for (const task of stale.rows) {
+    await settleFailure(task.id, "TASK_TIMEOUT");
+    console.warn(`reclaimed stale task ${task.id}`);
+  }
+}
+
 const worker = new Worker("generation", async (job) => {
   const taskResult = await pool.query("SELECT id, user_id, workflow_key, points, input_json FROM generation_tasks WHERE id = $1", [job.data.taskId]);
   const task = taskResult.rows[0];
   if (!task) throw new Error("Task not found");
-  await pool.query("UPDATE generation_tasks SET status = 'RUNNING', updated_at = NOW() WHERE id = $1 AND status = 'QUEUED'", [task.id]);
+  const claimed = await pool.query("UPDATE generation_tasks SET status = 'RUNNING', updated_at = NOW() WHERE id = $1 AND status = 'QUEUED' RETURNING id", [task.id]);
+  if (!claimed.rowCount) return { skipped: true };
   const savedKeys = [];
   try {
     const storageKeys = task.input_json.storageKeys || [task.input_json.storageKey];
@@ -281,7 +299,12 @@ const worker = new Worker("generation", async (job) => {
       );
       savedAssets.push({ assetId: asset.rows[0].id, storageKey: key });
     }
-    await settleSuccess(task, savedAssets);
+    const settled = await settleSuccess(task, savedAssets);
+    if (!settled) {
+      await Promise.all(savedKeys.map(deleteObject));
+      await pool.query("DELETE FROM assets WHERE id = ANY($1::uuid[])", [savedAssets.map((asset) => asset.assetId)]);
+      return { skipped: true };
+    }
     return { outputs: savedAssets.length };
   } catch (error) {
     await Promise.all(savedKeys.map(deleteObject));
@@ -298,11 +321,14 @@ worker.on("failed", (job, error) => console.error(`task ${job?.id || "unknown"} 
 
 heartbeat().catch((error) => console.error("initial worker heartbeat failed", error));
 const heartbeatTimer = setInterval(() => heartbeat().catch((error) => console.error("worker heartbeat failed", error)), 30_000);
+reconcileStaleTasks().catch((error) => console.error("initial stale-task reconciliation failed", error));
+const reconciliationTimer = setInterval(() => reconcileStaleTasks().catch((error) => console.error("stale-task reconciliation failed", error)), 5 * 60_000);
 
 for (const signal of ["SIGTERM", "SIGINT"]) {
   process.on(signal, async () => {
     await worker.close();
     clearInterval(heartbeatTimer);
+    clearInterval(reconciliationTimer);
     await pool.end();
     process.exit(0);
   });
