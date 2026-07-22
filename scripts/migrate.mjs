@@ -119,6 +119,36 @@ try {
       details_json JSONB NOT NULL DEFAULT '{}'::jsonb
     );
 
+    CREATE TABLE IF NOT EXISTS payment_orders (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      order_no TEXT NOT NULL UNIQUE,
+      user_id UUID NOT NULL REFERENCES users(id),
+      provider TEXT NOT NULL CHECK (provider IN ('WECHAT_NATIVE')),
+      status TEXT NOT NULL CHECK (status IN ('CREATED', 'PENDING', 'PAID', 'CLOSED', 'FAILED', 'REFUNDED')),
+      amount_fen INTEGER NOT NULL CHECK (amount_fen > 0),
+      points INTEGER NOT NULL CHECK (points > 0),
+      package_key TEXT NOT NULL,
+      description TEXT NOT NULL,
+      provider_prepay_id TEXT,
+      provider_transaction_id TEXT UNIQUE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      paid_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS payment_orders_user_created_idx ON payment_orders (user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS payment_orders_status_expires_idx ON payment_orders (status, expires_at);
+
+    CREATE TABLE IF NOT EXISTS payment_notifications (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      provider TEXT NOT NULL,
+      event_id TEXT NOT NULL UNIQUE,
+      event_type TEXT NOT NULL,
+      order_no TEXT,
+      payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      received_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     INSERT INTO prompt_config_versions (workflow_key, version, variant_key, rollout_percent, config_json)
     VALUES
       ('product-ad-video', 1, 'control', 100, '{"template":"将输入的产品图片制作成高品质商品广告大片。综合识别全部图片中的材质、颜色、细节与卖点，围绕商品设计开场、细节、使用或氛围镜头和收束镜头。","watermark":false}'),
