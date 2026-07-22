@@ -10,9 +10,13 @@ function checkCos() {
 }
 
 async function checkArk() {
-  if (!process.env.ARK_API_KEY || !process.env.ARK_MODEL) throw new Error("Ark is not configured");
+  if (!process.env.ARK_API_KEY) throw new Error("Ark is not configured");
+  const arkModel = process.env.ARK_MODEL || "doubao-seedance-2-0-260128";
   const response = await fetch("https://ark.cn-beijing.volces.com/api/v3/models", { headers: { Authorization: `Bearer ${process.env.ARK_API_KEY}` }, signal: AbortSignal.timeout(4_000) });
   if (!response.ok) throw new Error(`Ark HTTP ${response.status}`);
+  const payload = await response.json().catch(() => null);
+  const models = Array.isArray(payload?.data) ? payload.data.map((model: { id?: string }) => model.id) : [];
+  if (models.length && !models.includes(arkModel)) throw new Error(`Ark model is not enabled: ${arkModel}`);
 }
 
 export async function GET() {
