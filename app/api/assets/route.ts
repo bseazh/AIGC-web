@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSignedObjectUrl, removeObject } from "@/lib/cos";
 import { db } from "@/lib/db";
 import { authenticatedUser } from "@/lib/session";
+import { storageSummary } from "@/lib/storage";
+import { audit } from "@/lib/audit";
 
 export async function GET(request: NextRequest) {
   const user = await authenticatedUser(request);
@@ -37,7 +39,7 @@ export async function GET(request: NextRequest) {
   const usage = await db.query<{ bytes: string }>(
     "SELECT COALESCE(SUM(byte_size), 0)::text AS bytes FROM assets WHERE owner_id = $1 AND audit_status = 'READY'", [user.id],
   );
-  return NextResponse.json({ assets, totalBytes: Number(usage.rows[0]?.bytes || 0) });
+  const storage = await storageSummary(user.id); return NextResponse.json({ assets, totalBytes: Number(usage.rows[0]?.bytes || 0), storage });
 }
 
 export async function DELETE(request: NextRequest) {
@@ -50,5 +52,6 @@ export async function DELETE(request: NextRequest) {
   if (!asset) return NextResponse.json({ code: "ASSET_NOT_FOUND" }, { status: 404 });
   await removeObject(asset.storage_key);
   await db.query("DELETE FROM assets WHERE id = $1 AND owner_id = $2", [body.assetId, user.id]);
+  await audit(user.id, "ASSET_DELETED", request, { type: "asset", id: body.assetId });
   return NextResponse.json({ ok: true });
 }

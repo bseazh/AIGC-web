@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSignedObjectUrl } from "@/lib/cos";
 import { db } from "@/lib/db";
 import { authenticatedUser } from "@/lib/session";
+import { storageSummary } from "@/lib/storage";
+import { audit } from "@/lib/audit";
 
 const extensionByMime: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -38,6 +40,8 @@ export async function POST(request: NextRequest) {
   if (!Number.isInteger(byteSize) || byteSize <= 0 || byteSize > maxBytesByMime[mimeType]) {
     return NextResponse.json({ code: "FILE_TOO_LARGE", message: "图片最大 10MB，视频最大 100MB，音频最大 30MB" }, { status: 400 });
   }
+  const storage = await storageSummary(user.id);
+  if (storage.usedBytes + byteSize > storage.quotaBytes) return NextResponse.json({ code: "STORAGE_QUOTA_EXCEEDED", message: "存储空间不足，请删除不需要的素材后重试", storage }, { status: 413 });
 
   const key = `users/${user.id}/inputs/${randomUUID()}.${extension}`;
   const result = await db.query<{ id: string }>(
@@ -47,5 +51,6 @@ export async function POST(request: NextRequest) {
     [user.id, key, mimeType, byteSize, originalName],
   );
   const uploadUrl = await createSignedObjectUrl(key, "PUT", 600);
+  await audit(user.id, "ASSET_UPLOAD_CREATED", request, { type: "asset", id: result.rows[0].id }, { byteSize, mimeType });
   return NextResponse.json({ assetId: result.rows[0].id, uploadUrl, expiresIn: 600 });
 }
