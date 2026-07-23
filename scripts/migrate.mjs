@@ -175,6 +175,15 @@ try {
     );
     CREATE INDEX IF NOT EXISTS audit_events_user_created_idx ON audit_events (user_id, created_at DESC);
 
+    CREATE TABLE IF NOT EXISTS operations_runs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      operation TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('SUCCEEDED', 'FAILED')),
+      summary TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS operations_runs_created_idx ON operations_runs (created_at DESC);
+
     INSERT INTO prompt_config_versions (workflow_key, version, variant_key, rollout_percent, config_json)
     VALUES
       ('product-ad-video', 1, 'control', 100, '{"template":"将输入的产品图片制作成高品质商品广告大片。综合识别全部图片中的材质、颜色、细节与卖点，围绕商品设计开场、细节、使用或氛围镜头和收束镜头。","watermark":false}'),

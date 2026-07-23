@@ -92,7 +92,11 @@ try {
     removeExpiredAssets("INPUT", inputRetentionDays),
     removeExpiredAssets("OUTPUT", outputRetentionDays),
   ]);
-  console.log(JSON.stringify({ event: "storage_cleanup_complete", dryRun, temporary, uploads, inputs, outputs }));
+  const summary = { event: "storage_cleanup_complete", dryRun, temporary, uploads, inputs, outputs };
+  if (!dryRun) {
+    await pool.query("INSERT INTO operations_runs (operation, status, summary) VALUES ('STORAGE_CLEANUP', 'SUCCEEDED', $1)", [JSON.stringify(summary)]);
+  }
+  console.log(JSON.stringify(summary));
 } finally {
   await pool.end();
 }

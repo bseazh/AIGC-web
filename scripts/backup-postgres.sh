@@ -12,5 +12,6 @@ set -a
 source /home/ubuntu/project/AIGC_web/.env.production
 set +a
 node /home/ubuntu/project/AIGC_web/scripts/upload-postgres-backup.mjs "$backup_file"
+node /home/ubuntu/project/AIGC_web/scripts/record-operation.mjs POSTGRES_BACKUP SUCCEEDED "Uploaded backups/postgres/$(basename "$backup_file")"
 find "$backup_dir" -type f -name 'aigc-*.sql.gz' -mtime +14 -delete
 echo "PostgreSQL backup created and uploaded: $backup_file"
