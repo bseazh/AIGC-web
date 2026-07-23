@@ -58,7 +58,7 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
 
   const taskId = randomUUID();
   const idempotencyKey = request.headers.get("Idempotency-Key") || randomUUID();
-  const points = workflow.pointsPerTask;
+  const points = workflow.key === "video-mix" ? ({ 15: 40, 30: 70, 45: 100, 60: 130 } as Record<number, number>)[duration] : workflow.pointsPerTask;
   const client = await db.connect();
   try {
     await client.query("BEGIN");

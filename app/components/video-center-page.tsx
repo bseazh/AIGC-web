@@ -12,6 +12,7 @@ const groups = [
   { title: "带货视频生成", caption: "PRODUCT VIDEO", items: [
     { title: "产品广告大片", text: "一张商品图出发，自动组织卖点、细节与收束镜头。", href: "/create/product-ad-video", icon: Clapperboard, tone: "blue" },
     { title: "复刻带货视频", text: "参考镜头节奏与运镜，生成原创商品内容。", href: "/create/recreate-video", icon: Repeat2, tone: "violet" },
+    { title: "智能混剪", text: "至少两段已授权视频，保留原音频合成为长视频。", href: "/create/video-mix", icon: Layers3, tone: "cyan" },
   ] },
   { title: "Seedance2 视频", caption: "ADVANCED CREATION", items: [
     { title: "Seedance2 视频", text: "组合图片、视频、音频和自由脚本，完成高级视频创作。", href: "/create/seedance-video", icon: Film, tone: "cyan" },

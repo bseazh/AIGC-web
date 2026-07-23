@@ -1,4 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Worker } from "bullmq";
 import COS from "cos-nodejs-sdk-v5";
 import pg from "pg";
@@ -202,6 +206,18 @@ async function generateVideo(inputUrls, input, workflowKey, taskId) {
   return waitForVideo(await createVideoTask(inputUrls, input, workflowKey, taskId), taskId);
 }
 
+function run(command, args) { return new Promise((resolve, reject) => { const child = spawn(command, args, { stdio: "ignore" }); child.once("error", reject); child.once("exit", (code) => code === 0 ? resolve() : reject(new Error(`${command} exited ${code}`)); }); }
+async function generateMix(inputUrls, input, task) {
+  const dir = await mkdtemp(join(tmpdir(), "aigc-mix-"));
+  try {
+    const files = await Promise.all(inputUrls.map(async (url, index) => { const response = await fetch(url); if (!response.ok) throw new Error("MIX_SOURCE_DOWNLOAD_FAILED"); const file = join(dir, `${index}.mp4`); await writeFile(file, Buffer.from(await response.arrayBuffer())); return file; }));
+    const list = join(dir, "inputs.txt"); await writeFile(list, files.map((file) => `file '${file.replace(/'/g, "'\\''")}'`).join("\n"));
+    const output = join(dir, "output.mp4");
+    await run("/usr/bin/ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", list, "-t", String(input.duration), "-vf", `scale=${input.aspectRatio === "9:16" ? "720:1280" : "1280:720"}:force_original_aspect_ratio=decrease,pad=${input.aspectRatio === "9:16" ? "720:1280" : "1280:720"}:(ow-iw)/2:(oh-ih)/2`, "-c:v", "libx264", "-c:a", "aac", "-movflags", "+faststart", output]);
+    const key = `users/${task.user_id}/temporary/${task.id}-${randomUUID()}.mp4`; await putObject(key, await readFile(output), "video/mp4"); return cosUrl(key, "GET", 900);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+}
+
 async function settleSuccess(task, savedAssets) {
   const client = await pool.connect();
   try {
@@ -292,7 +308,9 @@ const worker = new Worker("generation", async (job) => {
   try {
     const storageKeys = task.input_json.storageKeys || [task.input_json.storageKey];
     const inputUrls = await Promise.all(storageKeys.map((key) => cosUrl(key, "GET", 3600)));
-    const temporaryUrls = ["product-ad-video", "recreate-video", "seedance-video"].includes(task.workflow_key)
+    const temporaryUrls = task.workflow_key === "video-mix"
+      ? [await generateMix(inputUrls, task.input_json, task)]
+      : ["product-ad-video", "recreate-video", "seedance-video"].includes(task.workflow_key)
       ? [await generateVideo(inputUrls, task.input_json, task.workflow_key, task.id)]
       : await Promise.all(Array.from({ length: task.input_json.outputs || 4 }, (_, index) => generateOne(inputUrls, task.input_json, index, task.workflow_key)));
     const savedAssets = [];
@@ -300,7 +318,7 @@ const worker = new Worker("generation", async (job) => {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`Could not download provider output ${response.status}`);
       const buffer = Buffer.from(await response.arrayBuffer());
-      const isVideoTask = ["product-ad-video", "recreate-video", "seedance-video"].includes(task.workflow_key);
+      const isVideoTask = ["product-ad-video", "recreate-video", "seedance-video", "video-mix"].includes(task.workflow_key);
       const contentType = response.headers.get("content-type")?.split(";")[0] || (isVideoTask ? "video/mp4" : "image/png");
       const extension = contentType === "image/jpeg" ? "jpg" : contentType === "image/webp" ? "webp" : contentType === "video/webm" ? "webm" : contentType.startsWith("video/") ? "mp4" : "png";
       const key = `users/${task.user_id}/outputs/${task.id}/${index + 1}-${randomUUID()}.${extension}`;

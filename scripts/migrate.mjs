@@ -149,6 +149,19 @@ try {
       received_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS content_authorizations (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id),
+      task_id UUID REFERENCES generation_tasks(id) ON DELETE SET NULL,
+      source_url TEXT,
+      consent_version TEXT NOT NULL,
+      consent_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      ip_address TEXT,
+      user_agent TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS content_authorizations_user_created_idx ON content_authorizations (user_id, created_at DESC);
+
     INSERT INTO prompt_config_versions (workflow_key, version, variant_key, rollout_percent, config_json)
     VALUES
       ('product-ad-video', 1, 'control', 100, '{"template":"将输入的产品图片制作成高品质商品广告大片。综合识别全部图片中的材质、颜色、细节与卖点，围绕商品设计开场、细节、使用或氛围镜头和收束镜头。","watermark":false}'),

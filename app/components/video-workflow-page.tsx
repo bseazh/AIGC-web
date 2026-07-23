@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 
 type Account = { wallet: { availablePoints: number } };
-type UploadSlot = "image1" | "image2" | "image3" | "image4" | "image5" | "video" | "audio";
+type UploadSlot = "image1" | "image2" | "image3" | "image4" | "image5" | "video" | "video2" | "audio";
 type Uploaded = { preview: string; name: string; byteSize: number; file?: File; assetId?: string };
 type Asset = { id: string; mimeType: string; byteSize: number; originalName: string; url: string; kind: string };
 type Result = { taskId: string; status: string; outputs: Array<{ assetId: string; url: string }> };
-type VideoTemplate = "ad" | "recreate" | "seedance";
+type VideoTemplate = "ad" | "recreate" | "seedance" | "mix";
 type Props = { template?: VideoTemplate };
 type Definition = { key: UploadSlot; label: string; hint: string; accepts: string; icon: typeof Plus; required?: boolean };
 
@@ -22,6 +22,7 @@ const allDefinitions: Definition[] = [
   { key: "image4", label: "产品图片 4", hint: "可选 · 补充细节", accepts: imageAccepts, icon: Plus },
   { key: "image5", label: "产品图片 5", hint: "可选 · 补充细节", accepts: imageAccepts, icon: Plus },
   { key: "video", label: "参考视频", hint: "必传 · MP4，最多 100MB", accepts: "video/mp4", icon: Film },
+  { key: "video2", label: "混剪视频 2", hint: "必传 · MP4，最多 100MB", accepts: "video/mp4", icon: Film },
   { key: "audio", label: "参考音频", hint: "可选 · MP3 / WAV，最多 30MB", accepts: "audio/mpeg,audio/mp3,audio/wav", icon: Music2 },
 ];
 
@@ -35,6 +36,9 @@ const templateConfig = {
   seedance: {
     title: "Seedance2 视频", subtitle: "图、视频、音频自由组合的高级创作", submitUrl: "/api/tasks/video/", description: "完整参考素材与自由脚本控制。", keys: ["image1", "image2", "video", "audio"] as UploadSlot[], scenes: ["商品特写", "第一人称", "生活方式", "自由创作"], styles: ["轻快节奏", "质感广告", "真实记录", "电影感"],
   },
+  mix: {
+    title: "智能混剪", subtitle: "多段授权视频保留原音频合成为成片", submitUrl: "/api/tasks/video-mix/", description: "至少选择两段已授权 MP4 视频。系统将裁切、拼接并保留原始音轨。", keys: ["video", "video2"] as UploadSlot[], scenes: ["原音频混剪"], styles: ["自然转场"],
+  },
 } as const;
 
 const durations = [5, 10, 15];
@@ -43,7 +47,7 @@ const resolutions = ["480p", "720p", "1080p"];
 export function VideoWorkflowPage({ template = "seedance" }: Props) {
   const router = useRouter();
   const config = templateConfig[template];
-  const definitions = allDefinitions.filter((definition) => config.keys.includes(definition.key)).map((definition) => ({ ...definition, required: definition.key === "image1" || (template === "recreate" && definition.key === "video") }));
+  const definitions = allDefinitions.filter((definition) => config.keys.includes(definition.key)).map((definition) => ({ ...definition, required: definition.key === "image1" || (template === "recreate" && definition.key === "video") || (template === "mix" && ["video", "video2"].includes(definition.key)) }));
   const [account, setAccount] = useState<Account | null>(null);
   const [uploads, setUploads] = useState<Partial<Record<UploadSlot, Uploaded>>>({});
   const [ratio, setRatio] = useState("16:9");
@@ -57,6 +61,7 @@ export function VideoWorkflowPage({ template = "seedance" }: Props) {
   const [librarySlot, setLibrarySlot] = useState<UploadSlot | null>(null);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [assetsLoading, setAssetsLoading] = useState(false);
+  const [authorizationConfirmed, setAuthorizationConfirmed] = useState(false);
 
   useEffect(() => { fetch("/api/auth/session/", { cache: "no-store" }).then(async (response) => { if (!response.ok) throw new Error(); setAccount(await response.json()); }).catch(() => router.replace("/")); }, [router]);
 
@@ -103,14 +108,15 @@ export function VideoWorkflowPage({ template = "seedance" }: Props) {
     try {
       const assetIds = await Promise.all(definitions.filter((definition) => uploads[definition.key]).map((definition) => upload(uploads[definition.key]!)));
       const promptValue = [`产品信息：${productInfo.trim()}`, `视频特殊要求：${specialRequirements.trim()}`].filter((item) => !item.endsWith("：")).join("\n");
-      const response = await fetch(config.submitUrl, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ assetIds, prompt: promptValue, aspectRatio: ratio, duration, resolution, scene: config.scenes[0], style: config.styles[0] }) });
+      const response = await fetch(config.submitUrl, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ assetIds, prompt: promptValue, aspectRatio: ratio, duration, resolution, scene: config.scenes[0], style: config.styles[0], authorizationConfirmed }) });
       const created = await response.json(); if (!response.ok) throw new Error(created.message || created.code || "创建任务失败");
       setPhase("generating"); await poll(created.taskId);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "生成失败"); setPhase("failed"); }
   };
   if (!account) return <main className="workspace-loading"><span><Sparkles size={22} /></span><p>正在载入芭乐AIGC</p></main>;
   const busy = phase === "uploading" || phase === "generating";
-  const missingRequired = definitions.some((definition) => definition.required && !uploads[definition.key]);
+  const mixPoints = duration === 15 ? 40 : duration === 30 ? 70 : duration === 45 ? 100 : 130;
+  const missingRequired = definitions.some((definition) => definition.required && !uploads[definition.key]) || (template === "mix" && !authorizationConfirmed);
   const compatibleAssets = librarySlot ? assets.filter((asset) => definitions.find((definition) => definition.key === librarySlot)!.accepts.split(",").includes(asset.mimeType)) : [];
   const imageCount = imageKeys.filter((key) => uploads[key]).length;
 
@@ -123,5 +129,5 @@ export function VideoWorkflowPage({ template = "seedance" }: Props) {
     <form className="creator-layout video-creator-layout" onSubmit={submit}><section className="video-stage"><div className="video-stage-heading"><div><span>VIDEO STUDIO</span><h1>{config.title}</h1><p>{config.description} 可上传新素材，或直接引用内容资产。</p></div><div className="video-badge"><Film size={16} />Seedance 2.0</div></div>
       <div className="ad-video-inputs"><div className="ad-input-heading"><strong>{template === "ad" ? "产品图片" : "产品与参考素材"} <em>*</em></strong>{template === "ad" && <span>已添加 {imageCount}/5</span>}</div><div className={`video-upload-grid ${template === "ad" ? "ad-image-grid" : ""}`}>{definitions.map(inputCard)}</div><label className="ad-text-field">产品信息（可选）<textarea value={productInfo} onChange={(event) => setProductInfo(event.target.value)} maxLength={600} placeholder="例如：产品名称、核心卖点、材质、目标人群" /></label><label className="ad-text-field">视频特殊要求（可选）<textarea value={specialRequirements} onChange={(event) => setSpecialRequirements(event.target.value)} maxLength={600} placeholder="例如：突出金属质感、镜头缓慢推进、电影级光影" /></label></div>
       {busy && <div className="generation-overlay"><LoaderCircle size={30} /><strong>{phase === "uploading" ? "正在上传参考素材" : "Seedance 正在合成视频"}</strong><span>通常需要数分钟，完成后将自动保存至内容资产</span></div>}{phase === "succeeded" && result?.outputs[0] && <div className="video-result"><video src={result.outputs[0].url} controls playsInline /><a href={`/api/assets/${result.outputs[0].assetId}/download/`}><Download size={15} />下载视频</a></div>}</section>
-      <aside className="creator-panel"><div className="panel-title"><span><Film size={18} /></span><div><h1>生成参数</h1><p>{duration} 秒 · {resolution} · 消耗 40 积分</p></div></div><label className="field-label">视频画面比例</label><div className="ratio-control"><button type="button" className={ratio === "16:9" ? "active" : ""} onClick={() => setRatio("16:9")}>16:9 横版</button><button type="button" className={ratio === "9:16" ? "active" : ""} onClick={() => setRatio("9:16")}>9:16 竖版</button></div><label className="field-label">视频时长</label><div className="ratio-control three-options">{durations.map((item) => <button type="button" key={item} className={duration === item ? "active" : ""} onClick={() => setDuration(item)}>{item} 秒</button>)}</div><label className="field-label">视频分辨率</label><div className="ratio-control three-options">{resolutions.map((item) => <button type="button" key={item} className={resolution === item ? "active" : ""} onClick={() => setResolution(item)}>{item}</button>)}</div>{error && <p className="creator-error" role="alert">{error}</p>}{phase === "succeeded" && <p className="creator-success"><Check size={16} />视频已保存到内容资产</p>}<button className="generate-button" type="submit" disabled={missingRequired || busy || account.wallet.availablePoints < 40}><Upload size={18} />{busy ? "任务处理中" : missingRequired ? "请补充必传素材" : account.wallet.availablePoints < 40 ? "积分不足" : `生成${config.title}`}</button></aside></form>{librarySlot && <div className="asset-picker-backdrop" role="dialog" aria-modal="true" aria-label="选择素材"><section className="asset-picker-modal"><header><div><span>内容资产</span><h2>选择{definitions.find((definition) => definition.key === librarySlot)?.label}</h2></div><button type="button" className="icon-button" onClick={() => setLibrarySlot(null)}><X size={18} /></button></header>{assetsLoading ? <div className="asset-picker-empty"><LoaderCircle size={22} />正在加载素材</div> : compatibleAssets.length === 0 ? <div className="asset-picker-empty"><FolderOpen size={25} /><strong>暂无可用素材</strong><p>先在图片创作或上传后完成校验，素材会自动显示在这里。</p></div> : <div className="asset-picker-grid">{compatibleAssets.map((asset) => <button type="button" key={asset.id} onClick={() => selectAsset(librarySlot, asset)}>{asset.mimeType.startsWith("image/") ? <img src={asset.url} alt="" /> : <span><Film size={24} />{asset.mimeType.startsWith("audio/") ? "音频素材" : "视频素材"}</span>}<strong>{asset.originalName}</strong><small>{asset.kind === "OUTPUT" ? "生成结果" : "上传素材"}</small></button>)}</div>}</section></div>}</main>;
+      <aside className="creator-panel"><div className="panel-title"><span><Film size={18} /></span><div><h1>生成参数</h1><p>{duration} 秒 · {resolution} · {template === "mix" ? `消耗 ${mixPoints} 积分` : "消耗 40 积分"}</p></div></div><label className="field-label">视频画面比例</label><div className="ratio-control"><button type="button" className={ratio === "16:9" ? "active" : ""} onClick={() => setRatio("16:9")}>16:9 横版</button><button type="button" className={ratio === "9:16" ? "active" : ""} onClick={() => setRatio("9:16")}>9:16 竖版</button></div><label className="field-label">视频时长</label><div className="ratio-control three-options">{(template === "mix" ? [15, 30, 45, 60] : durations).map((item) => <button type="button" key={item} className={duration === item ? "active" : ""} onClick={() => setDuration(item)}>{item} 秒</button>)}</div><label className="field-label">视频分辨率</label><div className="ratio-control three-options">{resolutions.map((item) => <button type="button" key={item} className={resolution === item ? "active" : ""} onClick={() => setResolution(item)}>{item}</button>)}</div>{template === "mix" && <label className="recreate-consent"><input type="checkbox" checked={authorizationConfirmed} onChange={(event) => setAuthorizationConfirmed(event.target.checked)} />我确认拥有全部视频素材的下载、剪辑和商业使用授权，并同意平台记录本次确认。</label>}{error && <p className="creator-error" role="alert">{error}</p>}{phase === "succeeded" && <p className="creator-success"><Check size={16} />视频已保存到内容资产</p>}<button className="generate-button" type="submit" disabled={missingRequired || busy || account.wallet.availablePoints < (template === "mix" ? mixPoints : 40)}><Upload size={18} />{busy ? "任务处理中" : missingRequired ? "请补充必传素材并确认授权" : account.wallet.availablePoints < (template === "mix" ? mixPoints : 40) ? "积分不足" : `生成${config.title}`}</button></aside></form>{librarySlot && <div className="asset-picker-backdrop" role="dialog" aria-modal="true" aria-label="选择素材"><section className="asset-picker-modal"><header><div><span>内容资产</span><h2>选择{definitions.find((definition) => definition.key === librarySlot)?.label}</h2></div><button type="button" className="icon-button" onClick={() => setLibrarySlot(null)}><X size={18} /></button></header>{assetsLoading ? <div className="asset-picker-empty"><LoaderCircle size={22} />正在加载素材</div> : compatibleAssets.length === 0 ? <div className="asset-picker-empty"><FolderOpen size={25} /><strong>暂无可用素材</strong><p>先在图片创作或上传后完成校验，素材会显示在这里。</p></div> : <div className="asset-picker-grid">{compatibleAssets.map((asset) => <button type="button" key={asset.id} onClick={() => selectAsset(librarySlot, asset)}><span><Film size={24} />视频素材</span><strong>{asset.originalName}</strong></button>)}</div>}</section></div>}</main>;
 }
