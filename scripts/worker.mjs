@@ -206,7 +206,16 @@ async function generateVideo(inputUrls, input, workflowKey, taskId) {
   return waitForVideo(await createVideoTask(inputUrls, input, workflowKey, taskId), taskId);
 }
 
-function run(command, args) { return new Promise((resolve, reject) => { const child = spawn(command, args, { stdio: "ignore" }); child.once("error", reject); child.once("exit", (code) => code === 0 ? resolve() : reject(new Error(`${command} exited ${code}`)); }); }
+function run(command, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: "ignore" });
+    child.once("error", reject);
+    child.once("exit", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`${command} exited ${code}`));
+    });
+  });
+}
 async function generateMix(inputUrls, input, task) {
   const dir = await mkdtemp(join(tmpdir(), "aigc-mix-"));
   try {
@@ -214,7 +223,9 @@ async function generateMix(inputUrls, input, task) {
     const list = join(dir, "inputs.txt"); await writeFile(list, files.map((file) => `file '${file.replace(/'/g, "'\\''")}'`).join("\n"));
     const output = join(dir, "output.mp4");
     await run("/usr/bin/ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", list, "-t", String(input.duration), "-vf", `scale=${input.aspectRatio === "9:16" ? "720:1280" : "1280:720"}:force_original_aspect_ratio=decrease,pad=${input.aspectRatio === "9:16" ? "720:1280" : "1280:720"}:(ow-iw)/2:(oh-ih)/2`, "-c:v", "libx264", "-c:a", "aac", "-movflags", "+faststart", output]);
-    const key = `users/${task.user_id}/temporary/${task.id}-${randomUUID()}.mp4`; await putObject(key, await readFile(output), "video/mp4"); return cosUrl(key, "GET", 900);
+    const key = `temporary/${task.user_id}/${task.id}-${randomUUID()}.mp4`;
+    await putObject(key, await readFile(output), "video/mp4");
+    return { url: await cosUrl(key, "GET", 900), temporaryKey: key };
   } finally { await rm(dir, { recursive: true, force: true }); }
 }
 
@@ -305,17 +316,19 @@ const worker = new Worker("generation", async (job) => {
   const claimed = await pool.query("UPDATE generation_tasks SET status = 'RUNNING', updated_at = NOW() WHERE id = $1 AND status = 'QUEUED' RETURNING id", [task.id]);
   if (!claimed.rowCount) return { skipped: true };
   const savedKeys = [];
+  let temporaryKeys = [];
   try {
     const storageKeys = task.input_json.storageKeys || [task.input_json.storageKey];
     const inputUrls = await Promise.all(storageKeys.map((key) => cosUrl(key, "GET", 3600)));
-    const temporaryUrls = task.workflow_key === "video-mix"
+    const temporaryOutputs = task.workflow_key === "video-mix"
       ? [await generateMix(inputUrls, task.input_json, task)]
       : ["product-ad-video", "recreate-video", "seedance-video"].includes(task.workflow_key)
-      ? [await generateVideo(inputUrls, task.input_json, task.workflow_key, task.id)]
-      : await Promise.all(Array.from({ length: task.input_json.outputs || 4 }, (_, index) => generateOne(inputUrls, task.input_json, index, task.workflow_key)));
+      ? [{ url: await generateVideo(inputUrls, task.input_json, task.workflow_key, task.id), temporaryKey: null }]
+      : (await Promise.all(Array.from({ length: task.input_json.outputs || 4 }, (_, index) => generateOne(inputUrls, task.input_json, index, task.workflow_key)))).map((url) => ({ url, temporaryKey: null }));
+    temporaryKeys = temporaryOutputs.flatMap((output) => output.temporaryKey ? [output.temporaryKey] : []);
     const savedAssets = [];
-    for (const [index, url] of temporaryUrls.entries()) {
-      const response = await fetch(url);
+    for (const [index, output] of temporaryOutputs.entries()) {
+      const response = await fetch(output.url);
       if (!response.ok) throw new Error(`Could not download provider output ${response.status}`);
       const buffer = Buffer.from(await response.arrayBuffer());
       const isVideoTask = ["product-ad-video", "recreate-video", "seedance-video", "video-mix"].includes(task.workflow_key);
@@ -342,6 +355,10 @@ const worker = new Worker("generation", async (job) => {
     await Promise.all(savedKeys.map(deleteObject));
     await settleFailure(task.id, error instanceof Error ? error.message : "GENERATION_FAILED");
     throw error;
+  } finally {
+    const cleanup = await Promise.allSettled(temporaryKeys.map(deleteObject));
+    const failed = cleanup.filter((result) => result.status === "rejected").length;
+    if (failed) console.error(`task ${task.id} temporary object cleanup failed for ${failed} object(s)`);
   }
 }, {
   connection: { host: redisUrl.hostname, port: Number(redisUrl.port || 6379), password: redisUrl.password || undefined, maxRetriesPerRequest: null },

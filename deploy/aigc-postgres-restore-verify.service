@@ -1,0 +1,10 @@
+[Unit]
+Description=Bala AIGC PostgreSQL backup restore verification
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/project/AIGC_web
+ExecStart=/bin/bash /home/ubuntu/project/AIGC_web/scripts/verify-postgres-backup.sh
