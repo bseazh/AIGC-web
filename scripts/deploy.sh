@@ -25,9 +25,13 @@ sudo install -D -m 644 deploy/aigc-postgres-backup.timer /etc/systemd/system/aig
 sudo install -D -m 644 deploy/aigc-postgres-restore-verify.service /etc/systemd/system/aigc-postgres-restore-verify.service
 sudo install -D -m 644 deploy/aigc-postgres-restore-verify.timer /etc/systemd/system/aigc-postgres-restore-verify.timer
 sudo install -D -m 644 deploy/journald-aigc.conf /etc/systemd/journald.conf.d/10-aigc.conf
+sudo install -D -m 644 deploy/sshd-aigc-hardening.conf /etc/ssh/sshd_config.d/01-aigc-hardening.conf
+sudo rm -f /etc/ssh/sshd_config.d/99-aigc-hardening.conf
+sudo sshd -t
 sudo systemctl daemon-reload
 sudo systemctl enable --now aigc-storage-cleanup.timer aigc-postgres-backup.timer aigc-postgres-restore-verify.timer
 sudo systemctl restart systemd-journald
+sudo systemctl reload ssh
 
 mkdir -p .next/standalone/.next
 cp -R .next/static .next/standalone/.next/static
