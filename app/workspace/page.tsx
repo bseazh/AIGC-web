@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Boxes, ChevronRight, Clock3, ImageIcon, Layers3, PackageOpen, ScanSearch, Shirt, Video, WandSparkles } from "lucide-react";
+import { ArrowRight, Boxes, ChevronRight, Clock3, ImageIcon, Layers3, PackageOpen, ScanSearch, Search, Shirt, Video, WandSparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -17,7 +17,7 @@ const tools = [
 
 type Account = { user: { identifier: string; displayName: string }; wallet: { availablePoints: number; frozenPoints: number } };
 type Task = { id: string; workflowName: string; status: string; statusLabel: string; points: number; thumbnailUrl: string | null; createdAt: string };
-type Inspiration = { id: string; title: string; category: string; description: string; image: string; href: string };
+type Inspiration = { id: string; title: string; category: string; industry: string; description: string; image: string; href: string };
 
 export default function Workspace() {
   const router = useRouter();
@@ -25,6 +25,7 @@ export default function Workspace() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activeCount, setActiveCount] = useState(0);
   const [inspirations, setInspirations] = useState<Inspiration[]>([]);
+  const [caseQuery, setCaseQuery] = useState(""); const [industry, setIndustry] = useState("全部");
   useEffect(() => {
     Promise.all([
       fetch("/api/auth/session/", { cache: "no-store" }),
@@ -48,7 +49,7 @@ export default function Workspace() {
         {tasks.length === 0 ? <div className="empty-tasks"><span><PackageOpen size={24} /></span><strong>暂无任务</strong><p>创建商品主图后，生成进度与结果会出现在这里。</p></div> : <div className="dashboard-task-list">{tasks.map((task) => <Link className="dashboard-task" href={`/tasks/${task.id}`} key={task.id}><div className="record-thumb">{task.thumbnailUrl ? <img src={task.thumbnailUrl} alt="" /> : <Clock3 size={20} />}</div><div><strong>{task.workflowName}</strong><span>{new Date(task.createdAt).toLocaleString("zh-CN")}</span></div><span className={`record-status status-${task.status.toLowerCase()}`}>{task.statusLabel}</span><span>{task.points} 积分</span><ChevronRight size={17} /></Link>)}</div>}
       </section>
       <section className="asset-shortcut"><div><span><Boxes size={20} /></span><div><strong>内容资产</strong><p>上传素材与生成结果都已集中保存。</p></div></div><Link href="/assets">打开资产库<ChevronRight size={16} /></Link></section>
-      <section className="inspiration-band"><div className="section-title"><div><h2>灵感案例</h2><p>授权示例素材，用于展示可创作的商品视觉方向。</p></div><Link href="/tools">查看工具<ChevronRight size={16} /></Link></div><div className="inspiration-grid">{inspirations.slice(0, 3).map((item) => <article className="inspiration-card" key={item.id}><img src={item.image} alt="" /><span>{item.category}</span><div><strong>{item.title}</strong><p>{item.description}</p><Link href={item.href}>做同款<ArrowRight size={15} /></Link></div></article>)}</div></section>
+      <section className="inspiration-band"><div className="section-title"><div><h2>灵感案例</h2><p>授权示例素材，可按行业筛选并一键带入创作参数。</p></div><Link href="/tools">查看工具<ChevronRight size={16} /></Link></div><div className="case-controls"><label><Search size={15} /><input value={caseQuery} onChange={(event) => setCaseQuery(event.target.value)} placeholder="搜索案例" /></label><div>{["全部", ...Array.from(new Set(inspirations.map((item) => item.industry)))].map((item) => <button type="button" className={industry === item ? "active" : ""} key={item} onClick={() => setIndustry(item)}>{item}</button>)}</div></div><div className="inspiration-grid">{inspirations.filter((item) => (industry === "全部" || item.industry === industry) && `${item.title}${item.category}${item.description}`.includes(caseQuery.trim())).map((item) => <article className="inspiration-card" key={item.id}><img src={item.image} alt="" /><span>{item.industry} · {item.category}</span><div><strong>{item.title}</strong><p>{item.description}</p><Link href={item.href}>做同款<ArrowRight size={15} /></Link></div></article>)}</div></section>
     </div>
   </AppShell>;
 }

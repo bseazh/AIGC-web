@@ -169,11 +169,25 @@ async function generateOne(inputUrls, input, index, workflowKey) {
   const detailStage = ["品牌定位与首屏商品展示长图", "核心卖点解析长图", "材质、结构与工艺细节长图", "真实使用场景与效果长图", "规格、服务与购买理由长图"][index] || "商品详情长图";
   const shared = workflowKey === "hd-enhance"
     ? "保持原图的主体、构图、比例、颜色、文字和关键细节准确，不新增、不删除或替换任何内容，不添加水印。"
+    : workflowKey === "white-background"
+    ? "精确抠出商品主体，生成干净纯白电商背景，保留真实材质、边缘、标识与自然轻投影，不添加文字、水印或额外商品。"
+    : workflowKey === "resize-image"
+    ? "保持原图商品主体、材质、颜色、标识与关键细节完全准确；仅自然延展周边画面以适配目标比例，不裁切主体，不添加文字、水印或额外商品。"
+    : ["recreate-product-hero", "recreate-detail-page"].includes(workflowKey)
+    ? "参考输入图的构图层级、留白和商业视觉方向，使用同一商品制作原创电商视觉；不得复制原图的文字、品牌、人物或具体画面，不添加水印。"
     : "保持商品主体的形状、颜色、商标和关键细节准确，不改变产品本身，不添加文字、水印或额外商品。";
   const taskPrompt = workflowKey === "model-wear"
     ? `以第一张图片中的模特为主体，将后续图片中的服装或商品自然穿戴到模特身上。保持模特身份、面部、体型和人体结构自然，服装版型、材质、颜色和图案准确。场景为${input.scene}，风格为${input.style}，${variation}，画幅比例${input.aspectRatio}。`
     : workflowKey === "hd-enhance"
     ? `对原图进行${input.scene}高清优化，策略为${input.style}。重点修复压缩噪点、边缘锯齿和模糊细节，保持画面自然，避免过度锐化、塑料感或内容重绘。`
+    : workflowKey === "white-background"
+    ? `生成${input.scene}商品图，风格为${input.style}。主体居中、完整可见，边缘干净，背景为均匀纯白。`
+    : workflowKey === "resize-image"
+    ? `将图片调整为${input.aspectRatio}比例，采用${input.scene}与${input.style}策略，仅对主体外区域进行真实、连续的扩展。`
+    : workflowKey === "recreate-product-hero"
+    ? `基于参考图的${input.scene}方向生成原创商品首屏主图，风格为${input.style}，${variation}，画幅比例${input.aspectRatio}。`
+    : workflowKey === "recreate-detail-page"
+    ? `生成原创商品详情页中的${detailStage}，参考${input.scene}，风格为${input.style}；各张图表达不同卖点，画幅比例${input.aspectRatio}，不生成文字、水印或价格。`
     : workflowKey === "product-detail-page"
     ? `生成商品详情页中的${detailStage}。五张长图必须围绕不同商品特性表达，不得重复构图或重复卖点；从输入商品中识别可见的材质、结构、用途和适用人群。整体为${input.scene}视觉方向和${input.style}风格，${variation}，竖向长图画幅比例${input.aspectRatio}。为后续商家排版保留清晰、干净的图文留白，但画面内不要生成文字、价格、标签或水印。`
     : workflowKey === "scene-image"

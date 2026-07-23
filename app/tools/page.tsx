@@ -1,6 +1,6 @@
 "use client";
 
-import { ImageIcon, Layers3, ScanSearch, Shirt, Sparkles, Video, WandSparkles } from "lucide-react";
+import { Crop, ImageIcon, Layers3, ScanSearch, Shirt, Sparkles, Video, WandSparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -13,6 +13,10 @@ const tools = [
   { name: "模特穿搭", group: "AI 带货模特", description: "模特图加商品图，生成自然上身展示效果。", href: "/create/model-wear", icon: Shirt, color: "violet", ready: true },
   { name: "商品详情页", group: "电商商品图", description: "围绕卖点组织四张统一风格的详情页视觉。", href: "/create/product-detail", icon: Layers3, color: "orange", ready: true },
   { name: "高清优化", group: "图片处理", description: "修复细节、放大分辨率并提升商品展示质感。", href: "/create/hd-enhance", icon: ScanSearch, color: "blue", ready: true },
+  { name: "白底图生成", group: "图片处理", description: "自动保留商品主体，生成干净的电商白底图。", href: "/create/white-background", icon: ImageIcon, color: "cyan", ready: true },
+  { name: "图片比例调整", group: "图片处理", description: "智能扩图适配常用电商比例，保持主体不变形。", href: "/create/resize-image", icon: Crop, color: "blue", ready: true },
+  { name: "复刻商品主图", group: "电商商品图", description: "提取参考图构图方向，生成原创商品主图。", href: "/create/recreate-product-hero", icon: WandSparkles, color: "violet", ready: true },
+  { name: "复刻商详页", group: "电商商品图", description: "参考卖点结构和节奏，生成原创详情页套图。", href: "/create/recreate-detail-page", icon: Layers3, color: "orange", ready: true },
   { name: "视频创作中心", group: "AI 视频", description: "产品广告大片、复刻带货与 Seedance2 高级视频创作。", href: "/create/product-video", icon: Video, color: "violet", ready: true },
 ];
 

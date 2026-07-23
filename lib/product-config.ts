@@ -70,6 +70,11 @@ export const detailPageWorkflow = {
   refundOnFailure: true,
 } as const;
 
+export const whiteBackgroundWorkflow = { ...hdEnhanceWorkflow, key: "white-background", name: "白底图生成", pointsPerTask: Number(process.env.WHITE_BACKGROUND_TASK_POINTS || 5), outputsPerTask: 4, scenes: ["纯白背景", "电商白底", "轻投影白底"], styles: ["商品静物", "干净裁切", "真实光影"] } as const;
+export const resizeImageWorkflow = { ...hdEnhanceWorkflow, key: "resize-image", name: "图片比例调整", pointsPerTask: Number(process.env.RESIZE_IMAGE_TASK_POINTS || 5), outputsPerTask: 1, aspectRatios: ["1:1", "3:4", "4:3", "9:16"], scenes: ["智能扩图", "居中构图", "保留主体"], styles: ["自然延展", "电商留白", "真实背景"] } as const;
+export const recreateHeroWorkflow = { ...heroImageWorkflow, key: "recreate-product-hero", name: "复刻商品主图", pointsPerTask: Number(process.env.RECREATE_HERO_TASK_POINTS || 10), scenes: ["版式复刻", "构图复刻", "氛围复刻"], styles: ["原创商业", "高转化电商", "真实摄影"] } as const;
+export const recreateDetailWorkflow = { ...detailPageWorkflow, key: "recreate-detail-page", name: "复刻商详页", pointsPerTask: Number(process.env.RECREATE_DETAIL_TASK_POINTS || 10), scenes: ["卖点结构复刻", "模块节奏复刻", "长图版式复刻"], styles: ["原创电商", "清晰卖点", "克制留白"] } as const;
+
 const videoWorkflowBase = {
   enabled: Boolean(process.env.ARK_API_KEY && process.env.COS_BUCKET && process.env.COS_REGION && process.env.COS_SECRET_ID && process.env.COS_SECRET_KEY),
   pointsPerTask: Number(process.env.VIDEO_TASK_POINTS || 40),
