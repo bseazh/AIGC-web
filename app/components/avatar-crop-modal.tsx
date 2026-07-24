@@ -53,7 +53,7 @@ export function AvatarCropModal({ file, onCancel, onConfirm }: Props) {
   return <div className="avatar-crop-backdrop" role="dialog" aria-modal="true" aria-labelledby="avatar-crop-title">
     <section className="avatar-crop-modal">
       <header><div><span>个人头像</span><h2 id="avatar-crop-title">裁剪头像</h2></div><button type="button" className="icon-button" aria-label="取消裁剪" onClick={onCancel}><X size={18} /></button></header>
-      <div className="avatar-crop-stage"><canvas ref={canvasRef} width={SIZE} height={SIZE} /><span className="avatar-crop-mask" /></div>
+      <div className="avatar-crop-stage"><canvas ref={canvasRef} width={SIZE} height={SIZE} /><span className="avatar-crop-mask" aria-hidden="true" /></div>
       <label>缩放<input type="range" min="1" max="3" step="0.01" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} /></label>
       <label>水平位置<input type="range" min="-100" max="100" value={x} onChange={(event) => setX(Number(event.target.value))} /></label>
       <label>垂直位置<input type="range" min="-100" max="100" value={y} onChange={(event) => setY(Number(event.target.value))} /></label>
