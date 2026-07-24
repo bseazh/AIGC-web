@@ -58,6 +58,7 @@ fi
 
 if docker container inspect aigc-promtail >/dev/null 2>&1; then docker rm -f aigc-promtail >/dev/null; fi
 docker run -d --name aigc-promtail --restart unless-stopped --network aigc-network --user 0:0 \
+  -p 127.0.0.1:9080:9080 \
   -v /home/ubuntu/project/AIGC_web/deploy/observability/promtail-config.yml:/etc/promtail/config.yml:ro \
   -v /var/log/journal:/var/log/journal:ro -v /run/log/journal:/run/log/journal:ro \
   -v /etc/machine-id:/etc/machine-id:ro -v /var/log/nginx:/var/log/nginx:ro \
@@ -76,7 +77,7 @@ else
 fi
 
 for attempt in {1..30}; do
-  if docker exec aigc-postgres pg_isready -U aigc -d aigc >/dev/null 2>&1 && docker exec aigc-redis redis-cli ping | grep -q PONG && curl -fsS http://127.0.0.1:3100/ready >/dev/null && curl -fsS http://127.0.0.1:3001/api/health >/dev/null; then
+  if docker exec aigc-postgres pg_isready -U aigc -d aigc >/dev/null 2>&1 && docker exec aigc-redis redis-cli ping | grep -q PONG && curl -fsS http://127.0.0.1:3100/ready >/dev/null && curl -fsS http://127.0.0.1:3001/api/health >/dev/null && curl -fsS http://127.0.0.1:9080/ready >/dev/null; then
     exit 0
   fi
   sleep 1

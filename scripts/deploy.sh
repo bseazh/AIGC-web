@@ -144,7 +144,13 @@ fi
 for attempt in {1..20}; do
   if curl --fail --silent http://127.0.0.1:3010/api/health/ >/dev/null; then
     sudo systemctl is-active --quiet aigc-web aigc-worker aigc-moderation-worker
-    node scripts/verify-observability.mjs
+    if ! node scripts/verify-observability.mjs; then
+      docker ps -a --filter name=aigc-promtail
+      docker logs --tail 100 aigc-promtail
+      sudo ls -la /var/log/nginx
+      curl -fsS http://127.0.0.1:3100/loki/api/v1/label/job/values || true
+      exit 1
+    fi
     set +e
     node scripts/observability-alerts.mjs
     alert_status=$?
