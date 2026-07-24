@@ -1,0 +1,8 @@
+[Unit]
+Description=Bala AIGC health check with email alert
+After=network.target aigc-web.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/bin/bash /home/ubuntu/project/AIGC_web/scripts/check-health-alert.sh

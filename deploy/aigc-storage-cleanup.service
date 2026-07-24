@@ -2,6 +2,7 @@
 Description=Bala AIGC COS storage cleanup
 After=network.target docker.service
 Requires=docker.service
+OnFailure=aigc-alert@%n.service
 
 [Service]
 Type=oneshot

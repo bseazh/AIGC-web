@@ -1,0 +1,7 @@
+[Unit]
+Description=Bala AIGC failure email alert for %i
+
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/bin/bash /home/ubuntu/project/AIGC_web/scripts/send-alert-email.sh "[AIGC] Systemd unit failed" "Systemd unit %i failed on %H. Check: journalctl -u %i --no-pager"
