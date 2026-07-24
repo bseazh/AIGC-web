@@ -16,6 +16,10 @@ if [[ -f .env.production && -z "${CONTENT_REVIEW_PROVIDER:-}" ]]; then
   printf '%s\n' 'CONTENT_REVIEW_PROVIDER=tencent-ci' >> .env.production
   export CONTENT_REVIEW_PROVIDER=tencent-ci
 fi
+if [[ -f .env.production && -z "${PUBLIC_APP_URL:-}" ]]; then
+  printf '%s\n' 'PUBLIC_APP_URL=https://aigc.bigapple.store' >> .env.production
+  export PUBLIC_APP_URL=https://aigc.bigapple.store
+fi
 if [[ -f .env.production && "${CONTENT_REVIEW_PROVIDER:-}" == "tencent-ci" && -z "${CONTENT_REVIEW_INTERNAL_SECRET:-}" ]]; then
   CONTENT_REVIEW_INTERNAL_SECRET="$(openssl rand -hex 32)"
   printf 'CONTENT_REVIEW_INTERNAL_SECRET=%s\n' "$CONTENT_REVIEW_INTERNAL_SECRET" >> .env.production
