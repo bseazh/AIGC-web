@@ -18,6 +18,9 @@ if (process.env.WECHAT_PAY_ENABLED === "true") {
   const paymentRequired = ["WECHAT_PAY_MCH_ID", "WECHAT_PAY_APP_ID", "WECHAT_PAY_MERCHANT_SERIAL_NO", "WECHAT_PAY_PRIVATE_KEY", "WECHAT_PAY_API_V3_KEY", "WECHAT_PAY_PLATFORM_PUBLIC_KEY", "WECHAT_PAY_NOTIFY_URL", "WECHAT_PAY_REFUND_NOTIFY_URL"];
   const paymentMissing = paymentRequired.filter((name) => !process.env[name]);
   if (paymentMissing.length) throw new Error(`Production preflight failed: missing ${paymentMissing.join(", ")}`);
+  console.log("WeChat Pay configuration: OK (enabled)");
+} else {
+  console.log("WeChat Pay configuration: disabled");
 }
 
 const database = new pg.Client({ connectionString: process.env.DATABASE_URL });
