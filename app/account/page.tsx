@@ -1,19 +1,69 @@
 "use client";
+
 import { CheckCircle2, KeyRound, LoaderCircle, Save, Upload, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { AppShell, LoadingScreen } from "@/app/components/app-shell";
+import { AvatarCropModal } from "@/app/components/avatar-crop-modal";
 
 type Account = { user: { displayName: string; avatarUrl?: string | null; avatarStyle?: string; isAdministrator?: boolean }; wallet: { availablePoints: number } };
 type Profile = { displayName: string; identifier: string; createdAt: string; avatarUrl: string | null; avatarStyle: string };
 const styles = ["ocean", "coral", "forest", "plum", "sun"];
 
 export default function AccountPage() {
-  const router = useRouter(); const [account, setAccount] = useState<Account | null>(null); const [profile, setProfile] = useState<Profile | null>(null); const [displayName, setDisplayName] = useState(""); const [avatarStyle, setAvatarStyle] = useState("ocean"); const [avatarAssetId, setAvatarAssetId] = useState(""); const [avatarPreview, setAvatarPreview] = useState(""); const [currentPassword, setCurrentPassword] = useState(""); const [newPassword, setNewPassword] = useState(""); const [message, setMessage] = useState(""); const [saving, setSaving] = useState(false); const [uploading, setUploading] = useState(false);
-  useEffect(() => { Promise.all([fetch("/api/auth/session/", { cache: "no-store" }), fetch("/api/account/", { cache: "no-store" })]).then(async ([session, detail]) => { if (!session.ok || !detail.ok) throw new Error(); const a = await session.json(); const p = await detail.json(); setAccount(a); setProfile(p); setDisplayName(p.displayName); setAvatarStyle(p.avatarStyle || "ocean"); }).catch(() => router.replace("/")); }, [router]);
-  const uploadAvatar = async (file?: File) => { if (!file) return; if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 10 * 1024 * 1024) return setMessage("头像仅支持 JPG、PNG、WebP，且不超过 10MB。"); setUploading(true); setMessage(""); const preview = URL.createObjectURL(file); setAvatarPreview(preview); try { const presign = await fetch("/api/uploads/presign/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: file.name, mimeType: file.type, byteSize: file.size }) }); const data = await presign.json(); if (!presign.ok) throw new Error(data.message || "头像上传失败"); const put = await fetch(data.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file }); if (!put.ok) throw new Error("头像文件上传失败"); const confirm = await fetch("/api/uploads/confirm/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assetId: data.assetId }) }); if (!confirm.ok) throw new Error("头像校验失败"); setAvatarAssetId(data.assetId); setMessage("头像已上传，点击保存设置后生效。"); } catch (error) { URL.revokeObjectURL(preview); setAvatarPreview(""); setMessage(error instanceof Error ? error.message : "头像上传失败"); } finally { setUploading(false); } };
-  const submit = async (event: FormEvent) => { event.preventDefault(); setSaving(true); setMessage(""); try { const response = await fetch("/api/account/", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName, currentPassword, newPassword, avatarStyle, ...(avatarAssetId ? { avatarAssetId } : {}) }) }); const body = await response.json(); if (!response.ok) throw new Error(body.message || "保存失败"); const detail = await fetch("/api/account/", { cache: "no-store" }); if (!detail.ok) throw new Error("设置已保存，但头像刷新失败"); const refreshed = await detail.json(); setProfile(refreshed); setAvatarPreview(""); setAvatarAssetId(""); setMessage("设置已保存"); setCurrentPassword(""); setNewPassword(""); setAccount((x) => x ? { ...x, user: { ...x.user, displayName: refreshed.displayName, avatarStyle: refreshed.avatarStyle, avatarUrl: refreshed.avatarUrl } } : x); } catch (error) { setMessage(error instanceof Error ? error.message : "保存失败"); } finally { setSaving(false); } };
+  const router = useRouter();
+  const [account, setAccount] = useState<Account | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [displayName, setDisplayName] = useState("");
+  const [avatarStyle, setAvatarStyle] = useState("ocean");
+  const [avatarAssetId, setAvatarAssetId] = useState("");
+  const [avatarPreview, setAvatarPreview] = useState("");
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    Promise.all([fetch("/api/auth/session/", { cache: "no-store" }), fetch("/api/account/", { cache: "no-store" })]).then(async ([session, detail]) => {
+      if (!session.ok || !detail.ok) throw new Error();
+      const nextAccount = await session.json(); const nextProfile = await detail.json();
+      setAccount(nextAccount); setProfile(nextProfile); setDisplayName(nextProfile.displayName); setAvatarStyle(nextProfile.avatarStyle || "ocean");
+    }).catch(() => router.replace("/"));
+  }, [router]);
+
+  const chooseAvatar = (file?: File) => {
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 10 * 1024 * 1024) return setMessage("头像仅支持 JPG、PNG、WebP，且不超过 10MB。");
+    setCropFile(file); setMessage("");
+  };
+
+  const uploadAvatar = async (file: File) => {
+    setCropFile(null); setUploading(true); setMessage("");
+    const preview = URL.createObjectURL(file); setAvatarPreview(preview);
+    try {
+      const presign = await fetch("/api/uploads/presign/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: file.name, mimeType: file.type, byteSize: file.size }) });
+      const data = await presign.json(); if (!presign.ok) throw new Error(data.message || "头像上传失败");
+      const put = await fetch(data.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file }); if (!put.ok) throw new Error("头像文件上传失败");
+      const confirm = await fetch("/api/uploads/confirm/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assetId: data.assetId }) }); if (!confirm.ok) throw new Error("头像校验失败");
+      setAvatarAssetId(data.assetId); setMessage("裁剪头像已上传，点击保存设置后生效。");
+    } catch (error) { URL.revokeObjectURL(preview); setAvatarPreview(""); setMessage(error instanceof Error ? error.message : "头像上传失败"); }
+    finally { setUploading(false); }
+  };
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault(); setSaving(true); setMessage("");
+    try {
+      const response = await fetch("/api/account/", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName, currentPassword, newPassword, avatarStyle, ...(avatarAssetId ? { avatarAssetId } : {}) }) });
+      const body = await response.json(); if (!response.ok) throw new Error(body.message || "保存失败");
+      const detail = await fetch("/api/account/", { cache: "no-store" }); if (!detail.ok) throw new Error("设置已保存，但头像刷新失败");
+      const refreshed = await detail.json(); setProfile(refreshed); setAvatarPreview(""); setAvatarAssetId(""); setCurrentPassword(""); setNewPassword(""); setMessage("设置已保存");
+      setAccount((current) => current ? { ...current, user: { ...current.user, displayName: refreshed.displayName, avatarStyle: refreshed.avatarStyle, avatarUrl: refreshed.avatarUrl } } : current);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "保存失败"); } finally { setSaving(false); }
+  };
+
   if (!account || !profile) return <LoadingScreen />;
   const avatar = avatarPreview || profile.avatarUrl || account.user.avatarUrl;
-  return <AppShell active="account" account={account}><div className="app-page-content"><section className="page-intro"><div><span className="page-kicker"><UserRound size={15} />账户中心</span><h1>账号设置</h1><p>管理个人资料、头像与登录密码。</p></div></section><section className="account-layout"><aside className="account-summary"><span className={`account-avatar avatar-${avatarStyle}`}>{avatar ? <img src={avatar} alt="" /> : profile.displayName.slice(0, 1)}</span><strong>{profile.displayName}</strong><small>{profile.identifier}</small><p>注册于 {new Date(profile.createdAt).toLocaleDateString("zh-CN")}</p></aside><form className="account-form" onSubmit={submit}><section><div className="account-section-title"><UserRound size={18} /><div><h2>头像与资料</h2><p>可选择预设风格或上传个人头像。</p></div></div><div className="avatar-style-picker">{styles.map((style) => <button type="button" className={`avatar-choice avatar-${style} ${avatarStyle === style ? "selected" : ""}`} onClick={() => setAvatarStyle(style)} key={style}>{profile.displayName.slice(0, 1)}</button>)}<label className="avatar-upload"><Upload size={16} />{uploading ? "上传中" : "上传头像"}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploading} onChange={(e) => uploadAvatar(e.target.files?.[0])} /></label></div><label>昵称<input value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={32} required /></label><label>账号标识<input value={profile.identifier} disabled /></label></section><section><div className="account-section-title"><KeyRound size={18} /><div><h2>修改密码</h2><p>不修改请留空。</p></div></div><label>当前密码<input value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} type="password" /></label><label>新密码<input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="password" minLength={8} maxLength={72} /></label></section>{message && <p className="account-message"><CheckCircle2 size={16} />{message}</p>}<button className="account-save" disabled={saving}>{saving ? <LoaderCircle size={17} /> : <Save size={17} />}{saving ? "保存中" : "保存设置"}</button></form></section></div></AppShell>;
+  return <><AppShell active="account" account={account}><div className="app-page-content"><section className="page-intro"><div><span className="page-kicker"><UserRound size={15} />账户中心</span><h1>账号设置</h1><p>管理个人资料、头像与登录密码。</p></div></section><section className="account-layout"><aside className="account-summary"><span className={`account-avatar avatar-${avatarStyle}`}>{avatar ? <img src={avatar} alt="" /> : profile.displayName.slice(0, 1)}</span><strong>{profile.displayName}</strong><small>{profile.identifier}</small><p>注册于 {new Date(profile.createdAt).toLocaleDateString("zh-CN")}</p></aside><form className="account-form" onSubmit={submit}><section><div className="account-section-title"><UserRound size={18} /><div><h2>头像与资料</h2><p>选择预设风格或上传并裁剪个人头像。</p></div></div><div className="avatar-style-picker">{styles.map((style) => <button type="button" className={`avatar-choice avatar-${style} ${avatarStyle === style ? "selected" : ""}`} onClick={() => setAvatarStyle(style)} key={style}>{profile.displayName.slice(0, 1)}</button>)}<label className="avatar-upload"><Upload size={16} />{uploading ? "上传中" : "上传头像"}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploading} onChange={(event) => { chooseAvatar(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label></div><label>昵称<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={32} required /></label><label>账号标识<input value={profile.identifier} disabled /></label></section><section><div className="account-section-title"><KeyRound size={18} /><div><h2>修改密码</h2><p>不修改请留空。</p></div></div><label>当前密码<input value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} type="password" /></label><label>新密码<input value={newPassword} onChange={(event) => setNewPassword(event.target.value)} type="password" minLength={8} maxLength={72} /></label></section>{message && <p className="account-message"><CheckCircle2 size={16} />{message}</p>}<button className="account-save" disabled={saving || uploading}>{saving ? <LoaderCircle size={17} /> : <Save size={17} />}{saving ? "保存中" : "保存设置"}</button></form></section></div></AppShell>{cropFile && <AvatarCropModal file={cropFile} onCancel={() => setCropFile(null)} onConfirm={uploadAvatar} />}</>;
 }
