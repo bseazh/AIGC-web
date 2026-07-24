@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { createSessionToken, hashPassword, normalizeIdentifier, SESSION_COOKIE, sessionCookieOptions, validPassword } from "@/lib/auth";
+import { hashPassword, normalizeIdentifier, SESSION_COOKIE, sessionCookieOptions, validPassword } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { consumeVerificationCode } from "@/lib/email-verification";
+import { createStoredSession } from "@/lib/session";
 const termsVersion = "terms-v1";
 const privacyVersion = "privacy-v1";
 
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
   }
 
   const client = await db.connect();
+  let sessionToken = "";
   try {
     await client.query("BEGIN");
     const passwordHash = await hashPassword(body.password);
@@ -50,10 +52,11 @@ export async function POST(request: Request) {
        VALUES ($1, 'AGREEMENTS_ACCEPTED', 'USER', $1, $2, $3, $4::jsonb)`,
       [user.id, request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null, request.headers.get("user-agent") || null, JSON.stringify({ termsVersion, privacyVersion })],
     );
+    sessionToken = await createStoredSession(client, user.id, user.token_version, request);
     await client.query("COMMIT");
 
     const response = NextResponse.json({ userId: user.id, welcomePoints }, { status: 201 });
-    response.cookies.set(SESSION_COOKIE, createSessionToken(user.id, user.token_version), sessionCookieOptions());
+    response.cookies.set(SESSION_COOKIE, sessionToken, sessionCookieOptions());
     return response;
   } catch (error) {
     await client.query("ROLLBACK");

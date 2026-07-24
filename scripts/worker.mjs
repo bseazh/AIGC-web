@@ -3,7 +3,8 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Worker } from "bullmq";
+import tls from "node:tls";
+import { Queue, Worker } from "bullmq";
 import COS from "cos-nodejs-sdk-v5";
 import pg from "pg";
 
@@ -17,11 +18,12 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5 });
 const cos = new COS({ SecretId: process.env.COS_SECRET_ID, SecretKey: process.env.COS_SECRET_KEY });
 const redisUrl = new URL(process.env.REDIS_URL);
 const workerId = `${process.env.HOSTNAME || "worker"}:${process.pid}`;
+const moderationQueue = process.env.CONTENT_REVIEW_PROVIDER === "tencent-ci" ? new Queue("moderation", { connection: { host: redisUrl.hostname, port: Number(redisUrl.port || 6379), password: redisUrl.password || undefined, maxRetriesPerRequest: null } }) : null;
 
 async function heartbeat() {
   await pool.query(
     "INSERT INTO worker_heartbeats (worker_id, last_seen_at, details_json) VALUES ($1, NOW(), $2::jsonb) ON CONFLICT (worker_id) DO UPDATE SET last_seen_at = EXCLUDED.last_seen_at, details_json = EXCLUDED.details_json",
-    [workerId, JSON.stringify({ pid: process.pid, concurrency: 2 })],
+    [workerId, JSON.stringify({ kind: "generation", pid: process.pid, concurrency: 2 })],
   );
 }
 
@@ -229,7 +231,7 @@ async function generateMix(inputUrls, input, task) {
   } finally { await rm(dir, { recursive: true, force: true }); }
 }
 
-async function settleSuccess(task, savedAssets) {
+async function submitForReview(task, savedAssets) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -239,20 +241,27 @@ async function settleSuccess(task, savedAssets) {
       return false;
     }
     await client.query(
-      "UPDATE generation_tasks SET status = 'SUCCEEDED', output_json = $2::jsonb, error_code = NULL, updated_at = NOW() WHERE id = $1",
+      "UPDATE generation_tasks SET status = 'PENDING_REVIEW', output_json = $2::jsonb, error_code = NULL, updated_at = NOW() WHERE id = $1",
       [task.id, JSON.stringify({ assets: savedAssets })],
     );
-    await client.query(
-      "UPDATE wallets SET frozen_points = frozen_points - $2, version = version + 1, updated_at = NOW() WHERE user_id = $1",
-      [task.user_id, task.points],
-    );
-    const wallet = await client.query("SELECT available_points FROM wallets WHERE user_id = $1", [task.user_id]);
-    await client.query(
-      `INSERT INTO wallet_ledger (user_id, type, amount, balance_after, business_type, business_id, idempotency_key)
-       VALUES ($1, 'SETTLE', 0, $2, 'GENERATION_TASK', $3, $4) ON CONFLICT (idempotency_key) DO NOTHING`,
-      [task.user_id, wallet.rows[0].available_points, task.id, `settle:${task.id}`],
-    );
+    const reviews = [];
+    for (const asset of savedAssets) {
+      const review = await client.query(
+        `INSERT INTO content_review_records (asset_id, task_id, phase, status, review_source, metadata_json)
+         VALUES ($1, $2, 'GENERATED_OUTPUT', 'PENDING', 'SYSTEM', $3::jsonb)
+         ON CONFLICT (asset_id) WHERE status IN ('PENDING', 'NEEDS_MANUAL') DO UPDATE SET updated_at = NOW()
+         RETURNING id`,
+        [asset.assetId, task.id, JSON.stringify({ workflowKey: task.workflow_key, generatedBy: workerId })],
+      );
+      if (review.rows[0]?.id) reviews.push({ reviewId: review.rows[0].id, assetId: asset.assetId });
+    }
     await client.query("COMMIT");
+    if (moderationQueue) {
+      for (const review of reviews) {
+        try { await moderationQueue.add("moderate-content", review, { jobId: review.reviewId, attempts: 4, backoff: { type: "exponential", delay: 15_000 }, removeOnComplete: 500, removeOnFail: 500 }); }
+        catch (error) { console.error(`could not enqueue automatic review ${review.reviewId}; review remains manual`, error); }
+      }
+    }
     return true;
   } catch (error) {
     await client.query("ROLLBACK");
@@ -266,7 +275,10 @@ async function settleFailure(taskId, message) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const result = await client.query("SELECT id, user_id, points, status FROM generation_tasks WHERE id = $1 FOR UPDATE", [taskId]);
+    const result = await client.query(
+      "SELECT t.id, t.user_id, t.workflow_key, t.points, t.status, u.email FROM generation_tasks t JOIN users u ON u.id = t.user_id WHERE t.id = $1 FOR UPDATE OF t",
+      [taskId],
+    );
     const task = result.rows[0];
     if (!task || ["SUCCEEDED", "FAILED", "REJECTED", "CANCELED"].includes(task.status)) {
       await client.query("ROLLBACK");
@@ -284,6 +296,14 @@ async function settleFailure(taskId, message) {
        VALUES ($1, 'REFUND', $2, $3, 'GENERATION_TASK', $4, $5) ON CONFLICT (idempotency_key) DO NOTHING`,
       [task.user_id, task.points, balance + task.points, task.id, `refund:${task.id}`],
     );
+    if (task.email) {
+      const html = `<div style="font-family:Arial,sans-serif;color:#283241;line-height:1.7"><h2>芭乐AIGC</h2><p>任务 <strong>${task.id}</strong> 执行失败，${task.points} 积分已自动退回。</p><p><a href="${process.env.PUBLIC_APP_URL || "https://aigc.bigapple.store"}/tasks/${task.id}">查看任务详情</a></p></div>`;
+      await client.query(
+        `INSERT INTO notification_outbox (user_id, recipient, event_type, subject, html_body, idempotency_key)
+         VALUES ($1, $2, 'TASK_FAILED', '你的创作任务未完成', $3, $4) ON CONFLICT (idempotency_key) DO NOTHING`,
+        [task.user_id, task.email, html, `task_failed:${task.id}`],
+      );
+    }
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -339,12 +359,12 @@ const worker = new Worker("generation", async (job) => {
       savedKeys.push(key);
       const asset = await pool.query(
         `INSERT INTO assets (owner_id, kind, storage_key, mime_type, byte_size, audit_status, original_name, metadata_json)
-         VALUES ($1, 'OUTPUT', $2, $3, $4, 'READY', $5, $6::jsonb) RETURNING id`,
-        [task.user_id, key, contentType, buffer.length, `${task.workflow_key}-${index + 1}.${extension}`, JSON.stringify({ taskId: task.id, workflowKey: task.workflow_key, provider: isVideoTask ? "ark" : "sophnet", model: isVideoTask ? (process.env.ARK_MODEL || "doubao-seedance-2-0-260128") : process.env.AI_MODEL })],
+         VALUES ($1, 'OUTPUT', $2, $3, $4, 'PENDING_REVIEW', $5, $6::jsonb) RETURNING id`,
+        [task.user_id, key, contentType, buffer.length, `${task.workflow_key}-${index + 1}.${extension}`, JSON.stringify({ taskId: task.id, workflowKey: task.workflow_key, provider: isVideoTask ? "ark" : "sophnet", model: isVideoTask ? (process.env.ARK_MODEL || "doubao-seedance-2-0-260128") : process.env.AI_MODEL, aiGenerated: true, aiContentLabel: "AI_GENERATED", provenance: { generatedAt: new Date().toISOString(), workerId }, moderation: { status: "PENDING_REVIEW" } })],
       );
       savedAssets.push({ assetId: asset.rows[0].id, storageKey: key });
     }
-    const settled = await settleSuccess(task, savedAssets);
+    const settled = await submitForReview(task, savedAssets);
     if (!settled) {
       await Promise.all(savedKeys.map(deleteObject));
       await pool.query("DELETE FROM assets WHERE id = ANY($1::uuid[])", [savedAssets.map((asset) => asset.assetId)]);
@@ -368,16 +388,94 @@ const worker = new Worker("generation", async (job) => {
 worker.on("completed", (job) => console.log(`task ${job.id} completed`));
 worker.on("failed", (job, error) => console.error(`task ${job?.id || "unknown"} failed`, error.message));
 
+function smtpCommand(socket, command, accepted) {
+  return new Promise((resolve, reject) => {
+    let response = "";
+    const cleanup = () => { socket.off("data", onData); socket.off("error", onError); socket.off("timeout", onTimeout); };
+    const onError = (error) => { cleanup(); reject(error); };
+    const onTimeout = () => { cleanup(); reject(new Error("SMTP connection timed out")); };
+    const onData = (chunk) => {
+      response += chunk.toString("utf8");
+      const last = response.trimEnd().split(/\r?\n/).at(-1) || "";
+      if (!/^\d{3} /.test(last)) return;
+      cleanup();
+      const status = Number(last.slice(0, 3));
+      if (accepted.includes(status)) resolve(response);
+      else reject(new Error(`SMTP rejected command with status ${status}`));
+    };
+    socket.on("data", onData); socket.on("error", onError); socket.on("timeout", onTimeout);
+    if (command) socket.write(`${command}\r\n`);
+  });
+}
+
+async function sendOutboxEmail(message) {
+  const host = process.env.SMTP_HOST;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  if (!host || !user || !pass) throw new Error("SMTP is not configured");
+  const socket = tls.connect({ host, port: Number(process.env.SMTP_PORT || 465), servername: host, rejectUnauthorized: true });
+  socket.setTimeout(10_000);
+  try {
+    await smtpCommand(socket, "", [220]);
+    await smtpCommand(socket, "EHLO aigc.bigapple.store", [250]);
+    await smtpCommand(socket, "AUTH LOGIN", [334]);
+    await smtpCommand(socket, Buffer.from(user).toString("base64"), [334]);
+    await smtpCommand(socket, Buffer.from(pass).toString("base64"), [235]);
+    await smtpCommand(socket, `MAIL FROM:<${user}>`, [250]);
+    await smtpCommand(socket, `RCPT TO:<${message.recipient}>`, [250, 251]);
+    await smtpCommand(socket, "DATA", [354]);
+    const subject = `=?UTF-8?B?${Buffer.from(message.subject).toString("base64")}?=`;
+    const fromName = `=?UTF-8?B?${Buffer.from("芭乐AIGC").toString("base64")}?=`;
+    const body = message.html_body.replace(/\r?\n\./g, "\r\n..");
+    await smtpCommand(socket, [`From: ${fromName} <${user}>`, `To: <${message.recipient}>`, `Subject: ${subject}`, "MIME-Version: 1.0", "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: 8bit", "", body, "."].join("\r\n"), [250]);
+    await smtpCommand(socket, "QUIT", [221]);
+  } finally { socket.destroy(); }
+}
+
+async function dispatchNotifications() {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) return;
+  await pool.query("UPDATE notification_outbox SET status = 'FAILED', last_error = COALESCE(last_error, 'DISPATCH_INTERRUPTED'), next_attempt_at = NOW(), updated_at = NOW() WHERE status = 'SENDING' AND updated_at < NOW() - INTERVAL '5 minutes'");
+  const client = await pool.connect();
+  let messages = [];
+  try {
+    await client.query("BEGIN");
+    const selected = await client.query(
+      `SELECT id, recipient, subject, html_body, attempts FROM notification_outbox
+       WHERE status IN ('PENDING', 'FAILED') AND attempts < 5 AND next_attempt_at <= NOW()
+       ORDER BY created_at ASC FOR UPDATE SKIP LOCKED LIMIT 10`,
+    );
+    messages = selected.rows;
+    if (messages.length) await client.query("UPDATE notification_outbox SET status = 'SENDING', attempts = attempts + 1, updated_at = NOW() WHERE id = ANY($1::uuid[])", [messages.map((message) => message.id)]);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally { client.release(); }
+  for (const message of messages) {
+    try {
+      await sendOutboxEmail(message);
+      await pool.query("UPDATE notification_outbox SET status = 'SENT', sent_at = NOW(), last_error = NULL, updated_at = NOW() WHERE id = $1", [message.id]);
+    } catch (error) {
+      const delayMinutes = Math.min(60, 2 ** Math.min(message.attempts + 1, 5));
+      await pool.query("UPDATE notification_outbox SET status = 'FAILED', last_error = $2, next_attempt_at = NOW() + ($3 * INTERVAL '1 minute'), updated_at = NOW() WHERE id = $1", [message.id, error instanceof Error ? error.message.slice(0, 500) : "EMAIL_SEND_FAILED", delayMinutes]);
+    }
+  }
+}
+
 heartbeat().catch((error) => console.error("initial worker heartbeat failed", error));
 const heartbeatTimer = setInterval(() => heartbeat().catch((error) => console.error("worker heartbeat failed", error)), 30_000);
 reconcileStaleTasks().catch((error) => console.error("initial stale-task reconciliation failed", error));
 const reconciliationTimer = setInterval(() => reconcileStaleTasks().catch((error) => console.error("stale-task reconciliation failed", error)), 5 * 60_000);
+dispatchNotifications().catch((error) => console.error("initial notification dispatch failed", error));
+const notificationTimer = setInterval(() => dispatchNotifications().catch((error) => console.error("notification dispatch failed", error)), 15_000);
 
 for (const signal of ["SIGTERM", "SIGINT"]) {
   process.on(signal, async () => {
     await worker.close();
+    if (moderationQueue) await moderationQueue.close();
     clearInterval(heartbeatTimer);
     clearInterval(reconciliationTimer);
+    clearInterval(notificationTimer);
     await pool.end();
     process.exit(0);
   });

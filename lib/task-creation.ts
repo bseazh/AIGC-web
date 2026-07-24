@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getGenerationQueue } from "@/lib/queue";
 import { authenticatedUser } from "@/lib/session";
 import { resolvePromptConfig } from "@/lib/prompt-config";
+import { enqueueTaskNotification } from "@/lib/notifications";
 
 type ImageWorkflow = {
   key: string;
@@ -19,7 +20,7 @@ type ImageWorkflow = {
 };
 
 type AssetSelector = (body: Record<string, unknown>) => string[];
-type ReadyAsset = { id: string; storage_key: string; mime_type: string; metadata_json: Record<string, unknown> };
+type ReadyAsset = { id: string; storage_key: string; mime_type: string; metadata_json: Record<string, unknown>; audit_status: string };
 type AssetValidator = (assets: ReadyAsset[]) => string | null;
 type RequestValidator = (body: Record<string, unknown>) => string | null;
 type InputExtras = (body: Record<string, unknown>) => Record<string, unknown>;
@@ -47,12 +48,13 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
   const duration = workflow.durations?.includes(requestedDuration) ? requestedDuration : workflow.durations?.[workflow.durations.length - 1] || 15;
   const resolution = workflow.resolutions?.includes(requestedResolution) ? requestedResolution : workflow.resolutions?.[1] || "720p";
   const assetResult = await db.query<ReadyAsset>(
-    "SELECT id, storage_key, mime_type, metadata_json FROM assets WHERE id = ANY($1::uuid[]) AND owner_id = $2 AND audit_status = 'READY' AND kind = 'INPUT'",
+    "SELECT id, storage_key, mime_type, metadata_json, audit_status FROM assets WHERE id = ANY($1::uuid[]) AND owner_id = $2 AND audit_status IN ('PENDING_REVIEW', 'READY') AND kind = 'INPUT'",
     [assetIds, user.id],
   );
   const assetsById = new Map(assetResult.rows.map((asset) => [asset.id, asset]));
   const assets = assetIds.map((id) => assetsById.get(id)).filter((asset): asset is ReadyAsset => Boolean(asset));
-  if (assets.length !== assetIds.length) return NextResponse.json({ code: "ASSET_NOT_READY", message: "请先完成图片上传" }, { status: 400 });
+  if (assets.length !== assetIds.length) return NextResponse.json({ code: "ASSET_NOT_READY", message: "素材不可用或未完成上传" }, { status: 400 });
+  const inputsReady = assets.every((asset) => asset.audit_status === "READY");
   const assetError = validateAssets?.(assets);
   if (assetError) return NextResponse.json({ code: "INVALID_VIDEO_ASSETS", message: assetError }, { status: 400 });
 
@@ -72,8 +74,8 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
     const input = { assetId: assets[0].id, storageKey: assets[0].storage_key, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), assetMimeTypes: assets.map((asset) => asset.mime_type), prompt, aspectRatio, duration, resolution, scene, style, outputs: workflow.outputsPerTask, ...(promptConfig ? { promptConfig } : {}), ...(inputExtras?.(body) || {}) };
     await client.query(
       `INSERT INTO generation_tasks (id, user_id, workflow_key, status, points, input_json, idempotency_key)
-       VALUES ($1, $2, $3, 'QUEUED', $4, $5::jsonb, $6)`,
-      [taskId, user.id, workflow.key, points, JSON.stringify(input), idempotencyKey],
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)`,
+      [taskId, user.id, workflow.key, inputsReady ? "QUEUED" : "PENDING_INPUT_REVIEW", points, JSON.stringify(input), idempotencyKey],
     );
     await client.query("UPDATE wallets SET available_points = available_points - $2, frozen_points = frozen_points + $2, version = version + 1, updated_at = NOW() WHERE user_id = $1", [user.id, points]);
     await client.query(
@@ -89,14 +91,16 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
     return NextResponse.json({ code: "TASK_CREATE_FAILED", message: "创建任务失败" }, { status: 500 });
   } finally { client.release(); }
 
-  try {
-    await getGenerationQueue().add("image-generation", { taskId }, { jobId: taskId, attempts: 1, removeOnComplete: 100, removeOnFail: 100 });
-  } catch (error) {
-    console.error("queue submission failed", error);
-    await refundTask(taskId, user.id, points, "QUEUE_UNAVAILABLE");
-    return NextResponse.json({ code: "QUEUE_UNAVAILABLE", message: "任务队列暂不可用，积分已退回" }, { status: 503 });
+  if (inputsReady) {
+    try {
+      await getGenerationQueue().add("image-generation", { taskId }, { jobId: taskId, attempts: 1, removeOnComplete: 100, removeOnFail: 100 });
+    } catch (error) {
+      console.error("queue submission failed", error);
+      await refundTask(taskId, user.id, points, "QUEUE_UNAVAILABLE");
+      return NextResponse.json({ code: "QUEUE_UNAVAILABLE", message: "任务队列暂不可用，积分已退回" }, { status: 503 });
+    }
   }
-  return NextResponse.json({ taskId, status: "QUEUED", points }, { status: 201 });
+  return NextResponse.json({ taskId, status: inputsReady ? "QUEUED" : "PENDING_INPUT_REVIEW", points }, { status: 201 });
 }
 
 async function refundTask(taskId: string, userId: string, points: number, errorCode: string) {
@@ -112,6 +116,8 @@ async function refundTask(taskId: string, userId: string, points: number, errorC
        VALUES ($1, 'REFUND', $2, $3, 'GENERATION_TASK', $4, $5) ON CONFLICT (idempotency_key) DO NOTHING`,
       [userId, points, balance + points, taskId, `refund:${taskId}`],
     );
+    const task = await client.query<{ workflow_key: string; email: string | null }>("SELECT t.workflow_key, u.email FROM generation_tasks t JOIN users u ON u.id = t.user_id WHERE t.id = $1", [taskId]);
+    if (task.rows[0]) await enqueueTaskNotification(client, { id: taskId, userId, email: task.rows[0].email, workflowKey: task.rows[0].workflow_key, points }, "FAILED");
     await client.query("COMMIT");
   } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }

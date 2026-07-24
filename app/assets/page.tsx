@@ -49,7 +49,8 @@ export default function AssetsPage() {
       const presign = await fetch("/api/uploads/presign/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ fileName: file.name, mimeType: file.type, byteSize: file.size }) });
       const signed = await presign.json(); if (!presign.ok) throw new Error(signed.message || "无法上传该文件");
       const put = await fetch(signed.uploadUrl, { method: "PUT", body: file, headers: { "content-type": file.type } }); if (!put.ok) throw new Error("文件上传失败");
-      const confirm = await fetch("/api/uploads/confirm/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ assetId: signed.assetId }) }); if (!confirm.ok) throw new Error("文件校验失败");
+      const confirm = await fetch("/api/uploads/confirm/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ assetId: signed.assetId }) }); const confirmed = await confirm.json(); if (!confirm.ok) throw new Error(confirmed.message || "文件校验失败");
+      if (confirmed.status === "PENDING_REVIEW") window.alert("素材已提交审核，通过后会显示在内容资产中。");
       await refresh();
     } catch (error) { window.alert(error instanceof Error ? error.message : "上传失败"); } finally { setUploading(false); }
   };

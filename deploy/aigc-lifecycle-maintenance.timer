@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Bala AIGC lifecycle maintenance hourly
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=5m
+
+[Install]
+WantedBy=timers.target

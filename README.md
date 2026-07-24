@@ -15,12 +15,13 @@ npm run dev
 
 - 积分换算固定为 `1 元 = 10 积分`；当前不接入微信支付。
 - 在服务器环境变量中配置 `ADMIN_IDENTIFIERS=admin@example.com,13800138000` 后，对应已登录账号可进入 `/admin/wallets`，执行人工充值或发放测试积分。两种操作都会独立写入积分流水。
-- 任务完成与失败状态只在任务中心展示，不发送站外通知。
+- 任务完成、失败、审核拒绝和投诉状态更新通过 SMTP 邮件通知。
 
 ## 验证
 
 ```bash
 npm run typecheck
+npm run test:regression
 npm run build
 ```
 
@@ -34,6 +35,7 @@ npm run build
 - PostgreSQL 16
 - Redis 7 + BullMQ
 - systemd 服务 `aigc-web`
+- systemd 服务 `aigc-worker`，以及存储清理、生命周期维护、备份和健康告警定时器
 - 本地监听 `127.0.0.1:3010`
 - Nginx 正式地址 `https://aigc.bigapple.store/`
 
@@ -56,4 +58,8 @@ sudo systemctl restart aigc-worker
 sudo systemctl status aigc-worker --no-pager
 ```
 
-通过后在「复刻带货视频」用已授权素材分别提交已开通的 5 / 10 / 15 秒及 480p / 720p / 1080p 组合。任务详情将显示视频播放器，并可从下载按钮获取原始产物；产物私有保存于 COS 的 `users/<用户ID>/outputs/<任务ID>/`，不会公开桶路径。
+配置隔离的验收用户、管理员和已授权商品图后执行 `npm run verify:ark-video`。脚本会通过网站 API 完成登录、COS 上传、输入审核、任务创建、Worker 生成、输出审核、下载权限、积分结算、拒绝退款和 COS 对象检查，并将可留档 JSON 报告写入 `acceptance-reports/`。
+
+生命周期维护每小时恢复审核后漏排队的任务、退回审核超时任务积分，并在注销冷静期结束后清理账户素材与可识别标识。用户可在模型执行前取消待审核或排队任务并立即取回冻结积分。
+
+发布前后检查项见 `docs/operations/release-checklist.md`。

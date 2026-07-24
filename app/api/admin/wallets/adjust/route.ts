@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { authenticatedAdministrator } from "@/lib/admin";
 import { db } from "@/lib/db";
+import { audit } from "@/lib/audit";
 
 type AdjustmentBody = { userId?: unknown; kind?: unknown; amountCny?: unknown; testPoints?: unknown; note?: unknown };
 
@@ -36,6 +37,7 @@ export async function POST(request: NextRequest) {
       [body.userId, points, balanceAfter, kind, note || null, `admin:${kind}:${randomUUID()}`],
     );
     await client.query("COMMIT");
+    await audit(administrator.id, "ADMIN_WALLET_ADJUSTED", request, { type: "user", id: body.userId }, { kind, points, amount, note });
     return NextResponse.json({ points, balanceAfter, message: kind === "MANUAL_RECHARGE" ? `已按 ${amount} 元充值 ${points} 积分` : `已发放 ${points} 测试积分` });
   } catch (error) {
     await client.query("ROLLBACK");

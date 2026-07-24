@@ -118,6 +118,8 @@ INPUT_REVIEW / RUNNING / OUTPUT_REVIEW
 - `GET /api/tasks/:id`：读取进度、输出与错误。
 - `POST /api/tasks/:id/retry`：仅对可重试终态开放。
 - `POST /api/tasks/:id/cancel`。
+
+取消仅允许在 `PENDING_INPUT_REVIEW` 或 `QUEUED` 阶段执行；任务状态、积分退款、流水和审计在同一事务提交。小时级生命周期维护负责审核超时退款、漏排队恢复及注销冷静期后的数据清理。
 - `GET /api/assets`、`DELETE /api/assets/:id`。
 
 ### Wallet and Orders
@@ -248,4 +250,3 @@ Admin Web
 - 手机端 390px、平板 768px、桌面 1440px 无溢出和文本遮挡。
 - 跑马灯支持暂停与 reduced-motion；表单、弹窗和任务状态可键盘操作。
 - 供应商超时、限流、内容拒绝和部分成功均有可理解的用户状态。
-

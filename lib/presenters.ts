@@ -11,8 +11,10 @@ export const workflowNames: Record<string, string> = {
 
 export const taskStatusLabels: Record<string, string> = {
   DRAFT: "草稿",
+  PENDING_INPUT_REVIEW: "素材审核中",
   QUEUED: "排队中",
   RUNNING: "生成中",
+  PENDING_REVIEW: "审核中",
   SUCCEEDED: "已完成",
   FAILED: "失败",
   REJECTED: "未通过审核",

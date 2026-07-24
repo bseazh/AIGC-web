@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getGenerationQueue } from "@/lib/queue";
 import { authenticatedUser } from "@/lib/session";
+import { enqueueTaskNotification } from "@/lib/notifications";
 
 const retryableStatuses = ["FAILED", "REJECTED", "CANCELED"];
 
@@ -14,6 +15,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const idempotencyKey = request.headers.get("Idempotency-Key") || randomUUID();
   const client = await db.connect();
   let points = 0;
+  let workflowKey = "generation";
   try {
     await client.query("BEGIN");
     const originalResult = await client.query<{ workflow_key: string; status: string; points: number; input_json: Record<string, unknown> }>(
@@ -22,6 +24,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const original = originalResult.rows[0];
     if (!original) { await client.query("ROLLBACK"); return NextResponse.json({ code: "TASK_NOT_FOUND" }, { status: 404 }); }
     if (!retryableStatuses.includes(original.status)) { await client.query("ROLLBACK"); return NextResponse.json({ code: "TASK_NOT_RETRYABLE", message: "仅失败、拒绝或取消的任务可重新发起" }, { status: 409 }); }
+    workflowKey = original.workflow_key;
     const input = original.input_json || {};
     const assetIds = Array.isArray(input.assetIds) ? input.assetIds.filter((assetId): assetId is string => typeof assetId === "string") : [];
     const readyAssets = assetIds.length ? await client.query<{ count: string }>(
@@ -57,6 +60,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         await refundClient.query("UPDATE generation_tasks SET status = 'FAILED', error_code = 'QUEUE_UNAVAILABLE', updated_at = NOW() WHERE id = $1", [retryTaskId]);
         await refundClient.query("UPDATE wallets SET available_points = available_points + $2, frozen_points = frozen_points - $2, version = version + 1, updated_at = NOW() WHERE user_id = $1", [user.id, points]);
         await refundClient.query("INSERT INTO wallet_ledger (user_id, type, amount, balance_after, business_type, business_id, idempotency_key) VALUES ($1, 'REFUND', $2, $3, 'GENERATION_TASK', $4, $5) ON CONFLICT (idempotency_key) DO NOTHING", [user.id, points, balance + points, retryTaskId, `refund:${retryTaskId}`]);
+        await enqueueTaskNotification(refundClient, { id: retryTaskId, userId: user.id, email: user.email, workflowKey, points }, "FAILED");
       }
       await refundClient.query("COMMIT");
     } catch (refundError) { await refundClient.query("ROLLBACK"); console.error("retry refund failed", refundError); }

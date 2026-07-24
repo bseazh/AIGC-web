@@ -1,0 +1,23 @@
+import { readFile } from "node:fs/promises";
+
+const checks = [
+  ["upload review gate", "app/api/uploads/confirm/route.ts", "audit_status = 'PENDING_REVIEW'"],
+  ["worker output review gate", "scripts/worker.mjs", "'PENDING_REVIEW'"],
+  ["download READY gate", "app/api/assets/[id]/download/route.ts", "audit_status = 'READY'"],
+  ["task list avoids pending output URL", "app/api/tasks/list/route.ts", "task.status === \"SUCCEEDED\""],
+  ["content rejection refund", "app/api/admin/reviews/[id]/route.ts", "CONTENT_REJECTED"],
+  ["server-side revocable sessions", "lib/session.ts", "login_sessions"],
+  ["login failure limit", "app/api/auth/login/route.ts", "LOGIN_RATE_LIMITED"],
+  ["task cancellation refund", "app/api/tasks/[id]/cancel/route.ts", "USER_CANCELED"],
+  ["lifecycle review timeout", "scripts/lifecycle-maintenance.mjs", "OUTPUT_REVIEW_TIMEOUT"],
+  ["account deletion finalization", "scripts/lifecycle-maintenance.mjs", "ACCOUNT_DELETION_FINALIZED"],
+];
+
+let failed = false;
+for (const [name, path, expected] of checks) {
+  const source = await readFile(path, "utf8");
+  const ok = source.includes(expected);
+  console.log(`${ok ? "PASS" : "FAIL"}: ${name}`);
+  if (!ok) failed = true;
+}
+if (failed) process.exitCode = 1;

@@ -193,6 +193,16 @@ export default function Home() {
     }
   };
 
+  const requestPasswordReset = async () => {
+    if (!identifier.trim()) return setAuthError("请先输入注册邮箱");
+    setSubmitting(true); setAuthError("");
+    try {
+      const response = await fetch(`${basePath}/api/auth/password-reset/request/`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: identifier }) });
+      const result = await response.json(); setAuthError(result.message || (response.ok ? "重置邮件已发送" : "找回密码请求失败"));
+    } catch { setAuthError("网络连接失败，请稍后再试"); }
+    finally { setSubmitting(false); }
+  };
+
   return (
     <main className="home-shell">
       <div className="hero-media" aria-hidden="true" />
@@ -257,6 +267,7 @@ export default function Home() {
               <label>{mode === "register" ? "邮箱" : "手机号或邮箱"}<input value={identifier} onChange={(event) => setIdentifier(event.target.value)} type={mode === "register" ? "email" : "text"} autoComplete="username" placeholder={mode === "register" ? "请输入邮箱地址" : "请输入手机号或邮箱"} required /></label>
               {mode === "register" && <label>邮箱验证码<span className="input-action"><input value={verificationCode} onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" placeholder="请输入 6 位验证码" pattern="\d{6}" required /><button type="button" onClick={sendEmailCode} disabled={sendingCode || codeCooldown > 0}>{sendingCode ? "发送中..." : codeCooldown > 0 ? `${codeCooldown} 秒后重发` : "发送验证码"}</button></span></label>}
               <label>密码<input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder="8-72 位密码" minLength={8} maxLength={72} required /></label>
+              {mode === "login" && <button className="forgot-password" type="button" onClick={requestPasswordReset} disabled={submitting}>忘记密码</button>}
               <label className="consent"><button type="button" className={agreed ? "checked" : ""} onClick={() => setAgreed(!agreed)} aria-label="同意协议">{agreed && <Check size={13} />}</button><span>我已阅读并同意《用户协议》和《隐私政策》</span></label>
               {authError && <p className="auth-error" role="alert">{authError}</p>}
               <button className="submit-button" type="submit" disabled={!agreed || submitting}>{submitting ? "处理中..." : mode === "login" ? "登录并进入工作台" : "注册并领取 100 积分"}<ArrowRight size={18} /></button>

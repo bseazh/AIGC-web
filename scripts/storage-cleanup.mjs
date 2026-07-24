@@ -97,6 +97,9 @@ try {
     await pool.query("INSERT INTO operations_runs (operation, status, summary) VALUES ('STORAGE_CLEANUP', 'SUCCEEDED', $1)", [JSON.stringify(summary)]);
   }
   console.log(JSON.stringify(summary));
+} catch (error) {
+  if (!dryRun) await pool.query("INSERT INTO operations_runs (operation, status, summary) VALUES ('STORAGE_CLEANUP', 'FAILED', $1)", [error instanceof Error ? error.message.slice(0, 2000) : "STORAGE_CLEANUP_FAILED"]).catch(() => undefined);
+  throw error;
 } finally {
   await pool.end();
 }

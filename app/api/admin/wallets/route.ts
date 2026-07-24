@@ -8,11 +8,11 @@ export async function GET(request: NextRequest) {
   const query = request.nextUrl.searchParams.get("query")?.trim() || "";
   const result = await db.query<{
     id: string; email: string | null; phone: string | null; display_name: string;
-    available_points: number; frozen_points: number;
+    available_points: number; frozen_points: number; status: string;
   }>(
-    `SELECT u.id, u.email, u.phone, u.display_name, w.available_points, w.frozen_points
+    `SELECT u.id, u.email, u.phone, u.display_name, u.status, w.available_points, w.frozen_points
      FROM users u JOIN wallets w ON w.user_id = u.id
-     WHERE u.status = 'ACTIVE'
+     WHERE u.status <> 'DELETED'
        AND ($1 = '' OR u.email ILIKE '%' || $1 || '%' OR u.phone ILIKE '%' || $1 || '%' OR u.display_name ILIKE '%' || $1 || '%')
      ORDER BY u.created_at DESC LIMIT 50`,
     [query],
@@ -23,5 +23,6 @@ export async function GET(request: NextRequest) {
     displayName: user.display_name,
     availablePoints: user.available_points,
     frozenPoints: user.frozen_points,
+    status: user.status,
   })) });
 }

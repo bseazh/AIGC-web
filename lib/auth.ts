@@ -9,6 +9,7 @@ export const SESSION_MAX_AGE = 60 * 60 * 24 * 30;
 type SessionPayload = {
   userId: string;
   tokenVersion: number;
+  sessionId: string;
   expiresAt: number;
 };
 
@@ -38,10 +39,11 @@ export async function verifyPassword(password: string, stored: string) {
   return derived.length === expected.length && timingSafeEqual(derived, expected);
 }
 
-export function createSessionToken(userId: string, tokenVersion: number) {
+export function createSessionToken(userId: string, tokenVersion: number, sessionId: string) {
   const payload: SessionPayload = {
     userId,
     tokenVersion,
+    sessionId,
     expiresAt: Math.floor(Date.now() / 1000) + SESSION_MAX_AGE,
   };
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -60,7 +62,7 @@ export function verifySessionToken(token?: string | null): SessionPayload | null
 
   try {
     const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as SessionPayload;
-    if (!payload.userId || payload.expiresAt <= Math.floor(Date.now() / 1000)) return null;
+    if (!payload.userId || !payload.sessionId || payload.expiresAt <= Math.floor(Date.now() / 1000)) return null;
     return payload;
   } catch {
     return null;

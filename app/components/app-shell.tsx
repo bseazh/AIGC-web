@@ -1,12 +1,12 @@
 "use client";
 
-import { ArrowLeft, Boxes, ChevronDown, CircleDollarSign, Clock3, Coins, Home, ImageIcon, LogOut, Menu, Settings2, Sparkles, UserRound, WalletCards } from "lucide-react";
+import { ArrowLeft, Boxes, ChevronDown, CircleDollarSign, Clock3, Coins, Headphones, Home, ImageIcon, LogOut, Menu, Settings2, Sparkles, UserRound, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ReactNode, useState } from "react";
 
 type AppShellProps = {
-  active: "workspace" | "tools" | "tasks" | "assets" | "wallet" | "recharge" | "account";
+  active: "workspace" | "tools" | "tasks" | "assets" | "wallet" | "recharge" | "account" | "complaints";
   account: { user: { displayName: string; avatarUrl?: string | null; avatarStyle?: string; isAdministrator?: boolean }; wallet: { availablePoints: number } };
   taskCount?: number;
   children: ReactNode;
@@ -19,6 +19,7 @@ const navItems = [
   { key: "assets", label: "内容资产", href: "/assets", icon: Boxes },
   { key: "wallet", label: "积分钱包", href: "/wallet", icon: WalletCards },
   { key: "recharge", label: "充值中心", href: "/recharge", icon: CircleDollarSign },
+  { key: "complaints", label: "投诉与客服", href: "/complaints", icon: Headphones },
 ] as const;
 
 export function AppShell({ active, account, taskCount = 0, children }: AppShellProps) {
@@ -41,7 +42,7 @@ export function AppShell({ active, account, taskCount = 0, children }: AppShellP
               <Icon size={19} />{item.label}{item.key === "tasks" && taskCount > 0 && <span className="nav-count">{taskCount > 99 ? "99+" : taskCount}</span>}
             </Link>
           ); })}
-          {account.user.isAdministrator && <><Link href="/admin/wallets" onClick={() => setSidebarOpen(false)}><Settings2 size={19} />积分后台</Link><Link href="/admin/prompts" onClick={() => setSidebarOpen(false)}><Settings2 size={19} />提示词运营</Link></>}
+          {account.user.isAdministrator && <><Link href="/admin/wallets" onClick={() => setSidebarOpen(false)}><Settings2 size={19} />积分后台</Link><Link href="/admin/payments" onClick={() => setSidebarOpen(false)}><Settings2 size={19} />微信支付</Link><Link href="/admin/support" onClick={() => setSidebarOpen(false)}><Settings2 size={19} />审核与客服</Link><Link href="/admin/review-metrics" onClick={() => setSidebarOpen(false)}><Settings2 size={19} />审核指标</Link><Link href="/admin/operations" onClick={() => setSidebarOpen(false)}><Settings2 size={19} />存储与运维</Link><Link href="/admin/prompts" onClick={() => setSidebarOpen(false)}><Settings2 size={19} />提示词运营</Link></>}
         </nav>
         <div className="sidebar-bottom">
           <div className="credit-card"><span>可用积分</span><strong><Coins size={18} />{account.wallet.availablePoints.toLocaleString()}</strong><em>1 元 = 10 积分</em></div>
