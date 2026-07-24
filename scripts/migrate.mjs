@@ -175,6 +175,9 @@ try {
     );
     CREATE INDEX IF NOT EXISTS audit_events_user_created_idx ON audit_events (user_id, created_at DESC);
 
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_asset_id UUID REFERENCES assets(id) ON DELETE SET NULL;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_style TEXT NOT NULL DEFAULT 'ocean';
+
     CREATE TABLE IF NOT EXISTS operations_runs (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       operation TEXT NOT NULL,

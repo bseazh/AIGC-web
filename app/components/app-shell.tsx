@@ -7,7 +7,7 @@ import { ReactNode, useState } from "react";
 
 type AppShellProps = {
   active: "workspace" | "tools" | "tasks" | "assets" | "wallet" | "recharge" | "account";
-  account: { user: { displayName: string; isAdministrator?: boolean }; wallet: { availablePoints: number } };
+  account: { user: { displayName: string; avatarUrl?: string | null; avatarStyle?: string; isAdministrator?: boolean }; wallet: { availablePoints: number } };
   taskCount?: number;
   children: ReactNode;
 };
@@ -54,7 +54,7 @@ export function AppShell({ active, account, taskCount = 0, children }: AppShellP
         <header className="workspace-header app-page-header">
           <button className="icon-button mobile-menu" aria-label="打开菜单" onClick={() => setSidebarOpen(true)}><Menu size={21} /></button>
           <Link href="/workspace" className="mobile-brand"><img src="/brand/bala-aigc-mark.png" alt="" /><strong>芭乐AIGC</strong></Link>
-          <div className="header-actions"><Link className="header-create" href="/tools"><ImageIcon size={17} />开始创作</Link><div className="header-account"><button className="avatar" type="button" aria-label="打开账户菜单" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen((open) => !open)}>{account.user.displayName.slice(0, 1)}<ChevronDown size={13} /></button>{accountMenuOpen && <div className="account-menu"><div><strong>{account.user.displayName}</strong><small>{account.wallet.availablePoints.toLocaleString()} 积分可用</small></div><Link href="/account" onClick={() => setAccountMenuOpen(false)}><UserRound size={16} />账号设置</Link><Link href="/wallet" onClick={() => setAccountMenuOpen(false)}><WalletCards size={16} />积分钱包</Link><Link href="/recharge" onClick={() => setAccountMenuOpen(false)}><CircleDollarSign size={16} />充值中心</Link><button type="button" onClick={logout}><LogOut size={16} />退出登录</button></div>}</div></div>
+          <div className="header-actions"><Link className="header-create" href="/tools"><ImageIcon size={17} />开始创作</Link><div className="header-account"><button className={`avatar avatar-${account.user.avatarStyle || "ocean"}`} type="button" aria-label="打开账户菜单" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen((open) => !open)}>{account.user.avatarUrl ? <img src={account.user.avatarUrl} alt="" /> : account.user.displayName.slice(0, 1)}<ChevronDown size={13} /></button>{accountMenuOpen && <div className="account-menu"><div><strong>{account.user.displayName}</strong><small>{account.wallet.availablePoints.toLocaleString()} 积分可用</small></div><Link href="/account" onClick={() => setAccountMenuOpen(false)}><UserRound size={16} />账号设置</Link><Link href="/wallet" onClick={() => setAccountMenuOpen(false)}><WalletCards size={16} />积分钱包</Link><Link href="/recharge" onClick={() => setAccountMenuOpen(false)}><CircleDollarSign size={16} />充值中心</Link><button type="button" onClick={logout}><LogOut size={16} />退出登录</button></div>}</div></div>
         </header>
         {children}
       </section>
