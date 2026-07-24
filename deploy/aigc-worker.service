@@ -2,12 +2,14 @@
 Description=Bala AIGC generation worker
 After=network.target docker.service
 Requires=docker.service
+OnFailure=aigc-alert@%n.service
 
 [Service]
 Type=simple
 User=ubuntu
 WorkingDirectory=/home/ubuntu/project/AIGC_web
 Environment=NODE_ENV=production
+Environment=LOG_SERVICE=aigc-worker
 EnvironmentFile=-/home/ubuntu/project/AIGC_web/.env.production
 ExecStart=/usr/bin/node /home/ubuntu/project/AIGC_web/scripts/worker.mjs
 Restart=always

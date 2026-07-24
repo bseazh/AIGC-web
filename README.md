@@ -47,6 +47,7 @@ npm run build
 
 - `DESIGN.md`：公开页面设计系统。
 - `SYSTEM-BLUEPRINT.md`：用户、任务、积分、API 与提示词系统蓝图。
+- `docs/operations/observability.md`：Loki、Grafana、结构化日志、告警和注册灰度说明。
 ## 视频生产验收
 
 在生产机写入 `ARK_API_KEY`、`ARK_MODEL` 和全部 COS 变量后，先执行以下检查；脚本不会输出密钥：

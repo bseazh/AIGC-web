@@ -64,6 +64,7 @@ try {
     );
 
     CREATE INDEX IF NOT EXISTS generation_tasks_user_created_idx ON generation_tasks (user_id, created_at DESC);
+    ALTER TABLE generation_tasks ADD COLUMN IF NOT EXISTS request_id TEXT;
 
     ALTER TABLE generation_tasks ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
     ALTER TABLE generation_tasks DROP CONSTRAINT IF EXISTS generation_tasks_status_check;
@@ -237,6 +238,7 @@ try {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS provider_call_logs_task_created_idx ON provider_call_logs (task_id, created_at DESC);
+    ALTER TABLE provider_call_logs ADD COLUMN IF NOT EXISTS provider_request_id TEXT;
 
     CREATE TABLE IF NOT EXISTS worker_heartbeats (
       worker_id TEXT PRIMARY KEY,

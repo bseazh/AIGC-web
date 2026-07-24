@@ -11,7 +11,9 @@ fi
 
 : "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
 
-mkdir -p data/postgres data/redis
+mkdir -p data/postgres data/redis data/loki data/grafana
+sudo chown -R 10001:10001 data/loki
+sudo chown -R 472:472 data/grafana
 
 if ! docker network inspect aigc-network >/dev/null 2>&1; then
   docker network create aigc-network >/dev/null
@@ -44,8 +46,40 @@ else
   docker start aigc-redis >/dev/null
 fi
 
+if ! docker container inspect aigc-loki >/dev/null 2>&1; then
+  docker run -d --name aigc-loki --restart unless-stopped --network aigc-network \
+    -p 127.0.0.1:3100:3100 \
+    -v /home/ubuntu/project/AIGC_web/deploy/observability/loki-config.yml:/etc/loki/local-config.yaml:ro \
+    -v /home/ubuntu/project/AIGC_web/data/loki:/loki \
+    grafana/loki:3.5.7 -config.file=/etc/loki/local-config.yaml >/dev/null
+else
+  docker restart aigc-loki >/dev/null
+fi
+
+if ! docker container inspect aigc-promtail >/dev/null 2>&1; then
+  docker run -d --name aigc-promtail --restart unless-stopped --network aigc-network \
+    -v /home/ubuntu/project/AIGC_web/deploy/observability/promtail-config.yml:/etc/promtail/config.yml:ro \
+    -v /var/log/journal:/var/log/journal:ro -v /run/log/journal:/run/log/journal:ro \
+    -v /etc/machine-id:/etc/machine-id:ro -v /var/log/nginx:/var/log/nginx:ro \
+    grafana/promtail:3.5.7 -config.file=/etc/promtail/config.yml >/dev/null
+else
+  docker restart aigc-promtail >/dev/null
+fi
+
+if ! docker container inspect aigc-grafana >/dev/null 2>&1; then
+  : "${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}"
+  docker run -d --name aigc-grafana --restart unless-stopped --network aigc-network \
+    -p 127.0.0.1:3001:3000 -e GF_SECURITY_ADMIN_PASSWORD="$GRAFANA_ADMIN_PASSWORD" \
+    -e GF_USERS_ALLOW_SIGN_UP=false \
+    -v /home/ubuntu/project/AIGC_web/deploy/observability/grafana-datasource.yml:/etc/grafana/provisioning/datasources/loki.yml:ro \
+    -v /home/ubuntu/project/AIGC_web/data/grafana:/var/lib/grafana \
+    grafana/grafana:12.3.3 >/dev/null
+else
+  docker restart aigc-grafana >/dev/null
+fi
+
 for attempt in {1..30}; do
-  if docker exec aigc-postgres pg_isready -U aigc -d aigc >/dev/null 2>&1 && docker exec aigc-redis redis-cli ping | grep -q PONG; then
+  if docker exec aigc-postgres pg_isready -U aigc -d aigc >/dev/null 2>&1 && docker exec aigc-redis redis-cli ping | grep -q PONG && curl -fsS http://127.0.0.1:3100/ready >/dev/null && curl -fsS http://127.0.0.1:3001/api/health >/dev/null; then
     exit 0
   fi
   sleep 1

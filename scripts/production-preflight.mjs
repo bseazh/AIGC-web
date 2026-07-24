@@ -39,6 +39,12 @@ try {
 } finally { redis.disconnect(); }
 console.log("Redis access: OK");
 
+for (const [name, url] of [["Loki", "http://127.0.0.1:3100/ready"], ["Grafana", "http://127.0.0.1:3001/api/health"]]) {
+  const response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
+  if (!response.ok) throw new Error(`${name} health check failed: HTTP ${response.status}`);
+  console.log(`${name} access: OK`);
+}
+
 const cos = new COS({ SecretId: process.env.COS_SECRET_ID, SecretKey: process.env.COS_SECRET_KEY });
 await new Promise((resolve, reject) => cos.headBucket({ Bucket: process.env.COS_BUCKET, Region: process.env.COS_REGION }, (error) => error ? reject(error) : resolve()));
 console.log("COS access: OK");

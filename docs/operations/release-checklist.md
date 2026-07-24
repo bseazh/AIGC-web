@@ -24,6 +24,10 @@
 - [ ] A queued task can be canceled exactly once and its frozen points are fully restored.
 - [ ] Review and notification backlog checks appear as `up` in `/api/health/`.
 - [ ] `npm run verify:ark-video` passes and its JSON report is archived with the release record.
+- [ ] Loki reports ready on `127.0.0.1:3100`, Grafana reports healthy on `127.0.0.1:3001`, and Promtail is running.
+- [ ] Nginx responses contain `X-Request-ID` and its JSON access log appears in Loki.
+- [ ] The administrator unified log page can correlate a task with request, provider, wallet, and audit records.
+- [ ] Registration rollout remains at 10% for 3–7 days before an evidence-based increase.
 
 ## Rollback triggers
 

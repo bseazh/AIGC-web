@@ -2,6 +2,9 @@ import { createHmac } from "node:crypto";
 import { Worker } from "bullmq";
 import COS from "cos-nodejs-sdk-v5";
 import pg from "pg";
+import { installStructuredConsole, log } from "./structured-logger.mjs";
+
+installStructuredConsole("aigc-moderation-worker");
 
 const { Pool } = pg;
 const required = ["DATABASE_URL", "REDIS_URL", "COS_BUCKET", "COS_REGION", "COS_SECRET_ID", "COS_SECRET_KEY", "PUBLIC_APP_URL", "CONTENT_REVIEW_INTERNAL_SECRET"];
@@ -140,8 +143,8 @@ const worker = new Worker("moderation", async (job) => {
   concurrency: 2,
 });
 
-worker.on("completed", (job) => console.log(`moderation ${job.id} completed`));
-worker.on("failed", (job, error) => console.error(`moderation ${job?.id || "unknown"} failed`, error.message));
+worker.on("completed", (job) => log("info", "moderation_completed", { taskId: job.id, reviewId: job.data?.reviewId }));
+worker.on("failed", (job, error) => log("error", "moderation_failed", { taskId: job?.id, reviewId: job?.data?.reviewId, error }));
 heartbeat().catch((error) => console.error("initial moderation heartbeat failed", error));
 const heartbeatTimer = setInterval(() => heartbeat().catch((error) => console.error("moderation heartbeat failed", error)), 30_000);
 

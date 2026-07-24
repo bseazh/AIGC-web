@@ -1,6 +1,7 @@
 [Unit]
 Description=AIGC Web Next.js application
 After=network.target
+OnFailure=aigc-alert@%n.service
 
 [Service]
 Type=simple
@@ -9,6 +10,7 @@ WorkingDirectory=/home/ubuntu/project/AIGC_web
 Environment=NODE_ENV=production
 Environment=PORT=3010
 Environment=HOSTNAME=127.0.0.1
+Environment=LOG_SERVICE=aigc-web
 EnvironmentFile=-/home/ubuntu/project/AIGC_web/.env.production
 ExecStart=/usr/bin/node /home/ubuntu/project/AIGC_web/.next/standalone/server.js
 Restart=always

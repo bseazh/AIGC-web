@@ -7,6 +7,9 @@ import tls from "node:tls";
 import { Queue, Worker } from "bullmq";
 import COS from "cos-nodejs-sdk-v5";
 import pg from "pg";
+import { installStructuredConsole, log } from "./structured-logger.mjs";
+
+installStructuredConsole("aigc-worker");
 
 const { Pool } = pg;
 const required = ["DATABASE_URL", "REDIS_URL", "COS_BUCKET", "COS_REGION", "COS_SECRET_ID", "COS_SECRET_KEY"];
@@ -39,11 +42,11 @@ function redactForLog(value) {
   return value;
 }
 
-async function logProviderCall(taskId, operation, request, responseStatus, response, errorCode = null) {
+async function logProviderCall(taskId, operation, request, responseStatus, response, errorCode = null, providerRequestId = null) {
   try {
     await pool.query(
-      "INSERT INTO provider_call_logs (task_id, provider, operation, request_json, response_status, response_json, error_code) VALUES ($1, 'ark', $2, $3::jsonb, $4, $5::jsonb, $6)",
-      [taskId, operation, JSON.stringify(redactForLog(request)), responseStatus, JSON.stringify(redactForLog(response || {})), errorCode],
+      "INSERT INTO provider_call_logs (task_id, provider, operation, request_json, response_status, response_json, error_code, provider_request_id) VALUES ($1, 'ark', $2, $3::jsonb, $4, $5::jsonb, $6, $7)",
+      [taskId, operation, JSON.stringify(redactForLog(request)), responseStatus, JSON.stringify(redactForLog(response || {})), errorCode, providerRequestId],
     );
   } catch (error) { console.error("provider call log failed", error); }
 }
@@ -128,7 +131,7 @@ async function createVideoTask(inputUrls, input, workflowKey, taskId) {
     body: JSON.stringify(requestBody),
   });
   const payload = await response.json().catch(() => null);
-  await logProviderCall(taskId, "create_video_task", { model: requestBody.model, ratio: requestBody.ratio, duration: requestBody.duration, resolution: requestBody.resolution, watermark: requestBody.watermark, promptConfig: input.promptConfig ? { id: input.promptConfig.id, version: input.promptConfig.version, variantKey: input.promptConfig.variantKey } : null, assetTypes: mimeTypes }, response.status, payload, response.ok ? null : "ARK_CREATE_FAILED");
+  await logProviderCall(taskId, "create_video_task", { model: requestBody.model, ratio: requestBody.ratio, duration: requestBody.duration, resolution: requestBody.resolution, watermark: requestBody.watermark, promptConfig: input.promptConfig ? { id: input.promptConfig.id, version: input.promptConfig.version, variantKey: input.promptConfig.variantKey } : null, assetTypes: mimeTypes }, response.status, payload, response.ok ? null : "ARK_CREATE_FAILED", payload?.id || response.headers.get("x-request-id"));
   if (!response.ok || !payload?.id) throw new Error(`Ark ${response.status}: ${payload?.error?.message || "task creation failed"}`);
   return payload.id;
 }
@@ -138,7 +141,7 @@ async function waitForVideo(taskId, generationTaskId) {
   while (Date.now() < deadline) {
     const response = await fetch(`https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks/${taskId}`, { headers: { Authorization: `Bearer ${process.env.ARK_API_KEY}` } });
     const payload = await response.json().catch(() => null);
-    await logProviderCall(generationTaskId, "get_video_task", { providerTaskId: taskId }, response.status, payload, response.ok ? null : "ARK_QUERY_FAILED");
+    await logProviderCall(generationTaskId, "get_video_task", { providerTaskId: taskId }, response.status, payload, response.ok ? null : "ARK_QUERY_FAILED", taskId);
     if (!response.ok) throw new Error(`Ark ${response.status}: ${payload?.error?.message || "task query failed"}`);
     const status = String(payload?.status || "").toLowerCase();
     if (["succeeded", "success", "completed"].includes(status)) {
@@ -330,9 +333,10 @@ async function reconcileStaleTasks() {
 }
 
 const worker = new Worker("generation", async (job) => {
-  const taskResult = await pool.query("SELECT id, user_id, workflow_key, points, input_json FROM generation_tasks WHERE id = $1", [job.data.taskId]);
+  const taskResult = await pool.query("SELECT id, user_id, workflow_key, points, input_json, request_id FROM generation_tasks WHERE id = $1", [job.data.taskId]);
   const task = taskResult.rows[0];
   if (!task) throw new Error("Task not found");
+  log("info", "task_started", { requestId: task.request_id, taskId: task.id, userId: task.user_id, workflowKey: task.workflow_key });
   const claimed = await pool.query("UPDATE generation_tasks SET status = 'RUNNING', updated_at = NOW() WHERE id = $1 AND status = 'QUEUED' RETURNING id", [task.id]);
   if (!claimed.rowCount) return { skipped: true };
   const savedKeys = [];
@@ -385,8 +389,8 @@ const worker = new Worker("generation", async (job) => {
   concurrency: 2,
 });
 
-worker.on("completed", (job) => console.log(`task ${job.id} completed`));
-worker.on("failed", (job, error) => console.error(`task ${job?.id || "unknown"} failed`, error.message));
+worker.on("completed", (job) => log("info", "task_completed", { taskId: job.id }));
+worker.on("failed", (job, error) => log("error", "task_failed", { taskId: job?.id, error }));
 
 function smtpCommand(socket, command, accepted) {
   return new Promise((resolve, reject) => {

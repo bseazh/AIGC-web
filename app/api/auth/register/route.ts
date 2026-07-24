@@ -1,8 +1,10 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { hashPassword, normalizeIdentifier, SESSION_COOKIE, sessionCookieOptions, validPassword } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { consumeVerificationCode } from "@/lib/email-verification";
 import { createStoredSession } from "@/lib/session";
+import { structuredLog, requestContext } from "@/lib/logger";
 const termsVersion = "terms-v1";
 const privacyVersion = "privacy-v1";
 
@@ -11,6 +13,12 @@ export async function POST(request: Request) {
   const identifier = normalizeIdentifier(body?.identifier);
   if (!identifier || identifier.type !== "email") {
     return NextResponse.json({ code: "INVALID_IDENTIFIER", message: "注册请使用有效的邮箱地址" }, { status: 400 });
+  }
+  const rolloutPercent = Math.min(Math.max(Number(process.env.PUBLIC_REGISTRATION_ROLLOUT_PERCENT || 100), 0), 100);
+  const cohort = createHash("sha256").update(identifier.value).digest().readUInt32BE(0) % 100;
+  if (cohort >= rolloutPercent) {
+    structuredLog("info", "registration_rollout_rejected", { ...requestContext(request), cohort, rolloutPercent });
+    return NextResponse.json({ code: "REGISTRATION_CAPACITY_LIMIT", message: "当前处于小流量开放阶段，请稍后再试" }, { status: 503 });
   }
   if (!validPassword(body?.password)) {
     return NextResponse.json({ code: "INVALID_PASSWORD", message: "密码长度需为 8-72 位" }, { status: 400 });

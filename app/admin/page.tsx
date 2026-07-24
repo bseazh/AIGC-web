@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Boxes, CircleDollarSign, ClipboardCheck, Coins, FileKey2, Gauge, MessageSquareText, ScrollText, ShieldCheck, Sparkles, Users, Wrench } from "lucide-react";
+import { Activity, Boxes, CircleDollarSign, ClipboardCheck, Coins, FileKey2, FileSearch, Gauge, MessageSquareText, ScrollText, ShieldCheck, Sparkles, Users, Wrench } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -16,6 +16,7 @@ const modules = [
   { href: "/admin/review-metrics", icon: Gauge, title: "审核指标", description: "审核时效、积压量与质量指标" },
   { href: "/admin/prompts", icon: Sparkles, title: "提示词运营", description: "工作流提示词版本、灰度与回滚" },
   { href: "/admin/operations", icon: Wrench, title: "存储与运维", description: "COS 配额、清理、备份和任务重试" },
+  { href: "/admin/logs", icon: FileSearch, title: "统一日志", description: "审计、供应商、积分与任务关联查询" },
 ] as const;
 
 export default function AdminDashboardPage() {

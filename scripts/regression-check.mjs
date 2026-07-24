@@ -17,6 +17,11 @@ const checks = [
   ["recharge code idempotent ledger", "app/api/recharge-codes/redeem/route.ts", "recharge-code:${code.id}:${user.id}"],
   ["production acceptance account bootstrap", "scripts/deploy.sh", "configure-production-acceptance.mjs"],
   ["production recharge code acceptance", "scripts/ark-video-acceptance.mjs", "duplicate denial and disable"],
+  ["structured task logging", "scripts/worker.mjs", "task_started"],
+  ["request correlation", "lib/task-creation.ts", "request_id"],
+  ["systemd web failure alert", "deploy/aigc-web.service", "OnFailure=aigc-alert@%n.service"],
+  ["central log retention", "deploy/observability/loki-config.yml", "retention_period: 720h"],
+  ["registration rollout", "app/api/auth/register/route.ts", "PUBLIC_REGISTRATION_ROLLOUT_PERCENT"],
 ];
 
 let failed = false;

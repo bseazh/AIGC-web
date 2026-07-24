@@ -16,6 +16,15 @@ if [[ -f .env.production && -z "${CONTENT_REVIEW_PROVIDER:-}" ]]; then
   printf '%s\n' 'CONTENT_REVIEW_PROVIDER=tencent-ci' >> .env.production
   export CONTENT_REVIEW_PROVIDER=tencent-ci
 fi
+if [[ -f .env.production && -z "${GRAFANA_ADMIN_PASSWORD:-}" ]]; then
+  GRAFANA_ADMIN_PASSWORD="$(openssl rand -hex 24)"
+  printf 'GRAFANA_ADMIN_PASSWORD=%s\n' "$GRAFANA_ADMIN_PASSWORD" >> .env.production
+  export GRAFANA_ADMIN_PASSWORD
+fi
+if [[ -f .env.production && -z "${PUBLIC_REGISTRATION_ROLLOUT_PERCENT:-}" ]]; then
+  printf '%s\n' 'PUBLIC_REGISTRATION_ROLLOUT_PERCENT=10' >> .env.production
+  export PUBLIC_REGISTRATION_ROLLOUT_PERCENT=10
+fi
 if [[ -f .env.production && -z "${PUBLIC_APP_URL:-}" ]]; then
   printf '%s\n' 'PUBLIC_APP_URL=https://aigc.bigapple.store' >> .env.production
   export PUBLIC_APP_URL=https://aigc.bigapple.store
@@ -70,6 +79,7 @@ npm run typecheck
 env -u TURBOPACK -u __NEXT_PRIVATE_STANDALONE_CONFIG -u __NEXT_PRIVATE_ORIGIN npm run build
 node scripts/migrate.mjs
 node scripts/configure-production-acceptance.mjs
+node scripts/record-operation.mjs REGISTRATION_ROLLOUT_STARTED SUCCEEDED "Public registration rollout ${PUBLIC_REGISTRATION_ROLLOUT_PERCENT}% started or confirmed at $(date -Is)"
 npm run test:db
 npm run verify:production
 
@@ -101,6 +111,18 @@ else
 fi
 sudo systemctl restart systemd-journald
 sudo systemctl reload ssh
+
+nginx_site="$(sudo grep -Rsl 'server_name aigc.bigapple.store' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null | head -1 || true)"
+if [[ -n "$nginx_site" ]]; then
+  nginx_target="$(readlink -f "$nginx_site")"
+  sudo install -D -m 600 "$nginx_target" /var/backups/aigc-nginx-site.pre-observability.conf
+  sudo install -m 644 deploy/nginx-aigc-domain.conf "$nginx_target"
+  sudo nginx -t
+  sudo systemctl reload nginx
+else
+  echo "Active aigc.bigapple.store Nginx site was not found" >&2
+  exit 1
+fi
 
 mkdir -p .next/standalone/.next
 cp -R .next/static .next/standalone/.next/static

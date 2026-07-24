@@ -5,6 +5,7 @@ import { getGenerationQueue } from "@/lib/queue";
 import { authenticatedUser } from "@/lib/session";
 import { resolvePromptConfig } from "@/lib/prompt-config";
 import { enqueueTaskNotification } from "@/lib/notifications";
+import { structuredLog, requestContext } from "@/lib/logger";
 
 type ImageWorkflow = {
   key: string;
@@ -59,6 +60,7 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
   if (assetError) return NextResponse.json({ code: "INVALID_VIDEO_ASSETS", message: assetError }, { status: 400 });
 
   const taskId = randomUUID();
+  const requestId = request.headers.get("x-request-id") || randomUUID();
   const idempotencyKey = request.headers.get("Idempotency-Key") || randomUUID();
   const points = workflow.key === "video-mix" ? ({ 15: 40, 30: 70, 45: 100, 60: 130 } as Record<number, number>)[duration] : workflow.pointsPerTask;
   const client = await db.connect();
@@ -73,9 +75,9 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
     const promptConfig = workflow.key.includes("video") ? await resolvePromptConfig(client, workflow.key, user.id) : undefined;
     const input = { assetId: assets[0].id, storageKey: assets[0].storage_key, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), assetMimeTypes: assets.map((asset) => asset.mime_type), prompt, aspectRatio, duration, resolution, scene, style, outputs: workflow.outputsPerTask, ...(promptConfig ? { promptConfig } : {}), ...(inputExtras?.(body) || {}) };
     await client.query(
-      `INSERT INTO generation_tasks (id, user_id, workflow_key, status, points, input_json, idempotency_key)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)`,
-      [taskId, user.id, workflow.key, inputsReady ? "QUEUED" : "PENDING_INPUT_REVIEW", points, JSON.stringify(input), idempotencyKey],
+      `INSERT INTO generation_tasks (id, user_id, workflow_key, status, points, input_json, idempotency_key, request_id)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
+      [taskId, user.id, workflow.key, inputsReady ? "QUEUED" : "PENDING_INPUT_REVIEW", points, JSON.stringify(input), idempotencyKey, requestId],
     );
     await client.query("UPDATE wallets SET available_points = available_points - $2, frozen_points = frozen_points + $2, version = version + 1, updated_at = NOW() WHERE user_id = $1", [user.id, points]);
     await client.query(
@@ -87,7 +89,7 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
   } catch (error) {
     await client.query("ROLLBACK");
     if ((error as { code?: string }).code === "23505") return NextResponse.json({ code: "DUPLICATE_REQUEST", message: "任务已创建" }, { status: 409 });
-    console.error("task creation failed", error);
+    structuredLog("error", "task_creation_failed", { ...requestContext(request), taskId, userId: user.id, error });
     return NextResponse.json({ code: "TASK_CREATE_FAILED", message: "创建任务失败" }, { status: 500 });
   } finally { client.release(); }
 
@@ -95,12 +97,13 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
     try {
       await getGenerationQueue().add("image-generation", { taskId }, { jobId: taskId, attempts: 1, removeOnComplete: 100, removeOnFail: 100 });
     } catch (error) {
-      console.error("queue submission failed", error);
+      structuredLog("error", "queue_submission_failed", { ...requestContext(request), taskId, userId: user.id, error });
       await refundTask(taskId, user.id, points, "QUEUE_UNAVAILABLE");
       return NextResponse.json({ code: "QUEUE_UNAVAILABLE", message: "任务队列暂不可用，积分已退回" }, { status: 503 });
     }
   }
-  return NextResponse.json({ taskId, status: inputsReady ? "QUEUED" : "PENDING_INPUT_REVIEW", points }, { status: 201 });
+  structuredLog("info", "task_created", { requestId, taskId, userId: user.id, workflowKey: workflow.key, points });
+  return NextResponse.json({ taskId, requestId, status: inputsReady ? "QUEUED" : "PENDING_INPUT_REVIEW", points }, { status: 201, headers: { "x-request-id": requestId } });
 }
 
 async function refundTask(taskId: string, userId: string, points: number, errorCode: string) {
