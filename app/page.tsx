@@ -178,7 +178,7 @@ export default function Home() {
       const response = await fetch(`${basePath}/api/auth/${mode}/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier, password, code: mode === "register" ? verificationCode : undefined }),
+        body: JSON.stringify({ identifier, password, code: mode === "register" ? verificationCode : undefined, termsAccepted: agreed, privacyAccepted: agreed }),
       });
       const result = await response.json();
       if (!response.ok) {

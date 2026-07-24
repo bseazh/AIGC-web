@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createSessionToken, hashPassword, normalizeIdentifier, SESSION_COOKIE, sessionCookieOptions, validPassword } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { consumeVerificationCode } from "@/lib/email-verification";
+const termsVersion = "terms-v1";
+const privacyVersion = "privacy-v1";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -11,6 +13,9 @@ export async function POST(request: Request) {
   }
   if (!validPassword(body?.password)) {
     return NextResponse.json({ code: "INVALID_PASSWORD", message: "密码长度需为 8-72 位" }, { status: 400 });
+  }
+  if (body?.termsAccepted !== true || body?.privacyAccepted !== true) {
+    return NextResponse.json({ code: "AGREEMENT_REQUIRED", message: "请阅读并同意用户协议和隐私政策" }, { status: 400 });
   }
   if (!(await consumeVerificationCode(identifier.value, body?.code))) {
     return NextResponse.json({ code: "INVALID_CODE", message: "验证码不正确或已过期" }, { status: 400 });
@@ -39,6 +44,11 @@ export async function POST(request: Request) {
        (user_id, type, amount, balance_after, business_type, idempotency_key)
        VALUES ($1, 'CREDIT', $2, $2, 'WELCOME_BONUS', $3)`,
       [user.id, welcomePoints, `welcome:${user.id}`],
+    );
+    await client.query(
+      `INSERT INTO audit_events (user_id, event_type, resource_type, resource_id, ip_address, user_agent, details_json)
+       VALUES ($1, 'AGREEMENTS_ACCEPTED', 'USER', $1, $2, $3, $4::jsonb)`,
+      [user.id, request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null, request.headers.get("user-agent") || null, JSON.stringify({ termsVersion, privacyVersion })],
     );
     await client.query("COMMIT");
 
