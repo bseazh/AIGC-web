@@ -16,13 +16,14 @@ async function lokiCount(query) {
 }
 
 try {
-  const [taskStats, reviewStats, refundStats, complaintStats, realUsers, rollout, generationWaiting, generationActive, moderationWaiting, httpTotal, http5xx] = await Promise.all([
-    pool.query(`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE status='SUCCEEDED')::int AS succeeded, COUNT(*) FILTER (WHERE status='FAILED')::int AS failed, COUNT(*) FILTER (WHERE status='REJECTED')::int AS rejected, COALESCE(AVG(EXTRACT(EPOCH FROM updated_at-created_at)) FILTER (WHERE status='SUCCEEDED'),0)::float AS avg_seconds FROM generation_tasks WHERE created_at>NOW()-INTERVAL '24 hours'`),
+  const [taskStats, reviewStats, refundStats, complaintStats, realUsers, rollout, operationChecks, generationWaiting, generationActive, moderationWaiting, httpTotal, http5xx] = await Promise.all([
+    pool.query(`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE t.status='SUCCEEDED')::int AS succeeded, COUNT(*) FILTER (WHERE t.status='FAILED')::int AS failed, COUNT(*) FILTER (WHERE t.status='REJECTED')::int AS rejected, COALESCE(AVG(EXTRACT(EPOCH FROM t.updated_at-t.created_at)) FILTER (WHERE t.status='SUCCEEDED'),0)::float AS avg_seconds FROM generation_tasks t JOIN users u ON u.id=t.user_id WHERE t.created_at>NOW()-INTERVAL '24 hours' AND u.email IS DISTINCT FROM $1 AND u.email IS DISTINCT FROM $2`, [process.env.ACCEPTANCE_USER_EMAIL || "", process.env.ACCEPTANCE_ADMIN_EMAIL || ""]),
     pool.query(`SELECT COUNT(*)::int AS reviewed, COALESCE(AVG(EXTRACT(EPOCH FROM reviewed_at-created_at)) FILTER (WHERE reviewed_at IS NOT NULL),0)::float AS avg_seconds, COUNT(*) FILTER (WHERE status IN ('PENDING','NEEDS_MANUAL') AND created_at<NOW()-INTERVAL '30 minutes')::int AS overdue FROM content_review_records WHERE created_at>NOW()-INTERVAL '24 hours'`),
     pool.query(`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE status IN ('ABNORMAL','FAILED'))::int AS abnormal FROM payment_refunds WHERE created_at>NOW()-INTERVAL '24 hours'`),
     pool.query(`SELECT COUNT(*) FILTER (WHERE created_at>NOW()-INTERVAL '24 hours')::int AS created, COUNT(*) FILTER (WHERE status IN ('SUBMITTED','IN_PROGRESS','WAITING_USER'))::int AS open FROM complaints`),
     pool.query(`SELECT COUNT(DISTINCT u.id) FILTER (WHERE u.created_at>NOW()-INTERVAL '24 hours')::int AS registered, COUNT(DISTINCT t.user_id)::int AS active_task_users, COUNT(t.id)::int AS tasks, COUNT(t.id) FILTER (WHERE t.status='SUCCEEDED')::int AS succeeded_tasks, COALESCE(SUM(t.points) FILTER (WHERE t.status='SUCCEEDED'),0)::int AS consumed_points FROM users u LEFT JOIN generation_tasks t ON t.user_id=u.id AND t.created_at>NOW()-INTERVAL '24 hours' WHERE u.email IS DISTINCT FROM $1 AND u.email IS DISTINCT FROM $2`, [process.env.ACCEPTANCE_USER_EMAIL || "", process.env.ACCEPTANCE_ADMIN_EMAIL || ""]),
     pool.query(`SELECT MIN(created_at) AS started_at FROM operations_runs WHERE operation='REGISTRATION_ROLLOUT_STARTED'`),
+    pool.query(`SELECT DISTINCT ON (operation) operation,status,summary,created_at FROM operations_runs WHERE operation IN ('POSTGRES_BACKUP','POSTGRES_RESTORE_VERIFY') ORDER BY operation,created_at DESC`),
     generation.getWaitingCount(), generation.getActiveCount(), moderation.getWaitingCount(),
     lokiCount('sum(count_over_time({job="nginx"}[24h]))'), lokiCount('sum(count_over_time({job="nginx"} | json | status >= 500 [24h]))'),
   ]);
@@ -37,7 +38,8 @@ try {
   if (Number(reviews.overdue) > 0) blockers.push("REVIEW_SLA");
   if (Number(refunds.abnormal) > 0) blockers.push("ABNORMAL_REFUND");
   const decision = blockers.length ? "HOLD" : observationHours < 72 ? "OBSERVE" : "ELIGIBLE_FOR_25_PERCENT";
-  const report = { status: "PASSED", generatedAt: new Date().toISOString(), rollout: { percent: Number(process.env.PUBLIC_REGISTRATION_ROLLOUT_PERCENT || 10), startedAt, observationHours: Number(observationHours.toFixed(1)), decision, blockers }, metrics24h: { http: { total: httpTotal, serverErrors: http5xx, serverErrorRate: http5xxRate }, tasks: { ...tasks, successRate }, queues: { generationWaiting, generationActive, moderationWaiting }, reviews, refunds, complaints, realUsers: users } };
+  const infrastructure = { lokiRetentionDays: 30, operations: Object.fromEntries(operationChecks.rows.map((row) => [row.operation, { status: row.status, summary: row.summary, createdAt: row.created_at }])) };
+  const report = { status: "PASSED", generatedAt: new Date().toISOString(), rollout: { percent: Number(process.env.PUBLIC_REGISTRATION_ROLLOUT_PERCENT || 10), startedAt, observationHours: Number(observationHours.toFixed(1)), decision, blockers }, metrics24h: { http: { total: httpTotal, serverErrors: http5xx, serverErrorRate: http5xxRate }, tasks: { ...tasks, successRate }, queues: { generationWaiting, generationActive, moderationWaiting }, reviews, refunds, complaints, realUsers: users }, infrastructure };
   const directory = resolve(process.env.ROLLOUT_REPORT_DIR || "rollout-reports"); await mkdir(directory, { recursive: true });
   const dated = resolve(directory, `rollout-${new Date().toISOString().slice(0,10)}.json`); const latest = resolve(directory, "latest-rollout-report.json");
   await writeFile(dated, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 }); await writeFile(latest, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
