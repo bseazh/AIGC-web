@@ -18,12 +18,13 @@ export async function POST(request: NextRequest) {
       [digestRechargeCode(normalized)],
     );
     const code = codeResult.rows[0];
-    if (!code || code.status !== "ACTIVE" || code.redeemed_count >= code.max_redemptions || (code.expires_at && new Date(code.expires_at) <= new Date())) {
+    if (!code || code.status !== "ACTIVE" || (code.expires_at && new Date(code.expires_at) <= new Date())) {
       await client.query("ROLLBACK");
       return NextResponse.json({ message: "充值码无效、已过期或已用完" }, { status: 400 });
     }
     const prior = await client.query("SELECT 1 FROM recharge_code_redemptions WHERE code_id = $1 AND user_id = $2", [code.id, user.id]);
     if (prior.rowCount) { await client.query("ROLLBACK"); return NextResponse.json({ message: "当前账号已兑换过该充值码" }, { status: 409 }); }
+    if (code.redeemed_count >= code.max_redemptions) { await client.query("ROLLBACK"); return NextResponse.json({ message: "充值码已用完" }, { status: 400 }); }
     const walletResult = await client.query<{ available_points: number }>("SELECT available_points FROM wallets WHERE user_id = $1 FOR UPDATE", [user.id]);
     const wallet = walletResult.rows[0];
     if (!wallet) { await client.query("ROLLBACK"); return NextResponse.json({ message: "钱包不可用" }, { status: 404 }); }
