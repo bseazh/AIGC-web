@@ -56,15 +56,12 @@ else
   docker restart aigc-loki >/dev/null
 fi
 
-if ! docker container inspect aigc-promtail >/dev/null 2>&1; then
-  docker run -d --name aigc-promtail --restart unless-stopped --network aigc-network \
-    -v /home/ubuntu/project/AIGC_web/deploy/observability/promtail-config.yml:/etc/promtail/config.yml:ro \
-    -v /var/log/journal:/var/log/journal:ro -v /run/log/journal:/run/log/journal:ro \
-    -v /etc/machine-id:/etc/machine-id:ro -v /var/log/nginx:/var/log/nginx:ro \
-    grafana/promtail:3.5.7 -config.file=/etc/promtail/config.yml >/dev/null
-else
-  docker restart aigc-promtail >/dev/null
-fi
+if docker container inspect aigc-promtail >/dev/null 2>&1; then docker rm -f aigc-promtail >/dev/null; fi
+docker run -d --name aigc-promtail --restart unless-stopped --network aigc-network --user 0:0 \
+  -v /home/ubuntu/project/AIGC_web/deploy/observability/promtail-config.yml:/etc/promtail/config.yml:ro \
+  -v /var/log/journal:/var/log/journal:ro -v /run/log/journal:/run/log/journal:ro \
+  -v /etc/machine-id:/etc/machine-id:ro -v /var/log/nginx:/var/log/nginx:ro \
+  grafana/promtail:3.5.7 -config.file=/etc/promtail/config.yml >/dev/null
 
 if ! docker container inspect aigc-grafana >/dev/null 2>&1; then
   : "${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}"
