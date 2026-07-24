@@ -12,7 +12,8 @@
     "verify:production": "node scripts/production-preflight.mjs",
     "verify:ark-video": "node scripts/ark-video-acceptance.mjs",
     "verify:wechat-pay": "node scripts/wechat-pay-acceptance.mjs",
-    "reconcile:wechat": "node scripts/wechat-reconcile.mjs"
+    "reconcile:wechat": "node scripts/wechat-reconcile.mjs",
+    "report:rollout": "node scripts/gray-rollout-report.mjs"
   },
   "dependencies": {
     "bullmq": "^5.34.10",

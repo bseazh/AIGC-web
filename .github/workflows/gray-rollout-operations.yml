@@ -1,0 +1,54 @@
+name: Gray rollout operations drill
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: gray-rollout-operations
+  cancel-in-progress: false
+
+jobs:
+  drill:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Configure SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+      - name: Run controlled production drill
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          set -a; source .env.production; set +a
+          [[ "${PUBLIC_REGISTRATION_ROLLOUT_PERCENT:-}" == "10" ]]
+          node scripts/send-alert-email.mjs "[AIGC] Controlled alert drill" "This is a controlled production alert delivery test at $(date -Is). No customer traffic was interrupted."
+          sudo systemd-run --unit=aigc-controlled-failure --property=Type=oneshot --property=OnFailure=aigc-alert@%n.service /bin/false
+          sleep 8
+          sudo systemctl is-failed --quiet aigc-controlled-failure.service
+          sudo systemctl reset-failed aigc-controlled-failure.service
+          sudo systemctl start aigc-postgres-backup.service
+          sudo systemctl start aigc-postgres-restore-verify.service
+          node scripts/verify-observability.mjs
+          node scripts/gray-rollout-report.mjs
+          cp rollout-reports/latest-rollout-report.json /tmp/gray-rollout-report.json
+          REMOTE
+      - name: Download gray rollout report
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: scp -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST:/tmp/gray-rollout-report.json" gray-rollout-report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gray-rollout-report-${{ github.run_id }}
+          path: gray-rollout-report.json

@@ -83,7 +83,7 @@ node scripts/record-operation.mjs REGISTRATION_ROLLOUT_STARTED SUCCEEDED "Public
 npm run test:db
 npm run verify:production
 
-chmod 700 scripts/backup-postgres.sh scripts/verify-postgres-backup.sh scripts/send-alert-email.sh scripts/check-health-alert.sh
+chmod 700 scripts/backup-postgres.sh scripts/verify-postgres-backup.sh scripts/send-alert-email.sh scripts/check-health-alert.sh scripts/run-gray-rollout-report.sh
 sudo install -D -m 644 deploy/aigc-storage-cleanup.service /etc/systemd/system/aigc-storage-cleanup.service
 sudo install -D -m 644 deploy/aigc-storage-cleanup.timer /etc/systemd/system/aigc-storage-cleanup.timer
 sudo install -D -m 644 deploy/aigc-lifecycle-maintenance.service /etc/systemd/system/aigc-lifecycle-maintenance.service
@@ -94,6 +94,8 @@ sudo install -D -m 644 deploy/aigc-postgres-restore-verify.service /etc/systemd/
 sudo install -D -m 644 deploy/aigc-postgres-restore-verify.timer /etc/systemd/system/aigc-postgres-restore-verify.timer
 sudo install -D -m 644 deploy/aigc-health-alert.service /etc/systemd/system/aigc-health-alert.service
 sudo install -D -m 644 deploy/aigc-health-alert.timer /etc/systemd/system/aigc-health-alert.timer
+sudo install -D -m 644 deploy/aigc-gray-rollout-report.service /etc/systemd/system/aigc-gray-rollout-report.service
+sudo install -D -m 644 deploy/aigc-gray-rollout-report.timer /etc/systemd/system/aigc-gray-rollout-report.timer
 sudo install -D -m 644 deploy/aigc-moderation-worker.service /etc/systemd/system/aigc-moderation-worker.service
 sudo install -D -m 644 deploy/aigc-wechat-reconcile.service /etc/systemd/system/aigc-wechat-reconcile.service
 sudo install -D -m 644 deploy/aigc-wechat-reconcile.timer /etc/systemd/system/aigc-wechat-reconcile.timer
@@ -103,7 +105,7 @@ sudo install -D -m 644 deploy/sshd-aigc-hardening.conf /etc/ssh/sshd_config.d/01
 sudo rm -f /etc/ssh/sshd_config.d/99-aigc-hardening.conf
 sudo sshd -t
 sudo systemctl daemon-reload
-sudo systemctl enable --now aigc-storage-cleanup.timer aigc-lifecycle-maintenance.timer aigc-postgres-backup.timer aigc-postgres-restore-verify.timer aigc-health-alert.timer
+sudo systemctl enable --now aigc-storage-cleanup.timer aigc-lifecycle-maintenance.timer aigc-postgres-backup.timer aigc-postgres-restore-verify.timer aigc-health-alert.timer aigc-gray-rollout-report.timer
 if [[ "${WECHAT_PAY_ENABLED:-false}" == "true" ]]; then
   sudo systemctl enable --now aigc-wechat-reconcile.timer
 else

@@ -44,3 +44,7 @@ Thresholds are configurable through the `ALERT_*` production variables. Alerts u
 ## Registration rollout
 
 `PUBLIC_REGISTRATION_ROLLOUT_PERCENT=10` deterministically opens registration to 10% of email cohorts. Existing accounts remain unaffected. Keep the rollout at 10% for 3–7 days, then review HTTP 5xx, task failure rate, queue age, moderation SLA, refunds and support volume before increasing to 25%, 50%, and 100%.
+
+`aigc-gray-rollout-report.timer` runs daily at 09:00 with up to ten minutes of randomized delay. It writes `rollout-reports/latest-rollout-report.json`, archives dated reports for 90 days, records the decision in `operations_runs`, and emails the summary. Before 72 hours the decision remains `OBSERVE`; breached thresholds produce `HOLD`; only healthy metrics after 72 hours produce `ELIGIBLE_FOR_25_PERCENT`. The report never changes the rollout percentage itself.
+
+Run the GitHub Actions workflow `Gray rollout operations drill` for a controlled test. It sends a test alert, creates an isolated failed transient systemd unit to exercise `OnFailure`, performs a PostgreSQL backup and temporary-database restore, verifies Loki ingestion, and archives a fresh rollout report. It does not stop any application service.

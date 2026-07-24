@@ -1,0 +1,12 @@
+[Unit]
+Description=Bala AIGC daily gray rollout report
+After=network.target docker.service aigc-web.service
+Requires=docker.service
+OnFailure=aigc-alert@%n.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/project/AIGC_web
+EnvironmentFile=-/home/ubuntu/project/AIGC_web/.env.production
+ExecStart=/bin/bash /home/ubuntu/project/AIGC_web/scripts/run-gray-rollout-report.sh

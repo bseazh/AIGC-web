@@ -24,6 +24,8 @@ const checks = [
   ["registration rollout", "app/api/auth/register/route.ts", "PUBLIC_REGISTRATION_ROLLOUT_PERCENT"],
   ["runtime Loki verification", "scripts/verify-observability.mjs", "Nginx request log was not found in Loki"],
   ["SMTP alert fallback", "scripts/send-alert-email.mjs", "ALERT_EMAIL_TO || user"],
+  ["daily rollout report guard", "scripts/gray-rollout-report.mjs", "ELIGIBLE_FOR_25_PERCENT"],
+  ["rollout report reads configured traffic", "scripts/gray-rollout-report.mjs", "PUBLIC_REGISTRATION_ROLLOUT_PERCENT || 10"],
 ];
 
 let failed = false;

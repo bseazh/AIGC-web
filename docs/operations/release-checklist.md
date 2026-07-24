@@ -28,6 +28,8 @@
 - [ ] Nginx responses contain `X-Request-ID` and its JSON access log appears in Loki.
 - [ ] The administrator unified log page can correlate a task with request, provider, wallet, and audit records.
 - [ ] Registration rollout remains at 10% for 3–7 days before an evidence-based increase.
+- [ ] The daily rollout report timer is active and the latest report decision is reviewed.
+- [ ] The controlled operations drill has verified alert delivery, backup restore, and Loki ingestion without stopping customer services.
 
 ## Rollback triggers
 
