@@ -4,6 +4,7 @@ import { audit } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { clearIdentifierFailures, loginRateLimit, recordLoginFailure } from "@/lib/login-security";
 import { createStoredSession, requestIp } from "@/lib/session";
+import { isAdministrator } from "@/lib/admin";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -21,11 +22,13 @@ export async function POST(request: Request) {
   const field = identifier.type === "email" ? "LOWER(email)" : "phone";
   const result = await db.query<{
     id: string;
+    email: string | null;
+    phone: string | null;
     password_hash: string;
     token_version: number;
     status: string;
   }>(
-    `SELECT id, password_hash, token_version, status FROM users WHERE ${field} = $1 LIMIT 1`,
+    `SELECT id, email, phone, password_hash, token_version, status FROM users WHERE ${field} = $1 LIMIT 1`,
     [identifier.value],
   );
   const user = result.rows[0];
@@ -45,7 +48,8 @@ export async function POST(request: Request) {
   } catch (error) { await client.query("ROLLBACK"); throw error; }
   finally { client.release(); }
   await audit(user.id, "LOGIN_SUCCEEDED", request, { type: "user", id: user.id });
-  const response = NextResponse.json({ userId: user.id });
+  const administrator = isAdministrator(user.email || user.phone);
+  const response = NextResponse.json({ userId: user.id, isAdministrator: administrator, redirectTo: administrator ? "/admin" : "/workspace" });
   response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
   return response;
 }

@@ -26,7 +26,7 @@ if (process.env.WECHAT_PAY_ENABLED === "true") {
 const database = new pg.Client({ connectionString: process.env.DATABASE_URL });
 await database.connect();
 try {
-  const tables = ["users", "login_sessions", "generation_tasks", "assets", "content_review_records", "content_violations", "complaints", "audit_events", "notification_outbox", "payment_refunds", "payment_reconciliation_runs", "payment_reconciliation_items"];
+  const tables = ["users", "login_sessions", "generation_tasks", "assets", "content_review_records", "content_violations", "complaints", "audit_events", "notification_outbox", "payment_refunds", "payment_reconciliation_runs", "payment_reconciliation_items", "recharge_codes", "recharge_code_redemptions"];
   const result = await database.query("SELECT name, to_regclass(name) IS NOT NULL AS present FROM unnest($1::text[]) AS requested(name)", [tables]);
   const absent = result.rows.filter((row) => !row.present).map((row) => row.name);
   if (absent.length) throw new Error(`Database schema is incomplete: ${absent.join(", ")}`);

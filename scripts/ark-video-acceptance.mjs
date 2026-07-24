@@ -104,8 +104,31 @@ try {
   const userCookie = await login(process.env.ACCEPTANCE_USER_EMAIL, process.env.ACCEPTANCE_USER_PASSWORD);
   const adminCookie = await login(process.env.ACCEPTANCE_ADMIN_EMAIL, process.env.ACCEPTANCE_ADMIN_PASSWORD);
   const session = (await api("/api/auth/session/", { cookie: userCookie })).body;
+  const adminSession = (await api("/api/auth/session/", { cookie: adminCookie })).body;
   if (!session.user?.id) throw new Error("Authenticated session did not return user id");
+  if (!adminSession.user?.isAdministrator) throw new Error("Acceptance administrator does not have administrator access");
   record("user and administrator login", "PASS");
+
+  const initialWallet = await wallet(userCookie);
+  const minimumAcceptancePoints = 10_000;
+  const grant = Math.max(100, minimumAcceptancePoints - initialWallet.wallet.availablePoints);
+  await api("/api/admin/wallets/adjust/", { cookie: adminCookie, method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: session.user.id, kind: "TEST_CREDIT", testPoints: grant, note: "Automated production full-chain acceptance" }) });
+  const fundedWallet = await wallet(userCookie);
+  if (fundedWallet.wallet.availablePoints < minimumAcceptancePoints || !fundedWallet.ledger.some((entry) => entry.business_type === "TEST_CREDIT")) throw new Error("Administrator test credit grant is missing");
+  record("administrator grants isolated acceptance test points", "PASS", { grantedPoints: grant, availablePoints: fundedWallet.wallet.availablePoints });
+
+  const codeCreation = (await api("/api/admin/recharge-codes/", { cookie: adminCookie, expected: [201], method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ points: 37, maxRedemptions: 1, note: "Automated production acceptance redemption" }) })).body;
+  const walletBeforeCode = await wallet(userCookie);
+  const redemption = (await api("/api/recharge-codes/redeem/", { cookie: userCookie, method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: codeCreation.code }) })).body;
+  if (redemption.balanceAfter !== walletBeforeCode.wallet.availablePoints + 37) throw new Error("Recharge code did not credit the expected points");
+  await api("/api/recharge-codes/redeem/", { cookie: userCookie, expected: [409], method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: codeCreation.code }) });
+  await api("/api/admin/recharge-codes/", { cookie: adminCookie, method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: codeCreation.id, status: "DISABLED" }) });
+  const disabledCode = (await api("/api/admin/recharge-codes/", { cookie: adminCookie, expected: [201], method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ points: 13, maxRedemptions: 1, note: "Automated production acceptance disabled code" }) })).body;
+  await api("/api/admin/recharge-codes/", { cookie: adminCookie, method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: disabledCode.id, status: "DISABLED" }) });
+  await api("/api/recharge-codes/redeem/", { cookie: userCookie, expected: [400], method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: disabledCode.code }) });
+  const walletAfterCode = await wallet(userCookie);
+  if (!walletAfterCode.ledger.some((entry) => entry.business_id === codeCreation.id && entry.business_type === "RECHARGE_CODE")) throw new Error("Recharge code ledger entry is missing");
+  record("recharge code redemption, duplicate denial and disable", "PASS", { codeId: codeCreation.id, points: 37 });
 
   const walletBefore = await wallet(userCookie);
   const presign = (await api("/api/uploads/presign/", { cookie: userCookie, method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: basename(inputPath), mimeType, byteSize: inputBuffer.length }) })).body;

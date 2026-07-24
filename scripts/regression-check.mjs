@@ -12,6 +12,11 @@ const checks = [
   ["lifecycle review timeout", "scripts/lifecycle-maintenance.mjs", "OUTPUT_REVIEW_TIMEOUT"],
   ["account deletion finalization", "scripts/lifecycle-maintenance.mjs", "ACCOUNT_DELETION_FINALIZED"],
   ["WeChat Native accepts code_url without prepay_id", "lib/wechat-pay.ts", "if (!response.ok || !payload?.code_url)"],
+  ["administrator login redirect", "app/api/auth/login/route.ts", "administrator ? \"/admin\" : \"/workspace\""],
+  ["recharge code transaction lock", "app/api/recharge-codes/redeem/route.ts", "FOR UPDATE"],
+  ["recharge code idempotent ledger", "app/api/recharge-codes/redeem/route.ts", "recharge-code:${code.id}:${user.id}"],
+  ["production acceptance account bootstrap", "scripts/deploy.sh", "configure-production-acceptance.mjs"],
+  ["production recharge code acceptance", "scripts/ark-video-acceptance.mjs", "duplicate denial and disable"],
 ];
 
 let failed = false;

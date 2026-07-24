@@ -20,6 +20,41 @@ if [[ -f .env.production && -z "${PUBLIC_APP_URL:-}" ]]; then
   printf '%s\n' 'PUBLIC_APP_URL=https://aigc.bigapple.store' >> .env.production
   export PUBLIC_APP_URL=https://aigc.bigapple.store
 fi
+
+# Keep production acceptance isolated and reproducible. Generated passwords stay
+# on the production host and are never written to source control or CI logs.
+if [[ -f .env.production && -z "${ACCEPTANCE_BASE_URL:-}" ]]; then
+  printf '%s\n' 'ACCEPTANCE_BASE_URL=https://aigc.bigapple.store' >> .env.production
+  export ACCEPTANCE_BASE_URL=https://aigc.bigapple.store
+fi
+if [[ -f .env.production && -z "${ACCEPTANCE_ADMIN_EMAIL:-}" ]]; then
+  printf '%s\n' 'ACCEPTANCE_ADMIN_EMAIL=production-acceptance-admin@bigapple.store' >> .env.production
+  export ACCEPTANCE_ADMIN_EMAIL=production-acceptance-admin@bigapple.store
+fi
+if [[ -f .env.production && -z "${ACCEPTANCE_USER_EMAIL:-}" ]]; then
+  printf '%s\n' 'ACCEPTANCE_USER_EMAIL=production-acceptance-user@bigapple.store' >> .env.production
+  export ACCEPTANCE_USER_EMAIL=production-acceptance-user@bigapple.store
+fi
+if [[ -f .env.production && -z "${ACCEPTANCE_ADMIN_PASSWORD:-}" ]]; then
+  ACCEPTANCE_ADMIN_PASSWORD="$(openssl rand -hex 24)"
+  printf 'ACCEPTANCE_ADMIN_PASSWORD=%s\n' "$ACCEPTANCE_ADMIN_PASSWORD" >> .env.production
+  export ACCEPTANCE_ADMIN_PASSWORD
+fi
+if [[ -f .env.production && -z "${ACCEPTANCE_USER_PASSWORD:-}" ]]; then
+  ACCEPTANCE_USER_PASSWORD="$(openssl rand -hex 24)"
+  printf 'ACCEPTANCE_USER_PASSWORD=%s\n' "$ACCEPTANCE_USER_PASSWORD" >> .env.production
+  export ACCEPTANCE_USER_PASSWORD
+fi
+if [[ -f .env.production && -z "${ACCEPTANCE_INPUT_FILE:-}" ]]; then
+  printf '%s\n' 'ACCEPTANCE_INPUT_FILE=public/brand/bala-aigc-logo.png' >> .env.production
+  export ACCEPTANCE_INPUT_FILE=public/brand/bala-aigc-logo.png
+fi
+if [[ -f .env.production && ",${ADMIN_IDENTIFIERS:-}," != *",${ACCEPTANCE_ADMIN_EMAIL},"* ]]; then
+  ADMIN_IDENTIFIERS="${ADMIN_IDENTIFIERS:+${ADMIN_IDENTIFIERS},}${ACCEPTANCE_ADMIN_EMAIL}"
+  printf 'ADMIN_IDENTIFIERS=%s\n' "$ADMIN_IDENTIFIERS" >> .env.production
+  export ADMIN_IDENTIFIERS
+fi
+chmod 600 .env.production
 if [[ -f .env.production && "${CONTENT_REVIEW_PROVIDER:-}" == "tencent-ci" && -z "${CONTENT_REVIEW_INTERNAL_SECRET:-}" ]]; then
   CONTENT_REVIEW_INTERNAL_SECRET="$(openssl rand -hex 32)"
   printf 'CONTENT_REVIEW_INTERNAL_SECRET=%s\n' "$CONTENT_REVIEW_INTERNAL_SECRET" >> .env.production
@@ -34,6 +69,7 @@ npm run test:regression
 npm run typecheck
 env -u TURBOPACK -u __NEXT_PRIVATE_STANDALONE_CONFIG -u __NEXT_PRIVATE_ORIGIN npm run build
 node scripts/migrate.mjs
+node scripts/configure-production-acceptance.mjs
 npm run test:db
 npm run verify:production
 

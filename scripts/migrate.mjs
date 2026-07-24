@@ -363,6 +363,33 @@ try {
     );
     CREATE INDEX IF NOT EXISTS operations_runs_created_idx ON operations_runs (created_at DESC);
 
+    CREATE TABLE IF NOT EXISTS recharge_codes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code_digest TEXT NOT NULL UNIQUE,
+      code_hint TEXT NOT NULL,
+      points INTEGER NOT NULL CHECK (points > 0),
+      max_redemptions INTEGER NOT NULL DEFAULT 1 CHECK (max_redemptions > 0),
+      redeemed_count INTEGER NOT NULL DEFAULT 0 CHECK (redeemed_count >= 0 AND redeemed_count <= max_redemptions),
+      status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'DISABLED')),
+      note TEXT,
+      expires_at TIMESTAMPTZ,
+      created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS recharge_codes_status_created_idx ON recharge_codes (status, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS recharge_code_redemptions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code_id UUID NOT NULL REFERENCES recharge_codes(id),
+      user_id UUID NOT NULL REFERENCES users(id),
+      points INTEGER NOT NULL CHECK (points > 0),
+      balance_after INTEGER NOT NULL CHECK (balance_after >= 0),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (code_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS recharge_code_redemptions_user_created_idx ON recharge_code_redemptions (user_id, created_at DESC);
+
     INSERT INTO prompt_config_versions (workflow_key, version, variant_key, rollout_percent, config_json)
     VALUES
       ('product-ad-video', 1, 'control', 100, '{"template":"将输入的产品图片制作成高品质商品广告大片。综合识别全部图片中的材质、颜色、细节与卖点，围绕商品设计开场、细节、使用或氛围镜头和收束镜头。","watermark":false}'),

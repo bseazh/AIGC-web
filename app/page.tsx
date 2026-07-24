@@ -131,7 +131,7 @@ export default function Home() {
     return () => window.clearInterval(timer);
   }, [codeCooldown]);
 
-  const enterWorkspace = () => router.push(targetHref);
+  const enterWorkspace = (redirectTo?: string) => router.push(redirectTo || targetHref);
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
   const openDestination = (href = "/workspace") => {
@@ -185,7 +185,7 @@ export default function Home() {
         setAuthError(result.message || "登录失败，请稍后再试");
         return;
       }
-      enterWorkspace();
+      enterWorkspace(mode === "login" ? result.redirectTo : undefined);
     } catch {
       setAuthError("网络连接失败，请稍后再试");
     } finally {

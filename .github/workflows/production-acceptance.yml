@@ -71,7 +71,9 @@ jobs:
         run: scp -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/acceptance-reports/latest-production-acceptance.json" production-acceptance.json
       - name: Show acceptance summary
         if: always()
-        run: cat production-acceptance.json
+        run: |
+          cat production-acceptance.json
+          node -e "const report=require('./production-acceptance.json'); if(report.status!=='PASSED') throw new Error('Production acceptance status is '+report.status)"
       - name: Upload acceptance report
         if: always()
         uses: actions/upload-artifact@v4

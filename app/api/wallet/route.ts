@@ -6,6 +6,7 @@ const labels: Record<string, string> = {
   MANUAL_RECHARGE: "人工充值",
   TEST_CREDIT: "测试积分",
   WECHAT_RECHARGE: "微信支付充值",
+  RECHARGE_CODE: "充值码兑换",
   GENERATION_TASK: "创作任务",
 };
 
