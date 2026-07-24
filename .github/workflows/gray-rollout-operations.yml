@@ -33,7 +33,7 @@ jobs:
           set -a; source .env.production; set +a
           [[ "${PUBLIC_REGISTRATION_ROLLOUT_PERCENT:-}" == "10" ]]
           node scripts/send-alert-email.mjs "[AIGC] Controlled alert drill" "This is a controlled production alert delivery test at $(date -Is). No customer traffic was interrupted."
-          sudo systemd-run --unit=aigc-controlled-failure --property=Type=oneshot --property=OnFailure=aigc-alert@%n.service /bin/false
+          sudo systemd-run --unit=aigc-controlled-failure --property=Type=oneshot --property=OnFailure=aigc-alert@aigc-controlled-failure.service /bin/false
           sleep 8
           sudo systemctl is-failed --quiet aigc-controlled-failure.service
           sudo systemctl reset-failed aigc-controlled-failure.service
