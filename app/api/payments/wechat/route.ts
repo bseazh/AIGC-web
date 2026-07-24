@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
   );
   try {
     const native = await createWechatNativeOrder({ orderNo, description, amountFen: selected.amountFen });
-    await db.query("UPDATE payment_orders SET status = 'PENDING', provider_prepay_id = $2, updated_at = NOW() WHERE id = $1", [created.rows[0].id, native.prepayId]);
+    await db.query("UPDATE payment_orders SET status = 'PENDING', updated_at = NOW() WHERE id = $1", [created.rows[0].id]);
     return NextResponse.json({ orderId: created.rows[0].id, orderNo, expiresIn: 1800, codeUrl: native.codeUrl });
   } catch (error) {
     await db.query("UPDATE payment_orders SET status = 'FAILED', updated_at = NOW() WHERE id = $1", [created.rows[0].id]);

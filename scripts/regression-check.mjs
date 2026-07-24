@@ -11,6 +11,7 @@ const checks = [
   ["task cancellation refund", "app/api/tasks/[id]/cancel/route.ts", "USER_CANCELED"],
   ["lifecycle review timeout", "scripts/lifecycle-maintenance.mjs", "OUTPUT_REVIEW_TIMEOUT"],
   ["account deletion finalization", "scripts/lifecycle-maintenance.mjs", "ACCOUNT_DELETION_FINALIZED"],
+  ["WeChat Native accepts code_url without prepay_id", "lib/wechat-pay.ts", "if (!response.ok || !payload?.code_url)"],
 ];
 
 let failed = false;

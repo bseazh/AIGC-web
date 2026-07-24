@@ -64,9 +64,12 @@ export async function createWechatNativeOrder(order: { orderNo: string; descript
   const body = JSON.stringify({ mchid: settings.mchId, appid: settings.appId, description: order.description, out_trade_no: order.orderNo, notify_url: settings.notifyUrl, amount: { total: order.amountFen, currency: "CNY" } });
   const url = `${baseUrl}/v3/pay/transactions/native`;
   const response = await fetch(url, { method: "POST", headers: { Authorization: authorization("POST", url, body, settings), "Content-Type": "application/json", Accept: "application/json", "Accept-Language": "zh-CN" }, body });
-  const payload = await response.json().catch(() => null) as { prepay_id?: string; code_url?: string; message?: string } | null;
-  if (!response.ok || !payload?.prepay_id || !payload.code_url) throw new Error(`WeChat Pay create order failed: ${payload?.message || response.status}`);
-  return { prepayId: payload.prepay_id, codeUrl: payload.code_url };
+  // Native v3 returns code_url. prepay_id belongs to other payment modes such
+  // as JSAPI and must not be required here, otherwise valid Native responses
+  // are incorrectly discarded before the QR code reaches the browser.
+  const payload = await response.json().catch(() => null) as { code_url?: string; message?: string; code?: string } | null;
+  if (!response.ok || !payload?.code_url) throw new Error(`WeChat Pay create Native order failed: ${payload?.code || response.status} ${payload?.message || ""}`.trim());
+  return { codeUrl: payload.code_url };
 }
 
 export async function createWechatRefund(refund: { refundNo: string; orderNo: string; amountFen: number; reason: string }) {
