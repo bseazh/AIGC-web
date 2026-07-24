@@ -238,7 +238,7 @@ export default function Home() {
 
       <footer className="public-footer">
         <span>© 2026 芭乐AIGC</span>
-        <nav><a href="mailto:bseazh@163.com">联系我们</a><a href="#">服务协议</a><a href="#">隐私政策</a></nav>
+        <nav><a href="mailto:ba_aigc@163.com">联系我们</a><a href="/terms">服务协议</a><a href="/privacy">隐私政策</a><a href="/complaints">投诉处理</a></nav>
       </footer>
 
       <button className="support-button" aria-label="联系客服"><MessageCircle size={23} /></button>
