@@ -1,0 +1,78 @@
+name: Production application acceptance
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: production-acceptance
+  cancel-in-progress: false
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Configure SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+      - name: Run acceptance on production host
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          set -a
+          source .env.production
+          set +a
+          mkdir -p acceptance-reports
+          required=(ACCEPTANCE_BASE_URL ACCEPTANCE_USER_EMAIL ACCEPTANCE_USER_PASSWORD ACCEPTANCE_ADMIN_EMAIL ACCEPTANCE_ADMIN_PASSWORD ACCEPTANCE_INPUT_FILE COS_BUCKET COS_REGION COS_SECRET_ID COS_SECRET_KEY)
+          missing=()
+          for name in "${required[@]}"; do
+            [[ -n "${!name:-}" ]] || missing+=("$name")
+          done
+          if (( ${#missing[@]} )); then
+            joined="$(IFS=,; echo "${missing[*]}")"
+            REPORT_STATUS=BLOCKED REPORT_MISSING="$joined" node - <<'NODE'
+          const { writeFileSync } = require('node:fs');
+          const report = {
+            status: process.env.REPORT_STATUS,
+            generatedAt: new Date().toISOString(),
+            environment: 'production',
+            reason: 'Full-chain acceptance prerequisites are not configured on the production host.',
+            missing: process.env.REPORT_MISSING.split(',').filter(Boolean),
+          };
+          writeFileSync('acceptance-reports/latest-production-acceptance.json', JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });
+          NODE
+          else
+            set +e
+            npm run verify:ark-video
+            result=$?
+            set -e
+            latest="$(ls -1t acceptance-reports/application-chain-*.json | head -1)"
+            cp "$latest" acceptance-reports/latest-production-acceptance.json
+            exit "$result"
+          fi
+          REMOTE
+      - name: Download acceptance report
+        if: always()
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: scp -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/acceptance-reports/latest-production-acceptance.json" production-acceptance.json
+      - name: Upload acceptance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-acceptance-${{ github.run_id }}
+          path: production-acceptance.json
+          if-no-files-found: error
