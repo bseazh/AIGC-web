@@ -23,6 +23,7 @@ const checks = [
   ["central log retention", "deploy/observability/loki-config.yml", "retention_period: 720h"],
   ["registration rollout", "app/api/auth/register/route.ts", "PUBLIC_REGISTRATION_ROLLOUT_PERCENT"],
   ["runtime Loki verification", "scripts/verify-observability.mjs", "Nginx request log was not found in Loki"],
+  ["SMTP alert fallback", "scripts/send-alert-email.mjs", "ALERT_EMAIL_TO || user"],
 ];
 
 let failed = false;
