@@ -7,9 +7,9 @@ export function normalizeRechargeCode(value: unknown) {
 }
 
 export function digestRechargeCode(value: string) {
-  const secret = process.env.RECHARGE_CODE_SECRET || process.env.SESSION_SECRET;
-  if (!secret || secret.length < 32) throw new Error("RECHARGE_CODE_SECRET or SESSION_SECRET must contain at least 32 characters");
-  return createHash("sha256").update(`${secret}:${value}`).digest("hex");
+  // Codes contain 96 bits of cryptographic entropy, so a stable one-way digest
+  // is sufficient and remains valid across independently configured app nodes.
+  return createHash("sha256").update(value).digest("hex");
 }
 
 export function createRechargeCode() {
