@@ -25,4 +25,4 @@ scrape_configs:
         labels:
           job: nginx
           service: nginx
-          __path__: /var/log/nginx/aigc-*.log
+          __path__: /var/log/nginx/aigc-*
