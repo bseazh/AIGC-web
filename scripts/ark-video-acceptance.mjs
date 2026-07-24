@@ -186,6 +186,13 @@ try {
   if (!objects.length || objects.some((object) => Number(object.Size || 0) <= 0)) throw new Error("Expected output object is missing or empty in COS");
   record("COS output object", "PASS", { objectCount: objects.length, totalBytes: objects.reduce((sum, object) => sum + Number(object.Size || 0), 0) });
 
+  const correlatedLogs = (await api(`/api/admin/logs/?query=${successCreation.taskId}`, { cookie: adminCookie })).body.logs || [];
+  const logCategories = [...new Set(correlatedLogs.map((entry) => entry.category))];
+  if (!["task", "provider", "wallet"].every((category) => logCategories.includes(category))) throw new Error(`Unified admin logs are missing categories: ${logCategories.join(",")}`);
+  const taskLog = correlatedLogs.find((entry) => entry.category === "task");
+  if (!taskLog?.details?.requestId) throw new Error("Task log is missing requestId correlation");
+  record("administrator unified correlated logs", "PASS", { taskId: successCreation.taskId, requestId: taskLog.details.requestId, categories: logCategories });
+
   if (process.env.ACCEPTANCE_VERIFY_REFUND !== "false") {
     const rejectionCreation = await createTask(userCookie, presign.assetId);
     const generatedForRejection = await waitTask(userCookie, rejectionCreation.taskId, ["PENDING_REVIEW", "SUCCEEDED", "REJECTED"]);

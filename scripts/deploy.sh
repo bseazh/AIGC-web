@@ -143,6 +143,13 @@ fi
 
 for attempt in {1..20}; do
   if curl --fail --silent http://127.0.0.1:3010/api/health/ >/dev/null; then
+    sudo systemctl is-active --quiet aigc-web aigc-worker aigc-moderation-worker
+    node scripts/verify-observability.mjs
+    set +e
+    node scripts/observability-alerts.mjs
+    alert_status=$?
+    set -e
+    [[ "$alert_status" -le 2 ]]
     echo "AIGC Web deployment is healthy"
     exit 0
   fi

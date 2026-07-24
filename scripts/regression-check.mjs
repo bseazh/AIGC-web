@@ -22,6 +22,7 @@ const checks = [
   ["systemd web failure alert", "deploy/aigc-web.service", "OnFailure=aigc-alert@%n.service"],
   ["central log retention", "deploy/observability/loki-config.yml", "retention_period: 720h"],
   ["registration rollout", "app/api/auth/register/route.ts", "PUBLIC_REGISTRATION_ROLLOUT_PERCENT"],
+  ["runtime Loki verification", "scripts/verify-observability.mjs", "Nginx request log was not found in Loki"],
 ];
 
 let failed = false;
