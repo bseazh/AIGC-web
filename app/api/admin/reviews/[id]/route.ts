@@ -40,7 +40,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const client = await db.connect();
   let responseStatus = "";
   let taskId: string | null = null;
-  let queuedTaskIds: string[] = [];
+  let queuedTasks: Array<{ id: string; simulateQueueFailure: boolean }> = [];
   try {
     await client.query("BEGIN");
     const found = await client.query<ReviewRow>(
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       );
       responseStatus = "APPROVED";
       if (!review.task_id) {
-        const activated = await client.query<{ id: string }>(
+        const activated = await client.query<{ id: string; input_json: Record<string, unknown> }>(
           `UPDATE generation_tasks t SET status = 'QUEUED', updated_at = NOW()
            WHERE t.status = 'PENDING_INPUT_REVIEW'
              AND (t.input_json->'assetIds') @> to_jsonb(ARRAY[$1]::text[])
@@ -85,10 +85,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
                JOIN assets input_asset ON input_asset.id = input_id::uuid
                WHERE input_asset.audit_status <> 'READY'
              )
-           RETURNING t.id`,
+           RETURNING t.id, t.input_json`,
           [review.asset_id],
         );
-        queuedTaskIds = activated.rows.map((task) => task.id);
+        queuedTasks = activated.rows.map((task) => ({
+          id: task.id,
+          simulateQueueFailure: review.email?.toLowerCase() === process.env.ACCEPTANCE_USER_EMAIL?.toLowerCase() && task.input_json?.acceptanceFault === "QUEUE_UNAVAILABLE",
+        }));
       }
       if (review.task_id && review.task_status === "PENDING_REVIEW") {
         const remaining = await client.query<{ count: string }>(
@@ -180,16 +183,17 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     console.error("content review decision failed", error);
     return NextResponse.json({ code: "REVIEW_FAILED", message: "审核决定保存失败" }, { status: 500 });
   } finally { client.release(); }
-  for (const queuedTaskId of queuedTaskIds) {
+  for (const queuedTask of queuedTasks) {
     try {
-      await getGenerationQueue().add("generation-after-input-review", { taskId: queuedTaskId }, { jobId: queuedTaskId, attempts: 1, removeOnComplete: 100, removeOnFail: 100 });
+      if (queuedTask.simulateQueueFailure) throw new Error("CONTROLLED_ACCEPTANCE_QUEUE_FAILURE");
+      await getGenerationQueue().add("generation-after-input-review", { taskId: queuedTask.id }, { jobId: queuedTask.id, attempts: 1, removeOnComplete: 100, removeOnFail: 100 });
     } catch (error) {
-      console.error(`could not queue reviewed task ${queuedTaskId}`, error);
-      await refundQueueFailure(queuedTaskId);
+      console.error(`could not queue reviewed task ${queuedTask.id}`, error);
+      await refundQueueFailure(queuedTask.id);
     }
   }
   await audit(actorId, systemDecision ? `AUTOMATED_CONTENT_REVIEW_${action}` : `ADMIN_CONTENT_REVIEW_${action}`, request, { type: "content_review", id }, { taskId, reasonCode: reasonCode || null, note });
-  return NextResponse.json({ reviewId: id, status: responseStatus, taskId, activatedTasks: queuedTaskIds.length });
+  return NextResponse.json({ reviewId: id, status: responseStatus, taskId, activatedTasks: queuedTasks.length });
 }
 
 async function refundQueueFailure(taskId: string) {

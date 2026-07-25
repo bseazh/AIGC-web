@@ -2,7 +2,7 @@ import COS from "cos-nodejs-sdk-v5";
 import Redis from "ioredis";
 import pg from "pg";
 
-const required = ["DATABASE_URL", "REDIS_URL", "SESSION_SECRET", "EMAIL_CODE_SECRET", "PUBLIC_APP_URL", "ADMIN_IDENTIFIERS", "SMTP_HOST", "SMTP_USER", "SMTP_PASS", "ARK_API_KEY", "COS_BUCKET", "COS_REGION", "COS_SECRET_ID", "COS_SECRET_KEY"];
+const required = ["DATABASE_URL", "REDIS_URL", "SESSION_SECRET", "EMAIL_CODE_SECRET", "PUBLIC_APP_URL", "ADMIN_IDENTIFIERS", "SMTP_HOST", "SMTP_USER", "SMTP_PASS", "AI_API_KEY", "AI_BASE_URL", "AI_MODEL", "ARK_API_KEY", "COS_BUCKET", "COS_REGION", "COS_SECRET_ID", "COS_SECRET_KEY"];
 const arkModel = process.env.ARK_MODEL || "doubao-seedance-2-0-260128";
 const missing = required.filter((name) => !process.env[name]);
 if (missing.length) {
@@ -12,6 +12,7 @@ if (missing.length) {
 if (process.env.SESSION_SECRET.length < 32 || process.env.EMAIL_CODE_SECRET.length < 32) throw new Error("Production preflight failed: session and email secrets must be at least 32 characters");
 if (process.env.SESSION_SECRET === process.env.EMAIL_CODE_SECRET) throw new Error("Production preflight failed: SESSION_SECRET and EMAIL_CODE_SECRET must be different");
 if (!process.env.PUBLIC_APP_URL.startsWith("https://")) throw new Error("Production preflight failed: PUBLIC_APP_URL must use HTTPS");
+if (!process.env.AI_BASE_URL.startsWith("https://")) throw new Error("Production preflight failed: AI_BASE_URL must use HTTPS");
 if (process.env.SESSION_COOKIE_SECURE === "false") throw new Error("Production preflight failed: secure session cookies cannot be disabled");
 if (process.env.CONTENT_REVIEW_PROVIDER === "tencent-ci" && (!process.env.CONTENT_REVIEW_INTERNAL_SECRET || process.env.CONTENT_REVIEW_INTERNAL_SECRET.length < 32)) throw new Error("Production preflight failed: CONTENT_REVIEW_INTERNAL_SECRET must be at least 32 characters when Tencent CI moderation is enabled");
 if (process.env.WECHAT_PAY_ENABLED === "true") {
@@ -57,5 +58,11 @@ const payload = await response.json().catch(() => ({}));
 const models = Array.isArray(payload?.data) ? payload.data.map((model) => model?.id) : [];
 if (models.length && !models.includes(arkModel)) throw new Error(`Ark model is not enabled for this key: ${arkModel}`);
 console.log(`Ark access: OK (${arkModel})`);
+const sophnetResponse = await fetch(`${process.env.AI_BASE_URL.replace(/\/$/, "")}/task/preflight-health-check`, {
+  headers: { Authorization: `Bearer ${process.env.AI_API_KEY}`, "Content-Type": "application/json" },
+  signal: AbortSignal.timeout(10_000),
+});
+if ([401, 403].includes(sophnetResponse.status) || sophnetResponse.status >= 500) throw new Error(`SophNet credential/reachability check failed: HTTP ${sophnetResponse.status}`);
+console.log(`SophNet access: OK (${process.env.AI_MODEL}, HTTP ${sophnetResponse.status})`);
 console.log("SMTP configuration: OK");
 console.log("Preflight passed. Restart the worker, then run the full application acceptance.");

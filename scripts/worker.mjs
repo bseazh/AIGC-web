@@ -42,11 +42,11 @@ function redactForLog(value) {
   return value;
 }
 
-async function logProviderCall(taskId, operation, request, responseStatus, response, errorCode = null, providerRequestId = null) {
+async function logProviderCall(taskId, provider, operation, request, responseStatus, response, errorCode = null, providerRequestId = null) {
   try {
     await pool.query(
-      "INSERT INTO provider_call_logs (task_id, provider, operation, request_json, response_status, response_json, error_code, provider_request_id) VALUES ($1, 'ark', $2, $3::jsonb, $4, $5::jsonb, $6, $7)",
-      [taskId, operation, JSON.stringify(redactForLog(request)), responseStatus, JSON.stringify(redactForLog(response || {})), errorCode, providerRequestId],
+      "INSERT INTO provider_call_logs (task_id, provider, operation, request_json, response_status, response_json, error_code, provider_request_id) VALUES ($1, $2, $3, $4::jsonb, $5, $6::jsonb, $7, $8)",
+      [taskId, provider, operation, JSON.stringify(redactForLog(request)), responseStatus, JSON.stringify(redactForLog(response || {})), errorCode, providerRequestId],
     );
   } catch (error) { console.error("provider call log failed", error); }
 }
@@ -75,24 +75,38 @@ function deleteObject(Key) {
   });
 }
 
-async function sophnet(path, init = {}) {
+function sophnetUrl(path) {
+  return `${String(process.env.AI_BASE_URL || "").replace(/\/$/, "")}${path}`;
+}
+
+async function sophnet(path, init = {}, audit = {}) {
   if (!process.env.AI_API_KEY || !process.env.AI_MODEL || !process.env.AI_BASE_URL) {
     throw new Error("Image provider is not configured");
   }
-  const response = await fetch(`${process.env.AI_BASE_URL}${path}`, {
-    ...init,
-    headers: { Authorization: `Bearer ${process.env.AI_API_KEY}`, "Content-Type": "application/json", ...(init.headers || {}) },
-  });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(`SophNet ${response.status}: ${payload?.message || "request failed"}`);
-  return payload;
+  const requestLog = { path, method: init.method || "GET", model: process.env.AI_MODEL, ...audit.request };
+  try {
+    const response = await fetch(sophnetUrl(path), {
+      ...init,
+      headers: { Authorization: `Bearer ${process.env.AI_API_KEY}`, "Content-Type": "application/json", ...(init.headers || {}) },
+    });
+    const payload = await response.json().catch(() => null);
+    const providerRequestId = payload?.output?.taskId || audit.providerTaskId || response.headers.get("x-request-id");
+    await logProviderCall(audit.taskId, "sophnet", audit.operation || "request", requestLog, response.status, payload, response.ok ? null : "SOPHNET_HTTP_ERROR", providerRequestId);
+    if (!response.ok) throw new Error(`SophNet ${response.status}: ${payload?.message || "request failed"}`);
+    return payload;
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.startsWith("SophNet ")) {
+      await logProviderCall(audit.taskId, "sophnet", audit.operation || "request", requestLog, 0, {}, "SOPHNET_NETWORK_ERROR", audit.providerTaskId || null);
+    }
+    throw error;
+  }
 }
 
-async function createImageTask(inputUrls, prompt) {
+async function createImageTask(inputUrls, prompt, generationTaskId, outputIndex) {
   const payload = await sophnet("/task", {
     method: "POST",
     body: JSON.stringify({ model: process.env.AI_MODEL, input: { prompt, images: inputUrls } }),
-  });
+  }, { taskId: generationTaskId, operation: "create_image_task", request: { outputIndex, inputCount: inputUrls.length, promptLength: prompt.length } });
   const taskId = payload?.output?.taskId;
   if (!taskId) throw new Error("SophNet did not return taskId");
   return taskId;
@@ -131,7 +145,7 @@ async function createVideoTask(inputUrls, input, workflowKey, taskId) {
     body: JSON.stringify(requestBody),
   });
   const payload = await response.json().catch(() => null);
-  await logProviderCall(taskId, "create_video_task", { model: requestBody.model, ratio: requestBody.ratio, duration: requestBody.duration, resolution: requestBody.resolution, watermark: requestBody.watermark, promptConfig: input.promptConfig ? { id: input.promptConfig.id, version: input.promptConfig.version, variantKey: input.promptConfig.variantKey } : null, assetTypes: mimeTypes }, response.status, payload, response.ok ? null : "ARK_CREATE_FAILED", payload?.id || response.headers.get("x-request-id"));
+  await logProviderCall(taskId, "ark", "create_video_task", { model: requestBody.model, ratio: requestBody.ratio, duration: requestBody.duration, resolution: requestBody.resolution, watermark: requestBody.watermark, promptConfig: input.promptConfig ? { id: input.promptConfig.id, version: input.promptConfig.version, variantKey: input.promptConfig.variantKey } : null, assetTypes: mimeTypes }, response.status, payload, response.ok ? null : "ARK_CREATE_FAILED", payload?.id || response.headers.get("x-request-id"));
   if (!response.ok || !payload?.id) throw new Error(`Ark ${response.status}: ${payload?.error?.message || "task creation failed"}`);
   return payload.id;
 }
@@ -141,7 +155,7 @@ async function waitForVideo(taskId, generationTaskId) {
   while (Date.now() < deadline) {
     const response = await fetch(`https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks/${taskId}`, { headers: { Authorization: `Bearer ${process.env.ARK_API_KEY}` } });
     const payload = await response.json().catch(() => null);
-    await logProviderCall(generationTaskId, "get_video_task", { providerTaskId: taskId }, response.status, payload, response.ok ? null : "ARK_QUERY_FAILED", taskId);
+    await logProviderCall(generationTaskId, "ark", "get_video_task", { providerTaskId: taskId }, response.status, payload, response.ok ? null : "ARK_QUERY_FAILED", taskId);
     if (!response.ok) throw new Error(`Ark ${response.status}: ${payload?.error?.message || "task query failed"}`);
     const status = String(payload?.status || "").toLowerCase();
     if (["succeeded", "success", "completed"].includes(status)) {
@@ -155,10 +169,10 @@ async function waitForVideo(taskId, generationTaskId) {
   throw new Error("Ark video task timed out");
 }
 
-async function waitForImage(taskId) {
+async function waitForImage(taskId, generationTaskId, outputIndex) {
   const deadline = Date.now() + 5 * 60 * 1000;
   while (Date.now() < deadline) {
-    const payload = await sophnet(`/task/${taskId}`);
+    const payload = await sophnet(`/task/${taskId}`, {}, { taskId: generationTaskId, operation: "get_image_task", providerTaskId: taskId, request: { outputIndex } });
     const output = payload?.output;
     if (output?.taskStatus === "SUCCEEDED") {
       const url = output.results?.[0]?.url;
@@ -173,7 +187,7 @@ async function waitForImage(taskId) {
   throw new Error("SophNet task timed out");
 }
 
-async function generateOne(inputUrls, input, index, workflowKey) {
+async function generateOne(inputUrls, input, index, workflowKey, generationTaskId) {
   const variation = ["正面居中构图", "轻微侧角构图", "留出营销文案空间", "更强调商品材质细节"][index] || "商业构图";
   const detailStage = ["品牌定位与首屏商品展示长图", "核心卖点解析长图", "材质、结构与工艺细节长图", "真实使用场景与效果长图", "规格、服务与购买理由长图"][index] || "商品详情长图";
   const shared = workflowKey === "hd-enhance"
@@ -203,8 +217,8 @@ async function generateOne(inputUrls, input, index, workflowKey) {
     ? `将商品自然融入${input.scene}场景，风格为${input.style}，${variation}，画幅比例${input.aspectRatio}，真实商业摄影，场景光线与商品接触阴影自然，突出商品主体。`
     : `生成${input.scene}环境中的${input.style}电商商品主图，${variation}，画幅比例${input.aspectRatio}，真实摄影，干净背景，柔和自然阴影。`;
   const prompt = [shared, taskPrompt, input.prompt ? `用户补充要求：${input.prompt}` : ""].filter(Boolean).join("\n");
-  const providerTaskId = await createImageTask(inputUrls, prompt);
-  return waitForImage(providerTaskId);
+  const providerTaskId = await createImageTask(inputUrls, prompt, generationTaskId, index);
+  return waitForImage(providerTaskId, generationTaskId, index);
 }
 
 async function generateVideo(inputUrls, input, workflowKey, taskId) {
@@ -336,7 +350,7 @@ async function reconcileStaleTasks() {
 }
 
 const worker = new Worker("generation", async (job) => {
-  const taskResult = await pool.query("SELECT id, user_id, workflow_key, points, input_json, request_id FROM generation_tasks WHERE id = $1", [job.data.taskId]);
+  const taskResult = await pool.query("SELECT t.id, t.user_id, t.workflow_key, t.points, t.input_json, t.request_id, u.email FROM generation_tasks t JOIN users u ON u.id = t.user_id WHERE t.id = $1", [job.data.taskId]);
   const task = taskResult.rows[0];
   if (!task) throw new Error("Task not found");
   log("info", "task_started", { requestId: task.request_id, taskId: task.id, userId: task.user_id, workflowKey: task.workflow_key });
@@ -345,13 +359,24 @@ const worker = new Worker("generation", async (job) => {
   const savedKeys = [];
   let temporaryKeys = [];
   try {
+    const acceptanceFault = task.workflow_key === "product-hero-image" && task.email?.toLowerCase() === process.env.ACCEPTANCE_USER_EMAIL?.toLowerCase()
+      ? task.input_json.acceptanceFault
+      : null;
+    if (acceptanceFault === "PROVIDER_FAILURE") {
+      await logProviderCall(task.id, "sophnet", "create_image_task", { controlledAcceptanceFault: true }, 502, {}, "SOPHNET_CONTROLLED_FAILURE");
+      throw new Error("SOPHNET_PROVIDER_FAILED");
+    }
+    if (acceptanceFault === "PROVIDER_TIMEOUT") {
+      await logProviderCall(task.id, "sophnet", "get_image_task", { controlledAcceptanceFault: true }, 504, {}, "SOPHNET_CONTROLLED_TIMEOUT");
+      throw new Error("SOPHNET_PROVIDER_TIMEOUT");
+    }
     const storageKeys = task.input_json.storageKeys || [task.input_json.storageKey];
     const inputUrls = await Promise.all(storageKeys.map((key) => cosUrl(key, "GET", 3600)));
     const temporaryOutputs = task.workflow_key === "video-mix"
       ? [await generateMix(inputUrls, task.input_json, task)]
       : ["product-ad-video", "recreate-video", "seedance-video"].includes(task.workflow_key)
       ? [{ url: await generateVideo(inputUrls, task.input_json, task.workflow_key, task.id), temporaryKey: null }]
-      : (await Promise.all(Array.from({ length: task.input_json.outputs || 4 }, (_, index) => generateOne(inputUrls, task.input_json, index, task.workflow_key)))).map((url) => ({ url, temporaryKey: null }));
+      : (await Promise.all(Array.from({ length: task.input_json.outputs || 4 }, (_, index) => generateOne(inputUrls, task.input_json, index, task.workflow_key, task.id)))).map((url) => ({ url, temporaryKey: null }));
     temporaryKeys = temporaryOutputs.flatMap((output) => output.temporaryKey ? [output.temporaryKey] : []);
     const savedAssets = [];
     for (const [index, output] of temporaryOutputs.entries()) {

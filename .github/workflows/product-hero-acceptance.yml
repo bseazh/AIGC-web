@@ -1,0 +1,63 @@
+name: Product hero production acceptance
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: production-acceptance
+  cancel-in-progress: false
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Configure SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+      - name: Run product hero acceptance
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          set -a
+          source .env.production
+          set +a
+          mkdir -p acceptance-reports
+          set +e
+          npm run verify:product-hero
+          result=$?
+          set -e
+          latest="$(ls -1t acceptance-reports/product-hero-*.json | head -1)"
+          cp "$latest" acceptance-reports/latest-product-hero-acceptance.json
+          exit "$result"
+          REMOTE
+      - name: Download acceptance report
+        if: always()
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: scp -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/acceptance-reports/latest-product-hero-acceptance.json" product-hero-acceptance.json
+      - name: Show acceptance summary
+        if: always()
+        run: |
+          cat product-hero-acceptance.json
+          node -e "const report=require('./product-hero-acceptance.json'); if(report.status!=='PASSED') throw new Error('Product hero acceptance status is '+report.status)"
+      - name: Upload acceptance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-hero-acceptance-${{ github.run_id }}
+          path: product-hero-acceptance.json
+          if-no-files-found: error

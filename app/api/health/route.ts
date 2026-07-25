@@ -19,10 +19,32 @@ async function checkArk() {
   if (models.length && !models.includes(arkModel)) throw new Error(`Ark model is not enabled: ${arkModel}`);
 }
 
+let sophnetHealthCache: { expiresAt: number; promise: Promise<{ model: string; responseStatus: number }> } | null = null;
+
+function checkSophnet() {
+  if (sophnetHealthCache && sophnetHealthCache.expiresAt > Date.now()) return sophnetHealthCache.promise;
+  const promise = (async () => {
+    const apiKey = process.env.AI_API_KEY;
+    const baseUrl = process.env.AI_BASE_URL;
+    const model = process.env.AI_MODEL;
+    if (!apiKey || !baseUrl || !model) throw new Error("SophNet is not configured");
+    if (!baseUrl.startsWith("https://")) throw new Error("SophNet base URL must use HTTPS");
+    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/task/health-check`, {
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(4_000),
+    });
+    if ([401, 403].includes(response.status) || response.status >= 500) throw new Error(`SophNet HTTP ${response.status}`);
+    return { model, responseStatus: response.status };
+  })();
+  sophnetHealthCache = { expiresAt: Date.now() + 60_000, promise };
+  promise.catch(() => { sophnetHealthCache = null; });
+  return promise;
+}
+
 export async function GET() {
   const redisUrl = process.env.REDIS_URL;
   if (!redisUrl) {
-    return NextResponse.json({ status: "unhealthy", checks: { redis: "down", queue: "down", worker: "unknown", ark: "unknown", cos: "unknown" } }, { status: 503 });
+    return NextResponse.json({ status: "unhealthy", checks: { redis: "down", queue: "down", worker: "unknown", ark: "unknown", sophnet: "unknown", cos: "unknown" } }, { status: 503 });
   }
 
   const redis = new Redis(redisUrl, { lazyConnect: true, maxRetriesPerRequest: 1, connectTimeout: 2_000 });
@@ -36,7 +58,7 @@ export async function GET() {
     const deletionCoolingDays = Number(process.env.ACCOUNT_DELETION_COOLING_DAYS || 7);
     const reviewSlaMinutes = Number(process.env.REVIEW_SLA_TARGET_MINUTES || 30);
     const reviewAutoErrorMax = Number(process.env.REVIEW_AUTO_ERROR_MAX_24H || 20);
-    const [database, redisCheck, queue, worker, moderationWorker, moderation, notifications, lifecycle, reconciliation, cos, ark] = await Promise.all([
+    const [database, redisCheck, queue, worker, moderationWorker, moderation, notifications, lifecycle, reconciliation, cos, ark, sophnet] = await Promise.all([
       check("database", () => db.query("SELECT 1")),
       check("redis", () => redis.connect().then(() => redis.ping())),
       check("queue", async () => ({ waiting: await getGenerationQueue().getWaitingCount(), active: await getGenerationQueue().getActiveCount() })),
@@ -100,10 +122,11 @@ export async function GET() {
       }),
       check("cos", checkCos),
       check("ark", checkArk),
+      check("sophnet", checkSophnet),
     ]);
-    const checks = Object.fromEntries([database, redisCheck, queue, worker, moderationWorker, moderation, notifications, lifecycle, reconciliation, cos, ark].map(({ name, status }) => [name, status]));
+    const checks = Object.fromEntries([database, redisCheck, queue, worker, moderationWorker, moderation, notifications, lifecycle, reconciliation, cos, ark, sophnet].map(({ name, status }) => [name, status]));
     const healthy = Object.values(checks).every((status) => status === "up");
-    return NextResponse.json({ status: healthy ? "healthy" : "unhealthy", checks, queue: queue.value, moderationWorker: moderationWorker.value, moderation: moderation.value, notifications: notifications.value, lifecycle: lifecycle.value, reconciliation: reconciliation.value, workerLastSeenAt: (worker.value as { last_seen_at?: string } | null)?.last_seen_at || null }, { status: healthy ? 200 : 503 });
+    return NextResponse.json({ status: healthy ? "healthy" : "unhealthy", checks, queue: queue.value, moderationWorker: moderationWorker.value, moderation: moderation.value, notifications: notifications.value, lifecycle: lifecycle.value, reconciliation: reconciliation.value, sophnet: sophnet.value, workerLastSeenAt: (worker.value as { last_seen_at?: string } | null)?.last_seen_at || null }, { status: healthy ? 200 : 503 });
   } catch (error) {
     console.error("health check failed", error);
     return NextResponse.json({ status: "unhealthy" }, { status: 503 });

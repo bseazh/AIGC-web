@@ -12,6 +12,7 @@
     "verify:production": "node scripts/production-preflight.mjs",
     "verify:ark-video": "node scripts/ark-video-acceptance.mjs",
     "verify:admin-exempt": "node scripts/admin-exempt-acceptance.mjs",
+    "verify:product-hero": "node scripts/product-hero-acceptance.mjs",
     "verify:wechat-pay": "node scripts/wechat-pay-acceptance.mjs",
     "reconcile:wechat": "node scripts/wechat-reconcile.mjs",
     "report:rollout": "node scripts/gray-rollout-report.mjs"
