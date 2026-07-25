@@ -136,6 +136,8 @@ sudo systemctl restart aigc-web
 if systemctl list-unit-files aigc-worker.service >/dev/null 2>&1; then
   sudo systemctl restart aigc-worker
 fi
+sudo systemctl restart aigc-lifecycle-maintenance.timer
+sudo systemctl start aigc-lifecycle-maintenance.service
 if [[ "${CONTENT_REVIEW_PROVIDER:-}" == "tencent-ci" ]]; then
   sudo systemctl enable --now aigc-moderation-worker
   sudo systemctl restart aigc-moderation-worker

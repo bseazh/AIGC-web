@@ -10,6 +10,7 @@ const checks = [
   ["login failure limit", "app/api/auth/login/route.ts", "LOGIN_RATE_LIMITED"],
   ["task cancellation refund", "app/api/tasks/[id]/cancel/route.ts", "USER_CANCELED"],
   ["lifecycle review timeout", "scripts/lifecycle-maintenance.mjs", "OUTPUT_REVIEW_TIMEOUT"],
+  ["deployment runs lifecycle maintenance", "scripts/deploy.sh", "systemctl start aigc-lifecycle-maintenance.service"],
   ["account deletion finalization", "scripts/lifecycle-maintenance.mjs", "ACCOUNT_DELETION_FINALIZED"],
   ["WeChat Native accepts code_url without prepay_id", "lib/wechat-pay.ts", "if (!response.ok || !payload?.code_url)"],
   ["administrator login redirect", "app/api/auth/login/route.ts", "administrator ? \"/admin\" : \"/workspace\""],
