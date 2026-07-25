@@ -1,0 +1,65 @@
+name: Administrator exempt production acceptance
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: production-acceptance
+  cancel-in-progress: false
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Configure SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+      - name: Run administrator exempt acceptance
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          set -a
+          source .env.production
+          set +a
+          grep -Rqs '管理员免积分' .next/static .next/standalone
+          export ADMIN_EXEMPT_UI_LABEL_PRESENT=true
+          mkdir -p acceptance-reports
+          set +e
+          node scripts/admin-exempt-acceptance.mjs
+          result=$?
+          set -e
+          latest="$(ls -1t acceptance-reports/admin-exempt-*.json | head -1)"
+          cp "$latest" acceptance-reports/latest-admin-exempt-acceptance.json
+          exit "$result"
+          REMOTE
+      - name: Download acceptance report
+        if: always()
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: scp -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/acceptance-reports/latest-admin-exempt-acceptance.json" admin-exempt-acceptance.json
+      - name: Show acceptance summary
+        if: always()
+        run: |
+          cat admin-exempt-acceptance.json
+          node -e "const report=require('./admin-exempt-acceptance.json'); if(report.status!=='PASSED') throw new Error('Administrator exempt acceptance status is '+report.status)"
+      - name: Upload acceptance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: administrator-exempt-acceptance-${{ github.run_id }}
+          path: admin-exempt-acceptance.json
+          if-no-files-found: error

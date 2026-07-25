@@ -45,7 +45,7 @@ export function AppShell({ active, account, taskCount = 0, children }: AppShellP
           {account.user.isAdministrator && <Link href="/admin" className="admin-console-link" onClick={() => setSidebarOpen(false)}><Settings2 size={19} />管理控制台</Link>}
         </nav>
         <div className="sidebar-bottom">
-          <div className="credit-card"><span>可用积分</span><strong><Coins size={18} />{account.wallet.availablePoints.toLocaleString()}</strong><em>1 元 = 10 积分</em></div>
+          <div className="credit-card"><span>{account.user.isAdministrator ? "任务计费" : "可用积分"}</span><strong><Coins size={18} />{account.user.isAdministrator ? "管理员免积分" : account.wallet.availablePoints.toLocaleString()}</strong><em>{account.user.isAdministrator ? "保留任务成本审计" : "1 元 = 10 积分"}</em></div>
           <Link href="/"><ArrowLeft size={17} />返回首页</Link>
           <button className="logout-link" onClick={logout}><LogOut size={16} />退出登录</button>
         </div>

@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { authenticatedUser } from "@/lib/session";
 import { taskStatusLabel } from "@/lib/presenters";
 import { workflowName } from "@/lib/presenters";
+import { isAdminExemptTask } from "@/lib/task-billing";
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const user = await authenticatedUser(request);
@@ -14,12 +15,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     workflow_key: string;
     status: string;
     points: number;
+    input_json: Record<string, unknown>;
     output_json: { assets?: Array<{ assetId: string; storageKey: string }> };
     error_code: string | null;
     created_at: string;
     updated_at: string;
   }>(
-    "SELECT id, workflow_key, status, points, output_json, error_code, created_at, updated_at FROM generation_tasks WHERE id = $1 AND user_id = $2",
+    "SELECT id, workflow_key, status, points, input_json, output_json, error_code, created_at, updated_at FROM generation_tasks WHERE id = $1 AND user_id = $2",
     [id, user.id],
   );
   const task = result.rows[0];
@@ -41,6 +43,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     status: task.status,
     statusLabel: taskStatusLabel(task.status),
     points: task.points,
+    adminExempt: isAdminExemptTask(task.input_json),
     outputs: outputs.filter((output): output is NonNullable<typeof output> => Boolean(output)),
     errorCode: task.error_code,
     createdAt: task.created_at,

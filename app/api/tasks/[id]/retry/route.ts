@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { getGenerationQueue } from "@/lib/queue";
 import { authenticatedUser } from "@/lib/session";
 import { enqueueTaskNotification } from "@/lib/notifications";
+import { isAdministrator } from "@/lib/admin";
+import { ADMIN_EXEMPT_BILLING_MODE } from "@/lib/task-billing";
 
 const retryableStatuses = ["FAILED", "REJECTED", "CANCELED"];
 
@@ -16,6 +18,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const client = await db.connect();
   let points = 0;
   let workflowKey = "generation";
+  const adminExempt = isAdministrator(user.email || user.phone);
   try {
     await client.query("BEGIN");
     const originalResult = await client.query<{ workflow_key: string; status: string; points: number; input_json: Record<string, unknown> }>(
@@ -34,11 +37,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const wallet = await client.query<{ available_points: number }>("SELECT available_points FROM wallets WHERE user_id = $1 FOR UPDATE", [user.id]);
     points = original.points;
     const balance = wallet.rows[0]?.available_points ?? 0;
-    if (balance < points) { await client.query("ROLLBACK"); return NextResponse.json({ code: "INSUFFICIENT_POINTS", message: "积分不足，无法重新发起" }, { status: 402 }); }
-    const retryInput = { ...input, retryOf: id, retriedAt: new Date().toISOString() };
+    if (!adminExempt && balance < points) { await client.query("ROLLBACK"); return NextResponse.json({ code: "INSUFFICIENT_POINTS", message: "积分不足，无法重新发起" }, { status: 402 }); }
+    const { billingMode: _billingMode, quotedPoints: _quotedPoints, ...baseInput } = input;
+    const retryInput = { ...baseInput, ...(adminExempt ? { billingMode: ADMIN_EXEMPT_BILLING_MODE, quotedPoints: points } : {}), retryOf: id, retriedAt: new Date().toISOString() };
     await client.query("INSERT INTO generation_tasks (id, user_id, workflow_key, status, points, input_json, idempotency_key) VALUES ($1, $2, $3, 'QUEUED', $4, $5::jsonb, $6)", [retryTaskId, user.id, original.workflow_key, points, JSON.stringify(retryInput), idempotencyKey]);
-    await client.query("UPDATE wallets SET available_points = available_points - $2, frozen_points = frozen_points + $2, version = version + 1, updated_at = NOW() WHERE user_id = $1", [user.id, points]);
-    await client.query("INSERT INTO wallet_ledger (user_id, type, amount, balance_after, business_type, business_id, idempotency_key) VALUES ($1, 'FREEZE', $2, $3, 'GENERATION_TASK', $4, $5)", [user.id, -points, balance - points, retryTaskId, `freeze:${retryTaskId}`]);
+    if (adminExempt) {
+      await client.query("INSERT INTO wallet_ledger (user_id, type, amount, balance_after, business_type, business_id, idempotency_key) VALUES ($1, 'ADMIN_EXEMPT_TASK', 0, $2, 'ADMIN_EXEMPT_TASK', $3, $4)", [user.id, balance, retryTaskId, `admin-exempt:${retryTaskId}`]);
+    } else {
+      await client.query("UPDATE wallets SET available_points = available_points - $2, frozen_points = frozen_points + $2, version = version + 1, updated_at = NOW() WHERE user_id = $1", [user.id, points]);
+      await client.query("INSERT INTO wallet_ledger (user_id, type, amount, balance_after, business_type, business_id, idempotency_key) VALUES ($1, 'FREEZE', $2, $3, 'GENERATION_TASK', $4, $5)", [user.id, -points, balance - points, retryTaskId, `freeze:${retryTaskId}`]);
+    }
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -58,14 +66,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         const wallet = await refundClient.query<{ available_points: number }>("SELECT available_points FROM wallets WHERE user_id = $1 FOR UPDATE", [user.id]);
         const balance = wallet.rows[0]?.available_points ?? 0;
         await refundClient.query("UPDATE generation_tasks SET status = 'FAILED', error_code = 'QUEUE_UNAVAILABLE', updated_at = NOW() WHERE id = $1", [retryTaskId]);
-        await refundClient.query("UPDATE wallets SET available_points = available_points + $2, frozen_points = frozen_points - $2, version = version + 1, updated_at = NOW() WHERE user_id = $1", [user.id, points]);
-        await refundClient.query("INSERT INTO wallet_ledger (user_id, type, amount, balance_after, business_type, business_id, idempotency_key) VALUES ($1, 'REFUND', $2, $3, 'GENERATION_TASK', $4, $5) ON CONFLICT (idempotency_key) DO NOTHING", [user.id, points, balance + points, retryTaskId, `refund:${retryTaskId}`]);
-        await enqueueTaskNotification(refundClient, { id: retryTaskId, userId: user.id, email: user.email, workflowKey, points }, "FAILED");
+        if (!adminExempt) {
+          await refundClient.query("UPDATE wallets SET available_points = available_points + $2, frozen_points = frozen_points - $2, version = version + 1, updated_at = NOW() WHERE user_id = $1", [user.id, points]);
+          await refundClient.query("INSERT INTO wallet_ledger (user_id, type, amount, balance_after, business_type, business_id, idempotency_key) VALUES ($1, 'REFUND', $2, $3, 'GENERATION_TASK', $4, $5) ON CONFLICT (idempotency_key) DO NOTHING", [user.id, points, balance + points, retryTaskId, `refund:${retryTaskId}`]);
+        }
+        await enqueueTaskNotification(refundClient, { id: retryTaskId, userId: user.id, email: user.email, workflowKey, points, adminExempt }, "FAILED");
       }
       await refundClient.query("COMMIT");
     } catch (refundError) { await refundClient.query("ROLLBACK"); console.error("retry refund failed", refundError); }
     finally { refundClient.release(); }
-    return NextResponse.json({ code: "QUEUE_UNAVAILABLE", message: "任务队列暂不可用，积分已退回" }, { status: 503 });
+    return NextResponse.json({ code: "QUEUE_UNAVAILABLE", message: adminExempt ? "任务队列暂不可用" : "任务队列暂不可用，积分已退回" }, { status: 503 });
   }
-  return NextResponse.json({ taskId: retryTaskId, status: "QUEUED", points }, { status: 201 });
+  return NextResponse.json({ taskId: retryTaskId, status: "QUEUED", points, adminExempt }, { status: 201 });
 }

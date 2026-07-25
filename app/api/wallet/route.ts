@@ -8,6 +8,7 @@ const labels: Record<string, string> = {
   WECHAT_RECHARGE: "微信支付充值",
   RECHARGE_CODE: "充值码兑换",
   GENERATION_TASK: "创作任务",
+  ADMIN_EXEMPT_TASK: "管理员免积分任务",
 };
 
 export async function GET(request: NextRequest) {

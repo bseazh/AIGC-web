@@ -3,6 +3,7 @@ import { createSignedObjectUrl } from "@/lib/cos";
 import { db } from "@/lib/db";
 import { taskStatusLabel, workflowName } from "@/lib/presenters";
 import { authenticatedUser } from "@/lib/session";
+import { isAdminExemptTask } from "@/lib/task-billing";
 
 export async function GET(request: NextRequest) {
   const user = await authenticatedUser(request);
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest) {
       status: task.status,
       statusLabel: taskStatusLabel(task.status),
       points: task.points,
+      adminExempt: isAdminExemptTask(task.input_json),
       params: {
         aspectRatio: task.input_json?.aspectRatio || null,
         scene: task.input_json?.scene || null,

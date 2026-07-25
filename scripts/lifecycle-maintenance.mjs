@@ -27,7 +27,7 @@ async function refundTask(taskId, targetStatus, errorCode) {
   try {
     await client.query("BEGIN");
     const found = await client.query(
-      `SELECT t.id, t.user_id, t.workflow_key, t.points, t.status, u.email
+      `SELECT t.id, t.user_id, t.workflow_key, t.points, t.status, t.input_json, u.email
        FROM generation_tasks t JOIN users u ON u.id = t.user_id WHERE t.id = $1 FOR UPDATE OF t`,
       [taskId],
     );
@@ -35,21 +35,24 @@ async function refundTask(taskId, targetStatus, errorCode) {
     if (!task || !["PENDING_INPUT_REVIEW", "PENDING_REVIEW"].includes(task.status)) {
       await client.query("ROLLBACK"); return false;
     }
+    const adminExempt = task.input_json?.billingMode === "ADMIN_EXEMPT";
     const wallet = await client.query("SELECT available_points FROM wallets WHERE user_id = $1 FOR UPDATE", [task.user_id]);
     const balance = wallet.rows[0]?.available_points || 0;
     await client.query("UPDATE generation_tasks SET status = $2, error_code = $3, updated_at = NOW() WHERE id = $1", [task.id, targetStatus, errorCode]);
-    await client.query("UPDATE wallets SET available_points = available_points + $2, frozen_points = frozen_points - $2, version = version + 1, updated_at = NOW() WHERE user_id = $1", [task.user_id, task.points]);
-    await client.query(
-      `INSERT INTO wallet_ledger (user_id, type, amount, balance_after, business_type, business_id, idempotency_key)
-       VALUES ($1, 'REFUND', $2, $3, 'GENERATION_TASK', $4, $5) ON CONFLICT (idempotency_key) DO NOTHING`,
-      [task.user_id, task.points, balance + task.points, task.id, `refund:${task.id}`],
-    );
+    if (!adminExempt) {
+      await client.query("UPDATE wallets SET available_points = available_points + $2, frozen_points = frozen_points - $2, version = version + 1, updated_at = NOW() WHERE user_id = $1", [task.user_id, task.points]);
+      await client.query(
+        `INSERT INTO wallet_ledger (user_id, type, amount, balance_after, business_type, business_id, idempotency_key)
+         VALUES ($1, 'REFUND', $2, $3, 'GENERATION_TASK', $4, $5) ON CONFLICT (idempotency_key) DO NOTHING`,
+        [task.user_id, task.points, balance + task.points, task.id, `refund:${task.id}`],
+      );
+    }
     if (task.status === "PENDING_REVIEW") {
       await client.query("UPDATE assets SET audit_status = 'REJECTED', updated_at = NOW() WHERE kind = 'OUTPUT' AND metadata_json->>'taskId' = $1 AND audit_status <> 'REJECTED'", [task.id]);
       await client.query("UPDATE content_review_records SET status = 'REJECTED', review_source = 'SYSTEM', risk_level = 'UNKNOWN', reason_code = $2, note = 'Review deadline exceeded', reviewed_at = NOW(), updated_at = NOW() WHERE task_id = $1 AND status IN ('PENDING', 'NEEDS_MANUAL')", [task.id, errorCode]);
     }
     if (task.email) {
-      const html = `<div style="font-family:Arial,sans-serif;color:#283241;line-height:1.7"><h2>芭乐AIGC</h2><p>任务 <strong>${task.id}</strong> 因审核等待超时未完成，${task.points} 积分已自动退回。</p></div>`;
+      const html = `<div style="font-family:Arial,sans-serif;color:#283241;line-height:1.7"><h2>芭乐AIGC</h2><p>任务 <strong>${task.id}</strong> 因审核等待超时未完成，${adminExempt ? "本任务为管理员免积分任务，未产生积分变动" : `${task.points} 积分已自动退回`}。</p></div>`;
       await client.query(
         `INSERT INTO notification_outbox (user_id, recipient, event_type, subject, html_body, idempotency_key)
          VALUES ($1, $2, 'TASK_FAILED', '你的创作任务未完成', $3, $4) ON CONFLICT (idempotency_key) DO NOTHING`,

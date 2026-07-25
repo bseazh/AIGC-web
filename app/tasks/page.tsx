@@ -6,9 +6,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppShell, LoadingScreen } from "@/app/components/app-shell";
 
-type Account = { user: { displayName: string }; wallet: { availablePoints: number } };
+type Account = { user: { displayName: string; isAdministrator?: boolean }; wallet: { availablePoints: number } };
 type Task = {
-  id: string; workflowName: string; status: string; statusLabel: string; points: number;
+  id: string; workflowName: string; status: string; statusLabel: string; points: number; adminExempt?: boolean;
   params: { aspectRatio: string | null; scene: string | null; style: string | null };
   outputCount: number; thumbnailUrl: string | null; errorCode: string | null; createdAt: string;
 };
@@ -75,8 +75,8 @@ export default function TasksPage() {
               <div className="record-thumb">{task.thumbnailUrl ? <img src={task.thumbnailUrl} alt="" /> : <ImageIcon size={22} />}</div>
               <div className="record-main"><strong>{task.workflowName}</strong><span>{[task.params.scene, task.params.style, task.params.aspectRatio].filter(Boolean).join(" · ") || "默认生成设置"}</span><time>{new Date(task.createdAt).toLocaleString("zh-CN")}</time></div>
               <span className={`record-status status-${task.status.toLowerCase()}`}>{statusIcon(task.status)}{task.statusLabel}</span>
-              <span className="record-points">{task.points} 积分</span>
-              <span className="record-output">{["FAILED", "REJECTED", "CANCELED"].includes(task.status) ? `失败已退回 ${task.points} 积分` : task.outputCount ? `${task.outputCount} 个结果` : task.errorCode || "等待结果"}</span>
+              <span className="record-points">{task.adminExempt ? "管理员免积分" : `${task.points} 积分`}</span>
+              <span className="record-output">{["FAILED", "REJECTED", "CANCELED"].includes(task.status) ? (task.adminExempt ? `未产生积分变动 · 报价 ${task.points} 积分` : `失败已退回 ${task.points} 积分`) : task.outputCount ? `${task.outputCount} 个结果` : task.errorCode || "等待结果"}</span>
               <ChevronRight size={18} />
             </Link>
           ))}</div>}

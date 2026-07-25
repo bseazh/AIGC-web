@@ -6,6 +6,8 @@ import { authenticatedUser } from "@/lib/session";
 import { resolvePromptConfig } from "@/lib/prompt-config";
 import { enqueueTaskNotification } from "@/lib/notifications";
 import { structuredLog, requestContext } from "@/lib/logger";
+import { isAdministrator } from "@/lib/admin";
+import { ADMIN_EXEMPT_BILLING_MODE } from "@/lib/task-billing";
 
 type ImageWorkflow = {
   key: string;
@@ -63,28 +65,37 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
   const requestId = request.headers.get("x-request-id") || randomUUID();
   const idempotencyKey = request.headers.get("Idempotency-Key") || randomUUID();
   const points = workflow.key === "video-mix" ? ({ 15: 40, 30: 70, 45: 100, 60: 130 } as Record<number, number>)[duration] : workflow.pointsPerTask;
+  const adminExempt = isAdministrator(user.email || user.phone);
   const client = await db.connect();
   try {
     await client.query("BEGIN");
     const walletResult = await client.query<{ available_points: number }>("SELECT available_points FROM wallets WHERE user_id = $1 FOR UPDATE", [user.id]);
     const balance = walletResult.rows[0]?.available_points ?? 0;
-    if (balance < points) {
+    if (!adminExempt && balance < points) {
       await client.query("ROLLBACK");
       return NextResponse.json({ code: "INSUFFICIENT_POINTS", message: "积分不足" }, { status: 402 });
     }
     const promptConfig = workflow.key.includes("video") ? await resolvePromptConfig(client, workflow.key, user.id) : undefined;
-    const input = { assetId: assets[0].id, storageKey: assets[0].storage_key, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), assetMimeTypes: assets.map((asset) => asset.mime_type), prompt, aspectRatio, duration, resolution, scene, style, outputs: workflow.outputsPerTask, ...(promptConfig ? { promptConfig } : {}), ...(inputExtras?.(body) || {}) };
+    const input = { assetId: assets[0].id, storageKey: assets[0].storage_key, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), assetMimeTypes: assets.map((asset) => asset.mime_type), prompt, aspectRatio, duration, resolution, scene, style, outputs: workflow.outputsPerTask, ...(adminExempt ? { billingMode: ADMIN_EXEMPT_BILLING_MODE, quotedPoints: points } : {}), ...(promptConfig ? { promptConfig } : {}), ...(inputExtras?.(body) || {}) };
     await client.query(
       `INSERT INTO generation_tasks (id, user_id, workflow_key, status, points, input_json, idempotency_key, request_id)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
       [taskId, user.id, workflow.key, inputsReady ? "QUEUED" : "PENDING_INPUT_REVIEW", points, JSON.stringify(input), idempotencyKey, requestId],
     );
-    await client.query("UPDATE wallets SET available_points = available_points - $2, frozen_points = frozen_points + $2, version = version + 1, updated_at = NOW() WHERE user_id = $1", [user.id, points]);
-    await client.query(
-      `INSERT INTO wallet_ledger (user_id, type, amount, balance_after, business_type, business_id, idempotency_key)
-       VALUES ($1, 'FREEZE', $2, $3, 'GENERATION_TASK', $4, $5)`,
-      [user.id, -points, balance - points, taskId, `freeze:${taskId}`],
-    );
+    if (adminExempt) {
+      await client.query(
+        `INSERT INTO wallet_ledger (user_id, type, amount, balance_after, business_type, business_id, idempotency_key)
+         VALUES ($1, 'ADMIN_EXEMPT_TASK', 0, $2, 'ADMIN_EXEMPT_TASK', $3, $4)`,
+        [user.id, balance, taskId, `admin-exempt:${taskId}`],
+      );
+    } else {
+      await client.query("UPDATE wallets SET available_points = available_points - $2, frozen_points = frozen_points + $2, version = version + 1, updated_at = NOW() WHERE user_id = $1", [user.id, points]);
+      await client.query(
+        `INSERT INTO wallet_ledger (user_id, type, amount, balance_after, business_type, business_id, idempotency_key)
+         VALUES ($1, 'FREEZE', $2, $3, 'GENERATION_TASK', $4, $5)`,
+        [user.id, -points, balance - points, taskId, `freeze:${taskId}`],
+      );
+    }
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -98,29 +109,31 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
       await getGenerationQueue().add("image-generation", { taskId }, { jobId: taskId, attempts: 1, removeOnComplete: 100, removeOnFail: 100 });
     } catch (error) {
       structuredLog("error", "queue_submission_failed", { ...requestContext(request), taskId, userId: user.id, error });
-      await refundTask(taskId, user.id, points, "QUEUE_UNAVAILABLE");
-      return NextResponse.json({ code: "QUEUE_UNAVAILABLE", message: "任务队列暂不可用，积分已退回" }, { status: 503 });
+      await refundTask(taskId, user.id, points, "QUEUE_UNAVAILABLE", adminExempt);
+      return NextResponse.json({ code: "QUEUE_UNAVAILABLE", message: adminExempt ? "任务队列暂不可用" : "任务队列暂不可用，积分已退回" }, { status: 503 });
     }
   }
-  structuredLog("info", "task_created", { requestId, taskId, userId: user.id, workflowKey: workflow.key, points });
-  return NextResponse.json({ taskId, requestId, status: inputsReady ? "QUEUED" : "PENDING_INPUT_REVIEW", points }, { status: 201, headers: { "x-request-id": requestId } });
+  structuredLog("info", "task_created", { requestId, taskId, userId: user.id, workflowKey: workflow.key, points, adminExempt });
+  return NextResponse.json({ taskId, requestId, status: inputsReady ? "QUEUED" : "PENDING_INPUT_REVIEW", points, adminExempt }, { status: 201, headers: { "x-request-id": requestId } });
 }
 
-async function refundTask(taskId: string, userId: string, points: number, errorCode: string) {
+async function refundTask(taskId: string, userId: string, points: number, errorCode: string, adminExempt: boolean) {
   const client = await db.connect();
   try {
     await client.query("BEGIN");
     const wallet = await client.query<{ available_points: number }>("SELECT available_points FROM wallets WHERE user_id = $1 FOR UPDATE", [userId]);
     const balance = wallet.rows[0]?.available_points ?? 0;
     await client.query("UPDATE generation_tasks SET status = 'FAILED', error_code = $2, updated_at = NOW() WHERE id = $1", [taskId, errorCode]);
-    await client.query("UPDATE wallets SET available_points = available_points + $2, frozen_points = frozen_points - $2, version = version + 1, updated_at = NOW() WHERE user_id = $1", [userId, points]);
-    await client.query(
-      `INSERT INTO wallet_ledger (user_id, type, amount, balance_after, business_type, business_id, idempotency_key)
-       VALUES ($1, 'REFUND', $2, $3, 'GENERATION_TASK', $4, $5) ON CONFLICT (idempotency_key) DO NOTHING`,
-      [userId, points, balance + points, taskId, `refund:${taskId}`],
-    );
+    if (!adminExempt) {
+      await client.query("UPDATE wallets SET available_points = available_points + $2, frozen_points = frozen_points - $2, version = version + 1, updated_at = NOW() WHERE user_id = $1", [userId, points]);
+      await client.query(
+        `INSERT INTO wallet_ledger (user_id, type, amount, balance_after, business_type, business_id, idempotency_key)
+         VALUES ($1, 'REFUND', $2, $3, 'GENERATION_TASK', $4, $5) ON CONFLICT (idempotency_key) DO NOTHING`,
+        [userId, points, balance + points, taskId, `refund:${taskId}`],
+      );
+    }
     const task = await client.query<{ workflow_key: string; email: string | null }>("SELECT t.workflow_key, u.email FROM generation_tasks t JOIN users u ON u.id = t.user_id WHERE t.id = $1", [taskId]);
-    if (task.rows[0]) await enqueueTaskNotification(client, { id: taskId, userId, email: task.rows[0].email, workflowKey: task.rows[0].workflow_key, points }, "FAILED");
+    if (task.rows[0]) await enqueueTaskNotification(client, { id: taskId, userId, email: task.rows[0].email, workflowKey: task.rows[0].workflow_key, points, adminExempt }, "FAILED");
     await client.query("COMMIT");
   } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }

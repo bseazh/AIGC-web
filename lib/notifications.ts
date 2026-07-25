@@ -6,14 +6,14 @@ function escapeHtml(value: string) {
 
 export async function enqueueTaskNotification(
   client: PoolClient,
-  task: { id: string; userId: string; email: string | null; workflowKey: string; points: number },
+  task: { id: string; userId: string; email: string | null; workflowKey: string; points: number; adminExempt?: boolean },
   outcome: "SUCCEEDED" | "FAILED" | "REJECTED",
 ) {
   if (!task.email) return;
   const labels = {
     SUCCEEDED: { event: "TASK_COMPLETED", subject: "你的创作任务已完成", result: "已通过审核，可以下载。" },
-    FAILED: { event: "TASK_FAILED", subject: "你的创作任务未完成", result: `执行失败，${task.points} 积分已退回。` },
-    REJECTED: { event: "TASK_REJECTED", subject: "你的创作任务未通过审核", result: `结果未通过内容审核，${task.points} 积分已退回。` },
+    FAILED: { event: "TASK_FAILED", subject: "你的创作任务未完成", result: task.adminExempt ? "执行失败；本任务为管理员免积分任务，未产生积分变动。" : `执行失败，${task.points} 积分已退回。` },
+    REJECTED: { event: "TASK_REJECTED", subject: "你的创作任务未通过审核", result: task.adminExempt ? "结果未通过内容审核；本任务为管理员免积分任务，未产生积分变动。" : `结果未通过内容审核，${task.points} 积分已退回。` },
   } as const;
   const label = labels[outcome];
   const html = `<div style="font-family:Arial,sans-serif;color:#283241;line-height:1.7"><h2>芭乐AIGC</h2><p>任务 <strong>${escapeHtml(task.id)}</strong>（${escapeHtml(task.workflowKey)}）${label.result}</p><p><a href="${escapeHtml(process.env.PUBLIC_APP_URL || "https://aigc.bigapple.store")}/tasks/${escapeHtml(task.id)}">查看任务详情</a></p></div>`;
