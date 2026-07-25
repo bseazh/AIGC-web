@@ -458,7 +458,18 @@ async function dispatchNotifications() {
     await client.query("ROLLBACK");
     throw error;
   } finally { client.release(); }
+  const suppressedRecipients = new Set(
+    [process.env.ACCEPTANCE_ADMIN_EMAIL, process.env.ACCEPTANCE_USER_EMAIL, process.env.NOTIFICATION_SUPPRESSED_RECIPIENTS]
+      .flatMap((value) => (value || "").split(","))
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean),
+  );
   for (const message of messages) {
+    if (suppressedRecipients.has(message.recipient.trim().toLowerCase())) {
+      await pool.query("UPDATE notification_outbox SET status = 'SUPPRESSED', sent_at = NULL, last_error = NULL, updated_at = NOW() WHERE id = $1", [message.id]);
+      log("info", "notification_suppressed", { notificationId: message.id, recipientType: "acceptance" });
+      continue;
+    }
     try {
       await sendOutboxEmail(message);
       await pool.query("UPDATE notification_outbox SET status = 'SENT', sent_at = NOW(), last_error = NULL, updated_at = NOW() WHERE id = $1", [message.id]);

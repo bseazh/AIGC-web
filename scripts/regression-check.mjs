@@ -24,6 +24,8 @@ const checks = [
   ["administrator exempt failure settlement", "scripts/worker.mjs", "billingMode === \"ADMIN_EXEMPT\""],
   ["administrator exempt UI label", "app/components/app-shell.tsx", "管理员免积分"],
   ["administrator exempt production acceptance", "scripts/admin-exempt-acceptance.mjs", "final wallet and ADMIN_EXEMPT_TASK audit"],
+  ["acceptance notification suppression", "scripts/worker.mjs", "notification_suppressed"],
+  ["direct email suppression", "lib/email.ts", "isNotificationRecipientSuppressed"],
   ["systemd web failure alert", "deploy/aigc-web.service", "OnFailure=aigc-alert@%n.service"],
   ["central log retention", "deploy/observability/loki-config.yml", "retention_period: 720h"],
   ["registration rollout", "app/api/auth/register/route.ts", "PUBLIC_REGISTRATION_ROLLOUT_PERCENT"],

@@ -205,6 +205,9 @@ try {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS notification_outbox_pending_idx ON notification_outbox (next_attempt_at, created_at) WHERE status IN ('PENDING', 'FAILED');
+    ALTER TABLE notification_outbox DROP CONSTRAINT IF EXISTS notification_outbox_status_check;
+    ALTER TABLE notification_outbox ADD CONSTRAINT notification_outbox_status_check
+      CHECK (status IN ('PENDING', 'SENDING', 'SENT', 'FAILED', 'SUPPRESSED'));
 
     ALTER TABLE users ADD COLUMN IF NOT EXISTS deletion_requested_at TIMESTAMPTZ;
     ALTER TABLE users DROP CONSTRAINT IF EXISTS users_check;

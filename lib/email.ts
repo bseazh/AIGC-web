@@ -1,4 +1,5 @@
 import tls from "node:tls";
+import { isNotificationRecipientSuppressed } from "@/lib/notification-suppression";
 
 function encodeFromHeader(value: string, fallbackAddress: string) {
   const sanitized = value.replace(/[\r\n]/g, " ").trim();
@@ -53,8 +54,9 @@ export function emailConfigured() {
 }
 
 export async function sendEmail(to: string, subjectText: string, html: string) {
-  const config = smtpConfig();
   const recipient = to.replace(/[\r\n<>]/g, "").trim();
+  if (isNotificationRecipientSuppressed(recipient)) return;
+  const config = smtpConfig();
   const subject = "=?UTF-8?B?" + Buffer.from(subjectText.replace(/[\r\n]/g, " ")).toString("base64") + "?=";
   const socket = tls.connect({ host: config.host, port: config.port, servername: config.host, rejectUnauthorized: true });
   socket.setTimeout(10_000);
