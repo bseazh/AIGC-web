@@ -90,11 +90,15 @@ async function waitAsset(assetId, expected, timeoutMs = 30_000) {
 }
 
 async function clonePendingAsset(sourceAssetId, label) {
+  const source = await database.query("SELECT owner_id, mime_type FROM assets WHERE id = $1", [sourceAssetId]);
+  if (!source.rows[0]) throw new Error(`Acceptance source asset is missing for ${label}`);
+  const extension = extname(inputPath).toLowerCase().replace(/^\./, "") || "png";
+  const storageKey = `users/${source.rows[0].owner_id}/inputs/${randomUUID()}.${extension}`;
+  await putCosObject(storageKey, inputBuffer, source.rows[0].mime_type);
   const asset = await database.query(
     `INSERT INTO assets (owner_id, kind, storage_key, mime_type, byte_size, audit_status, original_name, metadata_json)
-     SELECT owner_id, 'INPUT', storage_key, mime_type, byte_size, 'PENDING_REVIEW', $2, metadata_json || $3::jsonb
-     FROM assets WHERE id = $1 RETURNING id`,
-    [sourceAssetId, `${label}-${basename(inputPath)}`, JSON.stringify({ acceptanceClone: true, label })],
+     VALUES ($1, 'INPUT', $2, $3, $4, 'PENDING_REVIEW', $5, $6::jsonb) RETURNING id`,
+    [source.rows[0].owner_id, storageKey, source.rows[0].mime_type, inputBuffer.length, `${label}-${basename(inputPath)}`, JSON.stringify({ acceptanceClone: true, label })],
   );
   if (!asset.rows[0]) throw new Error(`Could not clone acceptance asset for ${label}`);
   const review = await database.query(
@@ -140,6 +144,10 @@ async function outputReviews(taskId, expectedCount = 4, timeoutMs = 30_000) {
 
 function cosObjects(prefix) {
   return new Promise((resolvePromise, reject) => cos.getBucket({ Bucket: process.env.COS_BUCKET, Region: process.env.COS_REGION, Prefix: prefix }, (error, data) => error ? reject(error) : resolvePromise(data.Contents || [])));
+}
+
+function putCosObject(Key, Body, ContentType) {
+  return new Promise((resolvePromise, reject) => cos.putObject({ Bucket: process.env.COS_BUCKET, Region: process.env.COS_REGION, Key, Body, ContentType }, (error) => error ? reject(error) : resolvePromise()));
 }
 
 async function ensurePoints(adminCookie, userCookie, userId) {
