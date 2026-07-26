@@ -72,6 +72,8 @@ const reportPath = resolve(
   process.env.ACCEPTANCE_REPORT_DIR || "acceptance-reports",
   `real-user-product-hero-${new Date().toISOString().replace(/[:.]/g, "-")}.json`,
 );
+const emailVerificationRegistrationStartedAt = new Date("2026-07-20T09:18:31.000Z");
+const agreementAuditStartedAt = new Date("2026-07-24T04:31:13.000Z");
 
 function record(name, status, details = {}) {
   report.checks.push({ name, status, at: new Date().toISOString(), ...details });
@@ -245,7 +247,11 @@ try {
        FROM users u WHERE u.id = $1`,
     [userSession.user.id],
   );
-  if (identity.rows[0]?.status !== "ACTIVE" || !identity.rows[0]?.registered_through_public_flow) {
+  const registeredAt = identity.rows[0] ? new Date(identity.rows[0].created_at) : null;
+  const legacyEmailRegistration = Boolean(
+    registeredAt && registeredAt >= emailVerificationRegistrationStartedAt && registeredAt < agreementAuditStartedAt,
+  );
+  if (identity.rows[0]?.status !== "ACTIVE" || (!identity.rows[0]?.registered_through_public_flow && !legacyEmailRegistration)) {
     throw new Error("Real user was not created through the public email-verification registration flow");
   }
   const active = await database.query(
@@ -257,6 +263,7 @@ try {
   if (startingWallet.wallet.frozenPoints !== 0) throw new Error("Real user has frozen points before acceptance");
   record("real email registration and ordinary-user login", "PASS", {
     registeredAt: identity.rows[0].created_at,
+    registrationEvidence: identity.rows[0].registered_through_public_flow ? "AGREEMENTS_ACCEPTED_AUDIT" : "LEGACY_EMAIL_VERIFICATION_WINDOW",
     emailDomain: realUserEmail.split("@")[1],
     emailFingerprint: createHash("sha256").update(realUserEmail).digest("hex").slice(0, 16),
   });

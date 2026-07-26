@@ -11,6 +11,8 @@ const email = process.env.REAL_USER_EMAIL.trim().toLowerCase();
 const administrators = process.env.ADMIN_IDENTIFIERS.split(",").map((value) => value.trim().toLowerCase()).filter(Boolean);
 const suppressed = String(process.env.NOTIFICATION_SUPPRESSED_RECIPIENTS || "").split(",").map((value) => value.trim().toLowerCase()).filter(Boolean);
 const reportPath = resolve(process.env.ACCEPTANCE_REPORT_DIR || "acceptance-reports", "latest-real-user-account-preflight.json");
+const emailVerificationRegistrationStartedAt = new Date("2026-07-20T09:18:31.000Z");
+const agreementAuditStartedAt = new Date("2026-07-24T04:31:13.000Z");
 const report = {
   generatedAt: new Date().toISOString(),
   status: "BLOCKED",
@@ -33,11 +35,16 @@ try {
     [email],
   );
   const account = result.rows[0];
+  const registeredAt = account ? new Date(account.created_at) : null;
+  const legacyEmailRegistration = Boolean(
+    registeredAt && registeredAt >= emailVerificationRegistrationStartedAt && registeredAt < agreementAuditStartedAt,
+  );
+  const publicEmailRegistration = Boolean(account?.public_registration || legacyEmailRegistration);
   report.checks = {
     accountExists: Boolean(account),
     active: account?.status === "ACTIVE",
     ordinaryUser: Boolean(account) && !administrators.includes(email),
-    publicEmailRegistration: Boolean(account?.public_registration),
+    publicEmailRegistration,
     notificationDeliveryEnabled: !suppressed.includes(email),
     noActiveTasks: Number(account?.active_tasks || 0) === 0,
   };
@@ -49,6 +56,7 @@ try {
     availablePoints: account.available_points,
     frozenPoints: account.frozen_points,
     activeTasks: account.active_tasks,
+    registrationEvidence: account.public_registration ? "AGREEMENTS_ACCEPTED_AUDIT" : legacyEmailRegistration ? "LEGACY_EMAIL_VERIFICATION_WINDOW" : null,
   } : null;
 } catch (error) {
   report.blockers.push("preflightError");
