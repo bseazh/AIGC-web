@@ -81,8 +81,8 @@ async function verifiedCreation(cookie, assetId, label) {
   const after = await wallet(cookie);
   assertWalletUnchanged(before, after, `${label} creation`);
   if (!created.adminExempt) throw new Error(`${label} task response is not marked adminExempt`);
-  const ledger = after.ledger.find((entry) => entry.business_id === created.taskId);
-  if (!ledger || ledger.type !== "ADMIN_EXEMPT_TASK" || ledger.business_type !== "ADMIN_EXEMPT_TASK" || ledger.amount !== 0) throw new Error(`${label} ADMIN_EXEMPT_TASK ledger is missing or invalid`);
+  const ledger = after.ledger.find((entry) => entry.businessId === created.taskId);
+  if (!ledger || ledger.type !== "ADMIN_EXEMPT_TASK" || ledger.businessType !== "ADMIN_EXEMPT_TASK" || ledger.amount !== 0) throw new Error(`${label} ADMIN_EXEMPT_TASK ledger is missing or invalid`);
   const detail = (await api(`/api/tasks/${created.taskId}/`, { cookie })).body;
   if (!detail.adminExempt || detail.points !== created.points || detail.points <= 0) throw new Error(`${label} task did not retain quoted cost`);
   return { created, before, detail };
@@ -197,8 +197,8 @@ try {
 
   const finalWallet = await wallet(cookie);
   const taskIds = [cancelCase, failureCase, rejectCase, successCase].map((item) => item.created.taskId);
-  const exemptEntries = finalWallet.ledger.filter((entry) => taskIds.includes(entry.business_id) && entry.type === "ADMIN_EXEMPT_TASK");
-  const unexpectedEntries = finalWallet.ledger.filter((entry) => taskIds.includes(entry.business_id) && ["FREEZE", "SETTLE", "REFUND"].includes(entry.type));
+  const exemptEntries = finalWallet.ledger.filter((entry) => taskIds.includes(entry.businessId) && entry.type === "ADMIN_EXEMPT_TASK");
+  const unexpectedEntries = finalWallet.ledger.filter((entry) => taskIds.includes(entry.businessId) && ["FREEZE", "SETTLE", "REFUND"].includes(entry.type));
   if (exemptEntries.length !== 4 || unexpectedEntries.length) throw new Error("Final administrator ledger audit is inconsistent");
   if (finalWallet.wallet.availablePoints !== 0 || finalWallet.wallet.frozenPoints !== 0) throw new Error("Final administrator wallet is not zero and unfrozen");
   record("final wallet and ADMIN_EXEMPT_TASK audit", "PASS", { exemptEntries: exemptEntries.length, wallet: finalWallet.wallet });

@@ -170,7 +170,7 @@ async function runRefundCase({ label, fault, expectedError, expectedProviderErro
   if (failed.errorCode !== expectedError) throw new Error(`${label} expected ${expectedError}, got ${failed.errorCode}`);
   const after = await wallet(context.userCookie);
   assertWallet(after, walletState(before), `${label} refund`);
-  const entries = after.ledger.filter((entry) => entry.business_id === created.taskId);
+  const entries = after.ledger.filter((entry) => entry.businessId === created.taskId);
   if (!entries.some((entry) => entry.type === "FREEZE") || !entries.some((entry) => entry.type === "REFUND")) throw new Error(`${label} freeze/refund ledger is incomplete`);
   if (expectedProviderError) {
     const logs = await database.query("SELECT error_code FROM provider_call_logs WHERE task_id = $1 AND provider = 'sophnet'", [created.taskId]);
@@ -234,7 +234,7 @@ try {
   }
   const afterSuccess = await wallet(userCookie);
   assertWallet(afterSuccess, { availablePoints: beforeSuccess.wallet.availablePoints - 10, frozenPoints: beforeSuccess.wallet.frozenPoints }, "success settlement");
-  const successLedger = afterSuccess.ledger.filter((entry) => entry.business_id === successCreation.taskId);
+  const successLedger = afterSuccess.ledger.filter((entry) => entry.businessId === successCreation.taskId);
   if (!successLedger.some((entry) => entry.type === "FREEZE") || !successLedger.some((entry) => entry.type === "SETTLE") || successLedger.some((entry) => entry.type === "REFUND")) throw new Error("Success ledger is inconsistent");
   const providerLogs = await database.query("SELECT operation, response_status, error_code, provider_request_id FROM provider_call_logs WHERE task_id = $1 AND provider = 'sophnet' ORDER BY created_at", [successCreation.taskId]);
   const createLogs = providerLogs.rows.filter((entry) => entry.operation === "create_image_task" && entry.response_status >= 200 && entry.response_status < 300 && !entry.error_code && entry.provider_request_id);

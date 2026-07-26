@@ -114,7 +114,7 @@ try {
   const grant = Math.max(100, minimumAcceptancePoints - initialWallet.wallet.availablePoints);
   await api("/api/admin/wallets/adjust/", { cookie: adminCookie, method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: session.user.id, kind: "TEST_CREDIT", testPoints: grant, note: "Automated production full-chain acceptance" }) });
   const fundedWallet = await wallet(userCookie);
-  if (fundedWallet.wallet.availablePoints < minimumAcceptancePoints || !fundedWallet.ledger.some((entry) => entry.business_type === "TEST_CREDIT")) throw new Error("Administrator test credit grant is missing");
+  if (fundedWallet.wallet.availablePoints < minimumAcceptancePoints || !fundedWallet.ledger.some((entry) => entry.businessType === "TEST_CREDIT")) throw new Error("Administrator test credit grant is missing");
   record("administrator grants isolated acceptance test points", "PASS", { grantedPoints: grant, availablePoints: fundedWallet.wallet.availablePoints });
 
   const codeCreation = (await api("/api/admin/recharge-codes/", { cookie: adminCookie, expected: [201], method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ points: 37, maxRedemptions: 1, note: "Automated production acceptance redemption" }) })).body;
@@ -127,7 +127,7 @@ try {
   await api("/api/admin/recharge-codes/", { cookie: adminCookie, method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: disabledCode.id, status: "DISABLED" }) });
   await api("/api/recharge-codes/redeem/", { cookie: userCookie, expected: [400], method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: disabledCode.code }) });
   const walletAfterCode = await wallet(userCookie);
-  if (!walletAfterCode.ledger.some((entry) => entry.business_id === codeCreation.id && entry.business_type === "RECHARGE_CODE")) throw new Error("Recharge code ledger entry is missing");
+  if (!walletAfterCode.ledger.some((entry) => entry.businessId === codeCreation.id && entry.businessType === "RECHARGE_CODE")) throw new Error("Recharge code ledger entry is missing");
   record("recharge code redemption, duplicate denial and disable", "PASS", { codeId: codeCreation.id, points: 37 });
 
   const walletBefore = await wallet(userCookie);
@@ -149,7 +149,7 @@ try {
   const successCreation = await createTask(userCookie, presign.assetId);
   if (successCreation.status !== "PENDING_INPUT_REVIEW") throw new Error(`Task bypassed input review with status ${successCreation.status}`);
   const walletFrozen = await wallet(userCookie);
-  if (!walletFrozen.ledger.some((entry) => entry.business_id === successCreation.taskId && entry.type === "FREEZE")) throw new Error("Task freeze ledger entry missing");
+  if (!walletFrozen.ledger.some((entry) => entry.businessId === successCreation.taskId && entry.type === "FREEZE")) throw new Error("Task freeze ledger entry missing");
   record("task waits for input review with point freeze", "PASS", { taskId: successCreation.taskId, points: successCreation.points });
 
   const inputReview = await waitForReview(adminCookie, (review) => review.assetId === presign.assetId);
@@ -171,7 +171,7 @@ try {
   record("worker output review and task settlement", "PASS", { outputCount: succeededTask.outputs.length });
 
   const walletSettled = await wallet(userCookie);
-  if (!walletSettled.ledger.some((entry) => entry.business_id === successCreation.taskId && entry.type === "SETTLE")) throw new Error("Task settlement ledger entry missing");
+  if (!walletSettled.ledger.some((entry) => entry.businessId === successCreation.taskId && entry.type === "SETTLE")) throw new Error("Task settlement ledger entry missing");
   if (walletSettled.wallet.availablePoints !== walletBefore.wallet.availablePoints - successCreation.points || walletSettled.wallet.frozenPoints !== walletBefore.wallet.frozenPoints) throw new Error("Settled wallet balances are inconsistent");
   record("settled point ledger and balances", "PASS");
 
@@ -204,7 +204,7 @@ try {
     if (rejectionResult.status === "REJECTED") {
       const walletRefunded = await wallet(userCookie);
       if (rejectionResult.errorCode !== "CONTENT_REJECTED") throw new Error("Rejected task did not record CONTENT_REJECTED");
-      if (!walletRefunded.ledger.some((entry) => entry.business_id === rejectionCreation.taskId && entry.type === "REFUND")) throw new Error("Rejected task refund ledger entry missing");
+      if (!walletRefunded.ledger.some((entry) => entry.businessId === rejectionCreation.taskId && entry.type === "REFUND")) throw new Error("Rejected task refund ledger entry missing");
       if (walletRefunded.wallet.availablePoints !== walletSettled.wallet.availablePoints || walletRefunded.wallet.frozenPoints !== walletSettled.wallet.frozenPoints) throw new Error("Refund did not restore wallet balances");
       record("review rejection and automatic refund", "PASS", { taskId: rejectionCreation.taskId, points: rejectionCreation.points });
     } else record("review rejection and automatic refund", "SKIP", { reason: "automatic provider approved output before the acceptance administrator could reject it" });

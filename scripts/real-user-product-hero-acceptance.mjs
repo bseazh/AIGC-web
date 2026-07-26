@@ -356,7 +356,7 @@ try {
 
   const finalWallet = await wallet(userCookie);
   assertWallet(finalWallet, walletState(startingWallet), "recharge and successful settlement net result");
-  const taskLedger = finalWallet.ledger.filter((entry) => entry.business_id === created.taskId);
+  const taskLedger = finalWallet.ledger.filter((entry) => entry.businessId === created.taskId);
   if (!taskLedger.some((entry) => entry.type === "FREEZE") || !taskLedger.some((entry) => entry.type === "SETTLE") || taskLedger.some((entry) => entry.type === "REFUND")) {
     throw new Error("Real-user task wallet ledger is inconsistent");
   }
