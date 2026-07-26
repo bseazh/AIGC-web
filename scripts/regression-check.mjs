@@ -28,6 +28,7 @@ const checks = [
   ["administrator exempt production acceptance", "scripts/admin-exempt-acceptance.mjs", "final wallet and ADMIN_EXEMPT_TASK audit"],
   ["product hero production acceptance", "scripts/product-hero-acceptance.mjs", "real SophNet create/query/download protocol"],
   ["real user product hero production acceptance", "scripts/real-user-product-hero-acceptance.mjs", "official recharge-code credit"],
+  ["real user account production preflight", "scripts/real-user-account-preflight.mjs", "publicEmailRegistration"],
   ["SophNet provider logs", "scripts/worker.mjs", "create_image_task"],
   ["SophNet production preflight", "scripts/production-preflight.mjs", "SophNet access: OK"],
   ["acceptance notification suppression", "scripts/worker.mjs", "notification_suppressed"],

@@ -1,0 +1,68 @@
+name: Real user account production preflight
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: production-acceptance
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Validate real-user email secret
+        env:
+          REAL_USER_EMAIL: ${{ secrets.REAL_USER_EMAIL }}
+        run: |
+          test -n "$REAL_USER_EMAIL"
+          case "${REAL_USER_EMAIL,,}" in
+            *production-acceptance-*) exit 1 ;;
+          esac
+      - name: Configure SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+      - name: Run account preflight
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          REAL_USER_EMAIL: ${{ secrets.REAL_USER_EMAIL }}
+        run: |
+          real_user_email_b64="$(printf '%s' "$REAL_USER_EMAIL" | base64 -w 0)"
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+            "DEPLOY_PATH='$DEPLOY_PATH' REAL_USER_EMAIL_B64='$real_user_email_b64' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          set -a
+          source .env.production
+          set +a
+          export REAL_USER_EMAIL="$(printf '%s' "$REAL_USER_EMAIL_B64" | base64 -d)"
+          unset REAL_USER_EMAIL_B64
+          mkdir -p acceptance-reports
+          node scripts/real-user-account-preflight.mjs
+          REMOTE
+      - name: Download preflight report
+        if: always()
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: scp -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/acceptance-reports/latest-real-user-account-preflight.json" real-user-account-preflight.json
+      - name: Show preflight report
+        if: always()
+        run: cat real-user-account-preflight.json
+      - name: Upload preflight report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-user-account-preflight-${{ github.run_id }}
+          path: real-user-account-preflight.json
+          if-no-files-found: error
