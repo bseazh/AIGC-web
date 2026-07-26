@@ -215,20 +215,12 @@ function cosObjects(prefix) {
   });
 }
 
-async function waitNotification(taskId, timeoutMs = 90_000) {
-  const deadline = Date.now() + timeoutMs;
-  let last;
-  while (Date.now() < deadline) {
-    const result = await database.query(
-      "SELECT recipient, event_type, status, attempts, sent_at, last_error FROM notification_outbox WHERE idempotency_key = $1",
-      [`task_completed:${taskId}`],
-    );
-    last = result.rows[0];
-    if (last?.status === "SENT") return last;
-    if (last?.status === "SUPPRESSED") throw new Error("Real-user completion email was suppressed");
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 1000));
-  }
-  throw new Error(`Completion email was not sent: ${last?.status || "missing"} ${last?.last_error || ""}`.trim());
+async function assertNoRoutineSuccessEmail(taskId) {
+  const result = await database.query(
+    "SELECT status FROM notification_outbox WHERE idempotency_key = $1",
+    [`task_completed:${taskId}`],
+  );
+  if (result.rowCount) throw new Error(`Routine task success email was unexpectedly queued as ${result.rows[0].status}`);
 }
 
 try {
@@ -370,15 +362,8 @@ try {
   }
   record("ordinary-user successful 10-point settlement", "PASS", { chargedPoints: 10, finalWallet: walletState(finalWallet) });
 
-  const notification = await waitNotification(created.taskId);
-  if (notification.recipient.toLowerCase() !== realUserEmail || notification.event_type !== "TASK_COMPLETED") {
-    throw new Error("Completion notification recipient or event is invalid");
-  }
-  record("real mailbox completion notification accepted by SMTP", "PASS", {
-    status: notification.status,
-    attempts: notification.attempts,
-    sentAt: notification.sent_at,
-  });
+  await assertNoRoutineSuccessEmail(created.taskId);
+  record("routine task success email remains disabled", "PASS", { successEmailQueued: false });
 
   report.status = "PASSED";
   report.evidence = {
@@ -390,7 +375,7 @@ try {
     outputAssetIds: succeeded.outputs.map((item) => item.assetId),
     chargedPoints: 10,
     finalWallet: walletState(finalWallet),
-    notificationStatus: notification.status,
+    successEmailQueued: false,
   };
 } catch (error) {
   report.status = "FAILED";

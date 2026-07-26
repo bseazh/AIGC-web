@@ -10,6 +10,7 @@ export async function enqueueTaskNotification(
   outcome: "SUCCEEDED" | "FAILED" | "REJECTED",
 ) {
   if (!task.email) return;
+  if (outcome === "SUCCEEDED" && process.env.EMAIL_NOTIFY_TASK_SUCCEEDED !== "true") return;
   const labels = {
     SUCCEEDED: { event: "TASK_COMPLETED", subject: "你的创作任务已完成", result: "已通过审核，可以下载。" },
     FAILED: { event: "TASK_FAILED", subject: "你的创作任务未完成", result: task.adminExempt ? "执行失败；本任务为管理员免积分任务，未产生积分变动。" : `执行失败，${task.points} 积分已退回。` },

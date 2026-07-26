@@ -26,6 +26,13 @@ function statusIcon(status: string) {
   return <LoaderCircle size={17} />;
 }
 
+function pointsLabel(task: Task) {
+  if (task.adminExempt) return "管理员免积分";
+  if (task.status === "SUCCEEDED") return `已扣 ${task.points} 积分`;
+  if (["FAILED", "REJECTED", "CANCELED"].includes(task.status)) return `已退回 ${task.points} 积分`;
+  return `冻结 ${task.points} 积分`;
+}
+
 export default function TasksPage() {
   const router = useRouter();
   const [account, setAccount] = useState<Account | null>(null);
@@ -75,7 +82,7 @@ export default function TasksPage() {
               <div className="record-thumb">{task.thumbnailUrl ? <img src={task.thumbnailUrl} alt="" /> : <ImageIcon size={22} />}</div>
               <div className="record-main"><strong>{task.workflowName}</strong><span>{[task.params.scene, task.params.style, task.params.aspectRatio].filter(Boolean).join(" · ") || "默认生成设置"}</span><time>{new Date(task.createdAt).toLocaleString("zh-CN")}</time></div>
               <span className={`record-status status-${task.status.toLowerCase()}`}>{statusIcon(task.status)}{task.statusLabel}</span>
-              <span className="record-points">{task.adminExempt ? "管理员免积分" : `${task.points} 积分`}</span>
+              <span className="record-points">{pointsLabel(task)}</span>
               <span className="record-output">{["FAILED", "REJECTED", "CANCELED"].includes(task.status) ? (task.adminExempt ? `未产生积分变动 · 报价 ${task.points} 积分` : `失败已退回 ${task.points} 积分`) : task.outputCount ? `${task.outputCount} 个结果` : task.errorCode || "等待结果"}</span>
               <ChevronRight size={18} />
             </Link>

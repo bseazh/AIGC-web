@@ -32,6 +32,8 @@ const checks = [
   ["SophNet provider logs", "scripts/worker.mjs", "create_image_task"],
   ["SophNet production preflight", "scripts/production-preflight.mjs", "SophNet access: OK"],
   ["acceptance notification suppression", "scripts/worker.mjs", "notification_suppressed"],
+  ["routine task success email disabled by default", "lib/notifications.ts", "EMAIL_NOTIFY_TASK_SUCCEEDED !== \"true\""],
+  ["wallet shows successful frozen-point settlement", "app/api/wallet/route.ts", "从冻结积分中正式扣除"],
   ["direct email suppression", "lib/email.ts", "isNotificationRecipientSuppressed"],
   ["systemd web failure alert", "deploy/aigc-web.service", "OnFailure=aigc-alert@%n.service"],
   ["central log retention", "deploy/observability/loki-config.yml", "retention_period: 720h"],
