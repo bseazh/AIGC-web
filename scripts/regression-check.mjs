@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 const checks = [
   ["upload review gate", "app/api/uploads/confirm/route.ts", "audit_status = 'PENDING_REVIEW'"],
   ["worker output review gate", "scripts/worker.mjs", "'PENDING_REVIEW'"],
+  ["manual review cannot be overwritten by automation", "scripts/moderation-worker.mjs", "review.review_source === \"MANUAL\""],
   ["download READY gate", "app/api/assets/[id]/download/route.ts", "audit_status = 'READY'"],
   ["task list avoids pending output URL", "app/api/tasks/list/route.ts", "task.status === \"SUCCEEDED\""],
   ["content rejection refund", "app/api/admin/reviews/[id]/route.ts", "CONTENT_REJECTED"],
@@ -26,6 +27,7 @@ const checks = [
   ["administrator exempt UI label", "app/components/app-shell.tsx", "管理员免积分"],
   ["administrator exempt production acceptance", "scripts/admin-exempt-acceptance.mjs", "final wallet and ADMIN_EXEMPT_TASK audit"],
   ["product hero production acceptance", "scripts/product-hero-acceptance.mjs", "real SophNet create/query/download protocol"],
+  ["real user product hero production acceptance", "scripts/real-user-product-hero-acceptance.mjs", "official recharge-code credit"],
   ["SophNet provider logs", "scripts/worker.mjs", "create_image_task"],
   ["SophNet production preflight", "scripts/production-preflight.mjs", "SophNet access: OK"],
   ["acceptance notification suppression", "scripts/worker.mjs", "notification_suppressed"],

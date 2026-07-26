@@ -1,0 +1,91 @@
+name: Real user product hero production acceptance
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: production-acceptance
+  cancel-in-progress: false
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Validate real-user secrets
+        env:
+          REAL_USER_EMAIL: ${{ secrets.REAL_USER_EMAIL }}
+          REAL_USER_PASSWORD: ${{ secrets.REAL_USER_PASSWORD }}
+          REAL_USER_INPUT_FILE: ${{ secrets.REAL_USER_INPUT_FILE }}
+          REAL_USER_INPUT_URL: ${{ secrets.REAL_USER_INPUT_URL }}
+        run: |
+          test -n "$REAL_USER_EMAIL"
+          test -n "$REAL_USER_PASSWORD"
+          test -n "$REAL_USER_INPUT_FILE" || test -n "$REAL_USER_INPUT_URL"
+          case "${REAL_USER_EMAIL,,}" in
+            *production-acceptance-*) exit 1 ;;
+          esac
+      - name: Configure SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+      - name: Run real-user product hero acceptance
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          REAL_USER_EMAIL: ${{ secrets.REAL_USER_EMAIL }}
+          REAL_USER_PASSWORD: ${{ secrets.REAL_USER_PASSWORD }}
+          REAL_USER_INPUT_FILE: ${{ secrets.REAL_USER_INPUT_FILE }}
+          REAL_USER_INPUT_URL: ${{ secrets.REAL_USER_INPUT_URL }}
+        run: |
+          real_user_email_b64="$(printf '%s' "$REAL_USER_EMAIL" | base64 -w 0)"
+          real_user_password_b64="$(printf '%s' "$REAL_USER_PASSWORD" | base64 -w 0)"
+          real_user_input_file_b64="$(printf '%s' "$REAL_USER_INPUT_FILE" | base64 -w 0)"
+          real_user_input_url_b64="$(printf '%s' "$REAL_USER_INPUT_URL" | base64 -w 0)"
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+            "DEPLOY_PATH='$DEPLOY_PATH' REAL_USER_EMAIL_B64='$real_user_email_b64' REAL_USER_PASSWORD_B64='$real_user_password_b64' REAL_USER_INPUT_FILE_B64='$real_user_input_file_b64' REAL_USER_INPUT_URL_B64='$real_user_input_url_b64' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          set -a
+          source .env.production
+          set +a
+          export REAL_USER_EMAIL="$(printf '%s' "$REAL_USER_EMAIL_B64" | base64 -d)"
+          export REAL_USER_PASSWORD="$(printf '%s' "$REAL_USER_PASSWORD_B64" | base64 -d)"
+          export REAL_USER_INPUT_FILE="$(printf '%s' "$REAL_USER_INPUT_FILE_B64" | base64 -d)"
+          export REAL_USER_INPUT_URL="$(printf '%s' "$REAL_USER_INPUT_URL_B64" | base64 -d)"
+          unset REAL_USER_EMAIL_B64 REAL_USER_PASSWORD_B64 REAL_USER_INPUT_FILE_B64 REAL_USER_INPUT_URL_B64
+          if [[ -n "$REAL_USER_INPUT_FILE" ]]; then test -f "$REAL_USER_INPUT_FILE"; else [[ "$REAL_USER_INPUT_URL" == https://* ]]; fi
+          mkdir -p acceptance-reports
+          set +e
+          npm run verify:real-user-product-hero
+          result=$?
+          set -e
+          latest="$(ls -1t acceptance-reports/real-user-product-hero-*.json | head -1)"
+          cp "$latest" acceptance-reports/latest-real-user-product-hero-acceptance.json
+          exit "$result"
+          REMOTE
+      - name: Download acceptance report
+        if: always()
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: scp -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/acceptance-reports/latest-real-user-product-hero-acceptance.json" real-user-product-hero-acceptance.json
+      - name: Show acceptance summary
+        if: always()
+        run: |
+          cat real-user-product-hero-acceptance.json
+          node -e "const report=require('./real-user-product-hero-acceptance.json'); if(report.status!=='PASSED') throw new Error('Real-user product hero acceptance status is '+report.status)"
+      - name: Upload acceptance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-user-product-hero-acceptance-${{ github.run_id }}
+          path: real-user-product-hero-acceptance.json
+          if-no-files-found: error

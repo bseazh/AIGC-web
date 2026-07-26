@@ -121,13 +121,13 @@ async function postDecision(reviewId, decision, metadata) {
 
 const worker = new Worker("moderation", async (job) => {
   const found = await pool.query(
-    `SELECT r.id, r.status, a.id AS asset_id, a.storage_key, a.mime_type
+    `SELECT r.id, r.status, r.review_source, a.id AS asset_id, a.storage_key, a.mime_type
      FROM content_review_records r JOIN assets a ON a.id = r.asset_id
      WHERE r.id = $1 AND a.id = $2`,
     [job.data.reviewId, job.data.assetId],
   );
   const review = found.rows[0];
-  if (!review || !["PENDING", "NEEDS_MANUAL"].includes(review.status)) return { skipped: true };
+  if (!review || review.review_source === "MANUAL" || !["PENDING", "NEEDS_MANUAL"].includes(review.status)) return { skipped: true };
   try {
     const audited = review.mime_type.startsWith("video/") ? await auditVideo(review.storage_key) : { response: await auditImage(review.storage_key) };
     const summary = audited.summary || normalizedPayload(audited.response);

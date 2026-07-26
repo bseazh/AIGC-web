@@ -61,6 +61,8 @@ sudo systemctl status aigc-worker --no-pager
 
 配置隔离的验收用户、管理员和已授权商品图后执行 `npm run verify:ark-video`。脚本会通过网站 API 完成登录、COS 上传、输入审核、任务创建、Worker 生成、输出审核、下载权限、积分结算、拒绝退款和 COS 对象检查，并将可留档 JSON 报告写入 `acceptance-reports/`。
 
+真实用户商品主图灰度验收通过 `Real user product hero production acceptance` 工作流手动执行。工作流要求在 GitHub `production` 环境中配置 `REAL_USER_EMAIL`、`REAL_USER_PASSWORD`，并通过 `REAL_USER_INPUT_URL`（推荐）或 `REAL_USER_INPUT_FILE` 提供已授权商品图片；账号必须由公开邮箱验证码注册流程创建，且不能是管理员、隔离验收账号或邮件抑制收件人。微信支付未开放时，脚本使用一次性充值码完成正式积分获取，随后验证真实上传、人工输入/输出审核、四张结果入库下载、10 积分结算和成功邮件投递。真实用户凭据只注入单次工作流进程，不写入生产环境文件或验收报告。
+
 生命周期维护每小时恢复审核后漏排队的任务、退回审核超时任务积分，并在注销冷静期结束后清理账户素材与可识别标识。用户可在模型执行前取消待审核或排队任务并立即取回冻结积分。
 
 发布前后检查项见 `docs/operations/release-checklist.md`。
