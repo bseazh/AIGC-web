@@ -37,7 +37,7 @@ export default function AdminDashboardPage() {
     <section className="admin-summary-grid">
       <article><Users size={20} /><span>用户总览</span><strong>{overview.users.length}</strong><small>最近 50 位用户</small></article>
       <article><Activity size={20} /><span>进行中任务</span><strong>{activeTasks}</strong><small>等待处理、排队或生成中</small></article>
-      <article><Boxes size={20} /><span>内容资产</span><strong>{overview.assets.length}</strong><small>最近 50 条资产</small></article>
+      <Link href="/assets"><Boxes size={20} /><span>内容资产</span><strong>{overview.assets.length}</strong><small>进入资产库查看与预览</small></Link>
       <article><ScrollText size={20} /><span>积分流水</span><strong>{overview.ledger.length}</strong><small>最近 50 条变动</small></article>
     </section>
     <section className="admin-module-grid">{modules.map((item) => { const Icon = item.icon; return <Link href={item.href} key={item.href}><span><Icon size={21} /></span><div><strong>{item.title}</strong><p>{item.description}</p></div><ClipboardCheck size={17} /></Link>; })}</section>

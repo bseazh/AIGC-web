@@ -1,13 +1,14 @@
 "use client";
 
-import { ArrowLeft, CheckCircle2, Download, ImageIcon, LoaderCircle, RefreshCw, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Download, ImageIcon, LoaderCircle, RefreshCw, X, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppShell, LoadingScreen } from "@/app/components/app-shell";
 
 type Account = { user: { displayName: string; isAdministrator?: boolean }; wallet: { availablePoints: number } };
-type TaskDetail = { taskId: string; workflowName: string; status: string; statusLabel: string; points: number; adminExempt?: boolean; outputs: Array<{ assetId: string; url: string; mimeType: string; name: string }>; errorCode?: string; createdAt: string; updatedAt: string };
+type TaskOutput = { assetId: string; url: string; mimeType: string; name: string };
+type TaskDetail = { taskId: string; workflowName: string; status: string; statusLabel: string; points: number; adminExempt?: boolean; outputs: TaskOutput[]; errorCode?: string; createdAt: string; updatedAt: string };
 const failureReasons: Record<string, string> = { QUEUE_UNAVAILABLE: "任务队列暂不可用", PROVIDER_TIMEOUT: "生成服务响应超时", PROVIDER_ERROR: "生成服务返回异常", CONTENT_REJECTED: "生成结果未通过审核", INPUT_CONTENT_REJECTED: "输入素材未通过审核", INPUT_REVIEW_TIMEOUT: "输入素材审核等待超时", OUTPUT_REVIEW_TIMEOUT: "生成结果审核等待超时", USER_CANCELED: "用户主动取消任务", TASK_TIMEOUT: "任务超时，积分已自动退回" };
 
 function billingState(task: TaskDetail) {
@@ -26,6 +27,7 @@ export default function TaskDetailPage() {
   const [loading, setLoading] = useState(true);
   const [retrying, setRetrying] = useState(false);
   const [canceling, setCanceling] = useState(false);
+  const [previewOutput, setPreviewOutput] = useState<TaskOutput | null>(null);
   const load = async () => {
     if (!taskId) return router.replace("/tasks");
     setLoading(true);
@@ -41,6 +43,24 @@ export default function TaskDetailPage() {
     }).catch(() => router.replace("/"));
     load();
   }, [taskId, router]);
+  useEffect(() => {
+    if (!previewOutput) return;
+    const previousOverflow = document.body.style.overflow;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPreviewOutput(null);
+      if (!["ArrowLeft", "ArrowRight"].includes(event.key) || !task || task.outputs.length < 2) return;
+      const currentIndex = task.outputs.findIndex((output) => output.assetId === previewOutput.assetId);
+      if (currentIndex < 0) return;
+      const offset = event.key === "ArrowLeft" ? -1 : 1;
+      setPreviewOutput(task.outputs[(currentIndex + offset + task.outputs.length) % task.outputs.length]);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [previewOutput, task]);
   const retry = async () => {
     if (!task || !["FAILED", "REJECTED", "CANCELED"].includes(task.status)) return;
     setRetrying(true);
@@ -62,6 +82,11 @@ export default function TaskDetailPage() {
     } catch (error) { window.alert(error instanceof Error ? error.message : "任务取消失败"); }
     finally { setCanceling(false); }
   };
+  const previewIndex = previewOutput && task ? task.outputs.findIndex((output) => output.assetId === previewOutput.assetId) : -1;
+  const movePreview = (offset: number) => {
+    if (!task || previewIndex < 0 || task.outputs.length < 2) return;
+    setPreviewOutput(task.outputs[(previewIndex + offset + task.outputs.length) % task.outputs.length]);
+  };
   if (!account) return <LoadingScreen />;
   return <AppShell active="tasks" account={account}>
     <div className="app-page-content">
@@ -70,8 +95,9 @@ export default function TaskDetailPage() {
         <section className="task-summary"><div><span>任务状态</span><strong className={`status-${task.status.toLowerCase()}`}>{task.status === "SUCCEEDED" && <CheckCircle2 size={18} />}{task.statusLabel}</strong></div><div><span>{billingState(task).label}</span><strong>{billingState(task).value}</strong></div><div><span>创建时间</span><strong>{new Date(task.createdAt).toLocaleString("zh-CN")}</strong></div><div><span>结果数量</span><strong>{task.outputs.length}</strong></div></section>
         {task.adminExempt && <p className="task-error-banner">本任务报价 {task.points} 积分，仅用于成本审计；管理员账号未冻结或扣除积分。</p>}
         {task.errorCode && <p className="task-error-banner">失败原因：{failureReasons[task.errorCode] || task.errorCode}。{task.adminExempt ? "本任务未产生积分变动。" : "失败任务积分已按规则退回。"}</p>}
-        <section className="detail-results"><div className="section-title"><div><h2>生成结果</h2><p>{task.status === "PENDING_REVIEW" ? "这是一条历史待处理任务，系统将在维护时自动释放结果。" : "生成结果已保存到内容资产。"}</p></div></div>{task.outputs.length ? <div className="asset-grid">{task.outputs.map((output, index) => <article className="asset-card" key={output.assetId}><div className="asset-media">{output.mimeType.startsWith("video/") ? <video src={output.url} controls playsInline /> : <img src={output.url} alt={`${output.name} ${index + 1}`} />}</div><div className="asset-card-footer"><strong>{output.name || `生成结果 ${index + 1}`}</strong><a href={`/api/assets/${output.assetId}/download/`}><Download size={16} />下载</a></div></article>)}</div> : <div className="page-empty compact"><span><ImageIcon size={25} /></span><strong>{task.status === "PENDING_REVIEW" ? "历史任务处理中" : "结果尚未生成"}</strong><p>{task.status === "PENDING_REVIEW" ? "系统维护完成后会自动开放结果。" : "任务完成后结果会自动出现在这里。"}</p></div>}</section>
+        <section className="detail-results"><div className="section-title"><div><h2>生成结果</h2><p>{task.status === "PENDING_REVIEW" ? "这是一条历史待处理任务，系统将在维护时自动释放结果。" : "生成结果已保存到内容资产。"}</p></div></div>{task.outputs.length ? <div className="asset-grid">{task.outputs.map((output, index) => <article className="asset-card" key={output.assetId}><button className="asset-media" type="button" aria-label={`预览${output.name || `生成结果 ${index + 1}`}`} onClick={() => setPreviewOutput(output)}>{output.mimeType.startsWith("video/") ? <video src={output.url} muted preload="metadata" playsInline /> : <img src={output.url} alt={`${output.name} ${index + 1}`} />}</button><div className="asset-card-footer"><strong>{output.name || `生成结果 ${index + 1}`}</strong><a href={`/api/assets/${output.assetId}/download/`}><Download size={16} />下载</a></div></article>)}</div> : <div className="page-empty compact"><span><ImageIcon size={25} /></span><strong>{task.status === "PENDING_REVIEW" ? "历史任务处理中" : "结果尚未生成"}</strong><p>{task.status === "PENDING_REVIEW" ? "系统维护完成后会自动开放结果。" : "任务完成后结果会自动出现在这里。"}</p></div>}</section>
       </>}
     </div>
+    {previewOutput && <div className="asset-preview-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setPreviewOutput(null)}><section className="asset-preview-modal" role="dialog" aria-modal="true" aria-label={`预览${previewOutput.name || "生成结果"}`}><button className="asset-preview-close" type="button" aria-label="关闭预览" title="关闭" onClick={() => setPreviewOutput(null)}><X size={21} /></button><div className="asset-preview-stage">{previewOutput.mimeType.startsWith("video/") ? <video key={previewOutput.assetId} src={previewOutput.url} controls autoPlay playsInline /> : <img src={previewOutput.url} alt={previewOutput.name || "生成结果"} />}</div>{task && task.outputs.length > 1 && <><button className="asset-preview-nav previous" type="button" aria-label="上一个" title="上一个" onClick={() => movePreview(-1)}><ChevronLeft size={24} /></button><button className="asset-preview-nav next" type="button" aria-label="下一个" title="下一个" onClick={() => movePreview(1)}><ChevronRight size={24} /></button></>}<footer><div><strong>{previewOutput.name || "生成结果"}</strong><small>生成结果</small></div><a href={`/api/assets/${previewOutput.assetId}/download/`}><Download size={17} />下载</a></footer></section></div>}
   </AppShell>;
 }
