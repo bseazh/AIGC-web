@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { authenticatedUser } from "@/lib/session";
 import { audit } from "@/lib/audit";
 import { enqueueContentReview } from "@/lib/queue";
+import { contentReviewEnabled } from "@/lib/content-review";
 
 export async function POST(request: NextRequest) {
   const user = await authenticatedUser(request);
@@ -31,6 +32,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ code: "VIDEO_METADATA_REQUIRED", message: "无法读取视频时长，请重新选择可正常播放的 MP4 文件" }, { status: 400 });
     }
     const metadataJson = asset.mime_type === "video/mp4" ? { durationSeconds: Math.round(videoDurationSeconds * 1000) / 1000 } : {};
+    if (!contentReviewEnabled()) {
+      const changed = await db.query(
+        `UPDATE assets SET audit_status = 'READY', metadata_json = metadata_json || $2::jsonb, updated_at = NOW()
+         WHERE id = $1 AND audit_status = 'UPLOADING' RETURNING id`,
+        [asset.id, JSON.stringify({ ...metadataJson, moderation: { status: "BYPASSED", bypassedAt: new Date().toISOString() } })],
+      );
+      if (!changed.rowCount) return NextResponse.json({ code: "ASSET_STATE_CHANGED" }, { status: 409 });
+      await audit(user.id, "ASSET_UPLOAD_CONFIRMED", request, { type: "asset", id: asset.id }, { contentReview: "disabled" });
+      return NextResponse.json({ assetId: asset.id, status: "READY", message: "素材已上传，可以直接用于创作" });
+    }
     const client = await db.connect();
     let reviewId = "";
     try {

@@ -7,7 +7,8 @@ const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2 })
 const redis = new URL(process.env.REDIS_URL);
 const connection = { host: redis.hostname, port: Number(redis.port || 6379), password: redis.password || undefined, maxRetriesPerRequest: null };
 const generation = new Queue("generation", { connection });
-const moderation = new Queue("moderation", { connection });
+const contentReviewEnabled = process.env.CONTENT_REVIEW_ENABLED === "true";
+const moderation = contentReviewEnabled ? new Queue("moderation", { connection }) : null;
 
 async function loki5xx() {
   try {
@@ -24,12 +25,12 @@ try {
     pool.query("SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE status='FAILED')::int AS failed FROM generation_tasks WHERE created_at > NOW()-INTERVAL '15 minutes'"),
     pool.query("SELECT COUNT(*)::int AS abnormal FROM payment_refunds WHERE status IN ('ABNORMAL','FAILED') AND updated_at > NOW()-INTERVAL '15 minutes'"),
     pool.query("SELECT details_json->>'kind' AS kind, MAX(last_seen_at) AS last_seen_at FROM worker_heartbeats GROUP BY details_json->>'kind'"),
-    generation.getWaitingCount(), moderation.getWaitingCount(), loki5xx(),
+    generation.getWaitingCount(), moderation ? moderation.getWaitingCount() : 0, loki5xx(),
   ]);
   const total = Number(tasks.rows[0]?.total || 0); const failed = Number(tasks.rows[0]?.failed || 0);
   const failureRate = total ? failed / total : 0;
   const heartbeatMap = Object.fromEntries(heartbeats.rows.map((row) => [row.kind, row.last_seen_at]));
-  const stale = ["generation", ...(process.env.CONTENT_REVIEW_PROVIDER === "tencent-ci" ? ["moderation"] : [])].filter((kind) => !heartbeatMap[kind] || Date.now() - new Date(heartbeatMap[kind]).getTime() > 90_000);
+  const stale = ["generation", ...(contentReviewEnabled && process.env.CONTENT_REVIEW_PROVIDER === "tencent-ci" ? ["moderation"] : [])].filter((kind) => !heartbeatMap[kind] || Date.now() - new Date(heartbeatMap[kind]).getTime() > 90_000);
   const metrics = { http5xx, loginFailures: Number(events.rows[0]?.login_failures || 0), taskTotal15m: total, taskFailures15m: failed, taskFailureRate: failureRate, generationWaiting, moderationWaiting, abnormalRefunds15m: Number(refunds.rows[0]?.abnormal || 0), staleWorkers: stale };
   const alerts = [];
   if (http5xx !== null && http5xx >= Number(process.env.ALERT_HTTP_5XX_5M || 5)) alerts.push(`HTTP 5xx in 5m: ${http5xx}`);
@@ -41,5 +42,5 @@ try {
   console.log(JSON.stringify({ timestamp: new Date().toISOString(), level: alerts.length ? "error" : "info", service: "aigc-observability", event: "alert_evaluation", metrics, alerts }));
   if (alerts.length) process.exitCode = 2;
 } finally {
-  await generation.close(); await moderation.close(); await pool.end();
+  await generation.close(); if (moderation) await moderation.close(); await pool.end();
 }

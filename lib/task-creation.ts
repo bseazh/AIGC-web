@@ -8,6 +8,7 @@ import { enqueueTaskNotification } from "@/lib/notifications";
 import { structuredLog, requestContext } from "@/lib/logger";
 import { isAdministrator } from "@/lib/admin";
 import { ADMIN_EXEMPT_BILLING_MODE } from "@/lib/task-billing";
+import { contentReviewEnabled } from "@/lib/content-review";
 
 type ImageWorkflow = {
   key: string;
@@ -50,14 +51,16 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
   const style = workflow.styles.includes(requestedStyle) ? requestedStyle : workflow.styles[0];
   const duration = workflow.durations?.includes(requestedDuration) ? requestedDuration : workflow.durations?.[workflow.durations.length - 1] || 15;
   const resolution = workflow.resolutions?.includes(requestedResolution) ? requestedResolution : workflow.resolutions?.[1] || "720p";
+  const reviewEnabled = contentReviewEnabled();
+  const acceptedStatuses = reviewEnabled ? ["PENDING_REVIEW", "READY"] : ["READY"];
   const assetResult = await db.query<ReadyAsset>(
-    "SELECT id, storage_key, mime_type, metadata_json, audit_status FROM assets WHERE id = ANY($1::uuid[]) AND owner_id = $2 AND audit_status IN ('PENDING_REVIEW', 'READY') AND kind = 'INPUT'",
-    [assetIds, user.id],
+    "SELECT id, storage_key, mime_type, metadata_json, audit_status FROM assets WHERE id = ANY($1::uuid[]) AND owner_id = $2 AND audit_status = ANY($3::text[]) AND kind = 'INPUT'",
+    [assetIds, user.id, acceptedStatuses],
   );
   const assetsById = new Map(assetResult.rows.map((asset) => [asset.id, asset]));
   const assets = assetIds.map((id) => assetsById.get(id)).filter((asset): asset is ReadyAsset => Boolean(asset));
   if (assets.length !== assetIds.length) return NextResponse.json({ code: "ASSET_NOT_READY", message: "素材不可用或未完成上传" }, { status: 400 });
-  const inputsReady = assets.every((asset) => asset.audit_status === "READY");
+  const inputsReady = !reviewEnabled || assets.every((asset) => asset.audit_status === "READY");
   const assetError = validateAssets?.(assets);
   if (assetError) return NextResponse.json({ code: "INVALID_VIDEO_ASSETS", message: assetError }, { status: 400 });
 

@@ -3,6 +3,14 @@ import Redis from "ioredis";
 import { db } from "@/lib/db";
 import { automaticModerationEnabled, getGenerationQueue, getModerationQueue } from "@/lib/queue";
 import { getCosClient } from "@/lib/cos";
+import { contentReviewEnabled } from "@/lib/content-review";
+
+class HealthCheckIssue extends Error {
+  constructor(message: string, readonly value: unknown) {
+    super(message);
+    this.name = "HealthCheckIssue";
+  }
+}
 
 function checkCos() {
   if (!process.env.COS_BUCKET || !process.env.COS_REGION) throw new Error("COS is not configured");
@@ -51,7 +59,15 @@ export async function GET() {
   try {
     const check = async (name: string, action: () => Promise<unknown>) => {
       try { return { name, status: "up" as const, value: await action() }; }
-      catch (error) { console.error(`health check ${name} failed`, error); return { name, status: "down" as const, value: null }; }
+      catch (error) {
+        console.error(`health check ${name} failed`, error);
+        return {
+          name,
+          status: "down" as const,
+          value: error instanceof HealthCheckIssue ? error.value : null,
+          issue: error instanceof HealthCheckIssue ? error.message : "check failed",
+        };
+      }
     };
     const reviewMaxAgeHours = Number(process.env.REVIEW_BACKLOG_MAX_AGE_HOURS || 24);
     const reviewMaxCount = Number(process.env.REVIEW_BACKLOG_MAX_COUNT || 1000);
@@ -77,6 +93,7 @@ export async function GET() {
         return { enabled: true, lastSeenAt: heartbeat.rows[0].last_seen_at, waiting, active };
       }),
       check("moderation", async () => {
+        if (!contentReviewEnabled()) return { enabled: false };
         const result = await db.query<{ count: string; oldest_at: string | null; oldest_age_seconds: string; provider_errors: string }>(
           `SELECT COUNT(*)::text AS count, MIN(created_at)::text AS oldest_at,
                   COALESCE(EXTRACT(EPOCH FROM NOW() - MIN(created_at)), 0)::text AS oldest_age_seconds,
@@ -85,8 +102,11 @@ export async function GET() {
         );
         const value = result.rows[0];
         const count = Number(value?.count || 0); const oldestAgeSeconds = Number(value?.oldest_age_seconds || 0); const providerErrors = Number(value?.provider_errors || 0);
-        if (count > reviewMaxCount || oldestAgeSeconds > reviewMaxAgeHours * 3600 || oldestAgeSeconds > reviewSlaMinutes * 60 || providerErrors > reviewAutoErrorMax) throw new Error(`moderation backlog count=${count} oldestAgeSeconds=${oldestAgeSeconds} providerErrors=${providerErrors}`);
-        return { count, oldestAt: value?.oldest_at || null, providerErrors, slaMinutes: reviewSlaMinutes };
+        const healthValue = { count, oldestAt: value?.oldest_at || null, oldestAgeSeconds, providerErrors, slaMinutes: reviewSlaMinutes };
+        if (count > reviewMaxCount || oldestAgeSeconds > reviewMaxAgeHours * 3600 || oldestAgeSeconds > reviewSlaMinutes * 60 || providerErrors > reviewAutoErrorMax) {
+          throw new HealthCheckIssue("review backlog threshold exceeded", healthValue);
+        }
+        return healthValue;
       }),
       check("notifications", async () => {
         const result = await db.query<{ exhausted: string; stuck: string }>(
@@ -95,8 +115,9 @@ export async function GET() {
            FROM notification_outbox`,
         );
         const exhausted = Number(result.rows[0]?.exhausted || 0); const stuck = Number(result.rows[0]?.stuck || 0);
-        if (exhausted || stuck) throw new Error(`notification backlog exhausted=${exhausted} stuck=${stuck}`);
-        return { exhausted, stuck };
+        const healthValue = { exhausted, stuck };
+        if (exhausted || stuck) throw new HealthCheckIssue("notification backlog threshold exceeded", healthValue);
+        return healthValue;
       }),
       check("lifecycle", async () => {
         const [latest, overdue] = await Promise.all([
@@ -104,8 +125,9 @@ export async function GET() {
           db.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM users WHERE status = 'DELETION_PENDING' AND deletion_requested_at < NOW() - ($1 * INTERVAL '1 day') - INTERVAL '2 hours'", [deletionCoolingDays]),
         ]);
         const overdueAccounts = Number(overdue.rows[0]?.count || 0); const lastRun = latest.rows[0] || null;
-        if (lastRun?.status === "FAILED" || overdueAccounts > 0) throw new Error(`lifecycle lastStatus=${lastRun?.status || "none"} overdueAccounts=${overdueAccounts}`);
-        return { lastRunAt: lastRun?.created_at || null, overdueAccounts };
+        const healthValue = { lastRunAt: lastRun?.created_at || null, lastStatus: lastRun?.status || null, overdueAccounts };
+        if (lastRun?.status === "FAILED" || overdueAccounts > 0) throw new HealthCheckIssue("lifecycle maintenance requires attention", healthValue);
+        return healthValue;
       }),
       check("reconciliation", async () => {
         const result = await db.query<{ status: string; created_at: string; unresolved: string }>(
@@ -117,16 +139,24 @@ export async function GET() {
           throw error;
         });
         const latest = result.rows[0]; const unresolved = Number(latest?.unresolved || 0);
-        if (latest?.status === "FAILED" || unresolved > Number(process.env.WECHAT_RECONCILIATION_MAX_UNRESOLVED || 0)) throw new Error(`payment reconciliation status=${latest?.status || "none"} unresolved=${unresolved}`);
-        return { lastRunAt: latest?.created_at || null, unresolved };
+        const healthValue = { lastRunAt: latest?.created_at || null, lastStatus: latest?.status || null, unresolved };
+        if (latest?.status === "FAILED" || unresolved > Number(process.env.WECHAT_RECONCILIATION_MAX_UNRESOLVED || 0)) {
+          throw new HealthCheckIssue("payment reconciliation requires attention", healthValue);
+        }
+        return healthValue;
       }),
       check("cos", checkCos),
       check("ark", checkArk),
       check("sophnet", checkSophnet),
     ]);
-    const checks = Object.fromEntries([database, redisCheck, queue, worker, moderationWorker, moderation, notifications, lifecycle, reconciliation, cos, ark, sophnet].map(({ name, status }) => [name, status]));
-    const healthy = Object.values(checks).every((status) => status === "up");
-    return NextResponse.json({ status: healthy ? "healthy" : "unhealthy", checks, queue: queue.value, moderationWorker: moderationWorker.value, moderation: moderation.value, notifications: notifications.value, lifecycle: lifecycle.value, reconciliation: reconciliation.value, sophnet: sophnet.value, workerLastSeenAt: (worker.value as { last_seen_at?: string } | null)?.last_seen_at || null }, { status: healthy ? 200 : 503 });
+    const results = [database, redisCheck, queue, worker, moderationWorker, moderation, notifications, lifecycle, reconciliation, cos, ark, sophnet];
+    const checks = Object.fromEntries(results.map(({ name, status }) => [name, status]));
+    const issues = Object.fromEntries(results.filter((result) => result.status === "down").map((result) => [result.name, "issue" in result ? result.issue : "check failed"]));
+    const criticalChecks = new Set(["database", "redis", "queue", "worker", "moderationWorker", "cos"]);
+    const unavailable = results.some(({ name, status }) => criticalChecks.has(name) && status === "down");
+    const degraded = results.some(({ status }) => status === "down");
+    const status = unavailable ? "unhealthy" : degraded ? "degraded" : "healthy";
+    return NextResponse.json({ status, checks, issues, queue: queue.value, moderationWorker: moderationWorker.value, moderation: moderation.value, notifications: notifications.value, lifecycle: lifecycle.value, reconciliation: reconciliation.value, sophnet: sophnet.value, workerLastSeenAt: (worker.value as { last_seen_at?: string } | null)?.last_seen_at || null }, { status: unavailable ? 503 : 200 });
   } catch (error) {
     console.error("health check failed", error);
     return NextResponse.json({ status: "unhealthy" }, { status: 503 });

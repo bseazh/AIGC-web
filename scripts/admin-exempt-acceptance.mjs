@@ -63,7 +63,7 @@ async function upload(cookie, label) {
   const uploaded = await fetch(presign.uploadUrl, { method: "PUT", headers: { "Content-Type": mimeType }, body: inputBuffer });
   if (!uploaded.ok) throw new Error(`COS upload returned ${uploaded.status}`);
   const confirmed = (await api("/api/uploads/confirm/", { cookie, method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assetId: presign.assetId }) })).body;
-  if (confirmed.status !== "PENDING_REVIEW") throw new Error(`Upload ${label} bypassed review with status ${confirmed.status}`);
+  if (confirmed.status !== "READY") throw new Error(`Upload ${label} returned ${confirmed.status}`);
   return presign.assetId;
 }
 
@@ -156,50 +156,21 @@ try {
   if (zeroWallet.wallet.availablePoints !== 0 || zeroWallet.wallet.frozenPoints !== 0) throw new Error("Administrator wallet was not reset to zero");
   record("administrator real wallet reset to zero", "PASS", { previousBalance });
 
-  const cancelAsset = await upload(cookie, "cancel");
-  const cancelCase = await verifiedCreation(cookie, cancelAsset, "cancel");
-  const canceled = (await api(`/api/tasks/${cancelCase.created.taskId}/cancel/`, { cookie, method: "POST" })).body;
-  if (canceled.status !== "CANCELED" || canceled.refundedPoints !== 0 || !canceled.adminExempt) throw new Error("Administrator exempt cancellation response is invalid");
-  assertWalletUnchanged(cancelCase.before, await wallet(cookie), "cancellation");
-  record("administrator exempt cancellation", "PASS", { taskId: cancelCase.created.taskId, quotedPoints: cancelCase.created.points });
-
-  const failureAsset = await upload(cookie, "failure");
-  const failureCase = await verifiedCreation(cookie, failureAsset, "failure");
-  await database.query("UPDATE generation_tasks SET created_at = NOW() - INTERVAL '48 hours', updated_at = NOW() - INTERVAL '48 hours' WHERE id = $1", [failureCase.created.taskId]);
-  await execFileAsync(process.execPath, [resolve("scripts/lifecycle-maintenance.mjs")], { env: process.env, timeout: 120_000 });
-  const failed = await waitTask(cookie, failureCase.created.taskId, ["FAILED"]);
-  if (failed.errorCode !== "INPUT_REVIEW_TIMEOUT") throw new Error(`Expected INPUT_REVIEW_TIMEOUT, got ${failed.errorCode}`);
-  assertWalletUnchanged(failureCase.before, await wallet(cookie), "failure");
-  record("administrator exempt failure", "PASS", { taskId: failureCase.created.taskId, errorCode: failed.errorCode });
-
-  const rejectAsset = await upload(cookie, "reject");
-  const rejectCase = await verifiedCreation(cookie, rejectAsset, "reject");
-  const rejectReview = await waitActiveReview(cookie, (review) => review.assetId === rejectAsset);
-  await decideReview(cookie, rejectReview.id, "REJECT");
-  const rejected = await waitTask(cookie, rejectCase.created.taskId, ["REJECTED"]);
-  if (rejected.errorCode !== "INPUT_CONTENT_REJECTED") throw new Error(`Expected INPUT_CONTENT_REJECTED, got ${rejected.errorCode}`);
-  assertWalletUnchanged(rejectCase.before, await wallet(cookie), "review rejection");
-  record("administrator exempt review rejection", "PASS", { taskId: rejectCase.created.taskId, reviewId: rejectReview.id });
+  record("administrator exempt cancellation", "SKIP", { reason: "content review is disabled and tasks enter the queue immediately" });
+  record("administrator exempt review failure cases", "SKIP", { reason: "content review is disabled" });
 
   const successAsset = await upload(cookie, "success");
   const successCase = await verifiedCreation(cookie, successAsset, "success");
-  const inputReview = await waitActiveReview(cookie, (review) => review.assetId === successAsset);
-  await decideReview(cookie, inputReview.id, "APPROVE");
-  const generated = await waitTask(cookie, successCase.created.taskId, ["PENDING_REVIEW", "SUCCEEDED"]);
-  if (generated.status === "PENDING_REVIEW") {
-    const outputReviews = (await activeReviews(cookie)).filter((review) => review.taskId === successCase.created.taskId);
-    for (const review of outputReviews) await decideReview(cookie, review.id, "APPROVE");
-  }
   const succeeded = await waitTask(cookie, successCase.created.taskId, ["SUCCEEDED"]);
   if (!succeeded.outputs.length) throw new Error("Administrator exempt success task has no outputs");
   assertWalletUnchanged(successCase.before, await wallet(cookie), "success settlement");
   record("administrator exempt successful settlement", "PASS", { taskId: successCase.created.taskId, quotedPoints: succeeded.points, outputCount: succeeded.outputs.length });
 
   const finalWallet = await wallet(cookie);
-  const taskIds = [cancelCase, failureCase, rejectCase, successCase].map((item) => item.created.taskId);
+  const taskIds = [successCase.created.taskId];
   const exemptEntries = finalWallet.ledger.filter((entry) => taskIds.includes(entry.businessId) && entry.type === "ADMIN_EXEMPT_TASK");
   const unexpectedEntries = finalWallet.ledger.filter((entry) => taskIds.includes(entry.businessId) && ["FREEZE", "SETTLE", "REFUND"].includes(entry.type));
-  if (exemptEntries.length !== 4 || unexpectedEntries.length) throw new Error("Final administrator ledger audit is inconsistent");
+  if (exemptEntries.length !== 1 || unexpectedEntries.length) throw new Error("Final administrator ledger audit is inconsistent");
   if (finalWallet.wallet.availablePoints !== 0 || finalWallet.wallet.frozenPoints !== 0) throw new Error("Final administrator wallet is not zero and unfrozen");
   record("final wallet and ADMIN_EXEMPT_TASK audit", "PASS", { exemptEntries: exemptEntries.length, wallet: finalWallet.wallet });
 

@@ -50,7 +50,7 @@ export default function AccountPage() {
       const data = await presign.json(); if (!presign.ok) throw new Error(data.message || "头像上传失败");
       const put = await fetch(data.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file }); if (!put.ok) throw new Error("头像文件上传失败");
       const confirm = await fetch("/api/uploads/confirm/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assetId: data.assetId }) }); if (!confirm.ok) throw new Error("头像校验失败");
-      setAvatarAssetId(data.assetId); setAvatarAction("custom"); setMessage("裁剪头像已提交审核，审核通过后可保存为头像。");
+      setAvatarAssetId(data.assetId); setAvatarAction("custom"); setMessage("裁剪头像已上传，可以保存为头像。");
     } catch (error) { URL.revokeObjectURL(preview); setAvatarPreview(""); setMessage(error instanceof Error ? error.message : "头像上传失败"); }
     finally { setUploading(false); }
   };

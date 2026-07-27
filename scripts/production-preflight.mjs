@@ -14,7 +14,7 @@ if (process.env.SESSION_SECRET === process.env.EMAIL_CODE_SECRET) throw new Erro
 if (!process.env.PUBLIC_APP_URL.startsWith("https://")) throw new Error("Production preflight failed: PUBLIC_APP_URL must use HTTPS");
 if (!process.env.AI_BASE_URL.startsWith("https://")) throw new Error("Production preflight failed: AI_BASE_URL must use HTTPS");
 if (process.env.SESSION_COOKIE_SECURE === "false") throw new Error("Production preflight failed: secure session cookies cannot be disabled");
-if (process.env.CONTENT_REVIEW_PROVIDER === "tencent-ci" && (!process.env.CONTENT_REVIEW_INTERNAL_SECRET || process.env.CONTENT_REVIEW_INTERNAL_SECRET.length < 32)) throw new Error("Production preflight failed: CONTENT_REVIEW_INTERNAL_SECRET must be at least 32 characters when Tencent CI moderation is enabled");
+if (process.env.CONTENT_REVIEW_ENABLED === "true" && process.env.CONTENT_REVIEW_PROVIDER === "tencent-ci" && (!process.env.CONTENT_REVIEW_INTERNAL_SECRET || process.env.CONTENT_REVIEW_INTERNAL_SECRET.length < 32)) throw new Error("Production preflight failed: CONTENT_REVIEW_INTERNAL_SECRET must be at least 32 characters when Tencent CI moderation is enabled");
 if (process.env.WECHAT_PAY_ENABLED === "true") {
   const paymentRequired = ["WECHAT_PAY_MCH_ID", "WECHAT_PAY_APP_ID", "WECHAT_PAY_MERCHANT_SERIAL_NO", "WECHAT_PAY_PRIVATE_KEY", "WECHAT_PAY_API_V3_KEY", "WECHAT_PAY_PLATFORM_PUBLIC_KEY", "WECHAT_PAY_NOTIFY_URL", "WECHAT_PAY_REFUND_NOTIFY_URL"];
   const paymentMissing = paymentRequired.filter((name) => !process.env[name]);

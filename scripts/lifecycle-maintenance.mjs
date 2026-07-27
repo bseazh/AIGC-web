@@ -8,6 +8,7 @@ for (const name of required) if (!process.env[name]) throw new Error(`${name} is
 const inputReviewTimeoutHours = Number(process.env.INPUT_REVIEW_TIMEOUT_HOURS || 24);
 const outputReviewTimeoutHours = Number(process.env.OUTPUT_REVIEW_TIMEOUT_HOURS || 24);
 const deletionCoolingDays = Number(process.env.ACCOUNT_DELETION_COOLING_DAYS || 7);
+const contentReviewEnabled = process.env.CONTENT_REVIEW_ENABLED === "true";
 for (const [name, value] of [["INPUT_REVIEW_TIMEOUT_HOURS", inputReviewTimeoutHours], ["OUTPUT_REVIEW_TIMEOUT_HOURS", outputReviewTimeoutHours], ["ACCOUNT_DELETION_COOLING_DAYS", deletionCoolingDays]]) {
   if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be positive`);
 }
@@ -62,6 +63,88 @@ async function refundTask(taskId, targetStatus, errorCode) {
     await client.query("COMMIT"); return true;
   } catch (error) { await client.query("ROLLBACK"); throw error; }
   finally { client.release(); }
+}
+
+async function settleBypassedOutputTask(taskId) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const found = await client.query(
+      `SELECT t.id, t.user_id, t.workflow_key, t.points, t.status, t.input_json, t.output_json, u.email
+       FROM generation_tasks t JOIN users u ON u.id = t.user_id WHERE t.id = $1 FOR UPDATE OF t`,
+      [taskId],
+    );
+    const task = found.rows[0];
+    if (task?.status !== "PENDING_REVIEW") {
+      await client.query("ROLLBACK");
+      return false;
+    }
+    const assetIds = Array.isArray(task.output_json?.assets) ? task.output_json.assets.map((asset) => asset?.assetId).filter(Boolean) : [];
+    if (!assetIds.length) throw new Error(`Pending output task ${task.id} has no saved assets`);
+    await client.query(
+      `UPDATE assets SET audit_status = 'READY',
+         metadata_json = metadata_json || $3::jsonb, updated_at = NOW()
+       WHERE kind = 'OUTPUT' AND audit_status = 'PENDING_REVIEW'
+         AND (metadata_json->>'taskId' = $1 OR id = ANY($2::uuid[]))`,
+      [task.id, assetIds, JSON.stringify({ moderation: { status: "BYPASSED", bypassedAt: new Date().toISOString() } })],
+    );
+    const readyAssets = await client.query("SELECT COUNT(*)::int AS count FROM assets WHERE id = ANY($1::uuid[]) AND kind = 'OUTPUT' AND audit_status = 'READY'", [assetIds]);
+    if (Number(readyAssets.rows[0]?.count || 0) !== assetIds.length) throw new Error(`Pending output task ${task.id} has unavailable assets`);
+    await client.query(
+      `UPDATE content_review_records SET status = 'APPROVED', review_source = 'SYSTEM', risk_level = 'LOW',
+         note = 'Content review disabled', reviewed_at = NOW(), updated_at = NOW()
+       WHERE task_id = $1 AND status IN ('PENDING', 'NEEDS_MANUAL')`,
+      [task.id],
+    );
+    const adminExempt = task.input_json?.billingMode === "ADMIN_EXEMPT";
+    if (!adminExempt) {
+      const wallet = await client.query("SELECT available_points, frozen_points FROM wallets WHERE user_id = $1 FOR UPDATE", [task.user_id]);
+      if (!wallet.rows[0] || Number(wallet.rows[0].frozen_points) < task.points) throw new Error(`Insufficient frozen points for pending task ${task.id}`);
+      await client.query("UPDATE wallets SET frozen_points = frozen_points - $2, version = version + 1, updated_at = NOW() WHERE user_id = $1", [task.user_id, task.points]);
+      await client.query(
+        `INSERT INTO wallet_ledger (user_id, type, amount, balance_after, business_type, business_id, idempotency_key)
+         VALUES ($1, 'SETTLE', 0, $2, 'GENERATION_TASK', $3, $4) ON CONFLICT (idempotency_key) DO NOTHING`,
+        [task.user_id, wallet.rows[0].available_points, task.id, `settle:${task.id}`],
+      );
+    }
+    await client.query("UPDATE generation_tasks SET status = 'SUCCEEDED', error_code = NULL, updated_at = NOW() WHERE id = $1", [task.id]);
+    if (task.email && process.env.EMAIL_NOTIFY_TASK_SUCCEEDED === "true") {
+      const html = `<div style="font-family:Arial,sans-serif;color:#283241;line-height:1.7"><h2>芭乐AIGC</h2><p>任务 <strong>${task.id}</strong>（${task.workflow_key}）已生成，可以下载。</p><p><a href="${process.env.PUBLIC_APP_URL || "https://aigc.bigapple.store"}/tasks/${task.id}">查看任务详情</a></p></div>`;
+      await client.query(
+        `INSERT INTO notification_outbox (user_id, recipient, event_type, subject, html_body, idempotency_key)
+         VALUES ($1, $2, 'TASK_COMPLETED', '你的创作任务已完成', $3, $4) ON CONFLICT (idempotency_key) DO NOTHING`,
+        [task.user_id, task.email, html, `task_completed:${task.id}`],
+      );
+    }
+    await client.query("COMMIT");
+    return true;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function bypassContentReview() {
+  const inputs = await pool.query(
+    `UPDATE assets SET audit_status = 'READY',
+       metadata_json = metadata_json || $1::jsonb, updated_at = NOW()
+     WHERE kind = 'INPUT' AND audit_status = 'PENDING_REVIEW' RETURNING id`,
+    [JSON.stringify({ moderation: { status: "BYPASSED", bypassedAt: new Date().toISOString() } })],
+  );
+  await pool.query(
+    `UPDATE content_review_records r SET status = 'APPROVED', review_source = 'SYSTEM', risk_level = 'LOW',
+       note = 'Content review disabled', reviewed_at = NOW(), updated_at = NOW()
+     FROM assets a WHERE r.asset_id = a.id AND a.kind = 'INPUT' AND r.status IN ('PENDING', 'NEEDS_MANUAL')`,
+  );
+  let settledOutputs = 0;
+  while (true) {
+    const pending = await pool.query("SELECT id FROM generation_tasks WHERE status = 'PENDING_REVIEW' ORDER BY updated_at ASC LIMIT 100");
+    if (!pending.rowCount) break;
+    for (const task of pending.rows) if (await settleBypassedOutputTask(task.id)) settledOutputs += 1;
+  }
+  return { enabled: false, releasedInputs: inputs.rowCount, settledOutputs };
 }
 
 async function reconcileWaitingTasks() {
@@ -140,10 +223,11 @@ async function finalizeDeletedAccounts() {
 }
 
 try {
+  const contentReview = contentReviewEnabled ? { enabled: true, releasedInputs: 0, settledOutputs: 0 } : await bypassContentReview();
   const waitingTasks = await reconcileWaitingTasks();
-  const reviewTimeouts = await expireReviewWaits();
+  const reviewTimeouts = contentReviewEnabled ? await expireReviewWaits() : { inputExpired: 0, outputExpired: 0, skipped: true };
   const accountDeletions = await finalizeDeletedAccounts();
-  const summary = { event: "lifecycle_maintenance_complete", waitingTasks, reviewTimeouts, accountDeletions };
+  const summary = { event: "lifecycle_maintenance_complete", contentReview, waitingTasks, reviewTimeouts, accountDeletions };
   await pool.query("INSERT INTO operations_runs (operation, status, summary) VALUES ('LIFECYCLE_MAINTENANCE', 'SUCCEEDED', $1)", [JSON.stringify(summary)]);
   console.log(JSON.stringify(summary));
 } catch (error) {

@@ -9,10 +9,13 @@ if [[ -f .env.production ]]; then
   set +a
 fi
 
-# Automatic moderation reuses the existing COS credentials. Bootstrap only the
-# non-provider secret so an older production environment can adopt the worker
-# without placing generated secrets in source control.
-if [[ -f .env.production && -z "${CONTENT_REVIEW_PROVIDER:-}" ]]; then
+# Content review is disabled by default. The provider configuration is retained
+# only so the review workflow can be restored explicitly if needed later.
+if [[ -f .env.production && -z "${CONTENT_REVIEW_ENABLED:-}" ]]; then
+  printf '%s\n' 'CONTENT_REVIEW_ENABLED=false' >> .env.production
+  export CONTENT_REVIEW_ENABLED=false
+fi
+if [[ -f .env.production && "${CONTENT_REVIEW_ENABLED:-false}" == "true" && -z "${CONTENT_REVIEW_PROVIDER:-}" ]]; then
   printf '%s\n' 'CONTENT_REVIEW_PROVIDER=tencent-ci' >> .env.production
   export CONTENT_REVIEW_PROVIDER=tencent-ci
 fi
@@ -64,7 +67,7 @@ if [[ -f .env.production && ",${ADMIN_IDENTIFIERS:-}," != *",${ACCEPTANCE_ADMIN_
   export ADMIN_IDENTIFIERS
 fi
 chmod 600 .env.production
-if [[ -f .env.production && "${CONTENT_REVIEW_PROVIDER:-}" == "tencent-ci" && -z "${CONTENT_REVIEW_INTERNAL_SECRET:-}" ]]; then
+if [[ -f .env.production && "${CONTENT_REVIEW_ENABLED:-false}" == "true" && "${CONTENT_REVIEW_PROVIDER:-}" == "tencent-ci" && -z "${CONTENT_REVIEW_INTERNAL_SECRET:-}" ]]; then
   CONTENT_REVIEW_INTERNAL_SECRET="$(openssl rand -hex 32)"
   printf 'CONTENT_REVIEW_INTERNAL_SECRET=%s\n' "$CONTENT_REVIEW_INTERNAL_SECRET" >> .env.production
   export CONTENT_REVIEW_INTERNAL_SECRET
@@ -136,18 +139,20 @@ sudo systemctl restart aigc-web
 if systemctl list-unit-files aigc-worker.service >/dev/null 2>&1; then
   sudo systemctl restart aigc-worker
 fi
-sudo systemctl restart aigc-lifecycle-maintenance.timer
-sudo systemctl start aigc-lifecycle-maintenance.service
-if [[ "${CONTENT_REVIEW_PROVIDER:-}" == "tencent-ci" ]]; then
+if [[ "${CONTENT_REVIEW_ENABLED:-false}" == "true" && "${CONTENT_REVIEW_PROVIDER:-}" == "tencent-ci" ]]; then
   sudo systemctl enable --now aigc-moderation-worker
   sudo systemctl restart aigc-moderation-worker
 else
   sudo systemctl disable --now aigc-moderation-worker 2>/dev/null || true
 fi
+sudo systemctl restart aigc-lifecycle-maintenance.timer
+sudo systemctl start aigc-lifecycle-maintenance.service
 
 for attempt in {1..20}; do
   if curl --fail --silent http://127.0.0.1:3010/api/health/ >/dev/null; then
-    sudo systemctl is-active --quiet aigc-web aigc-worker aigc-moderation-worker
+    required_units=(aigc-web aigc-worker)
+    if [[ "${CONTENT_REVIEW_ENABLED:-false}" == "true" && "${CONTENT_REVIEW_PROVIDER:-}" == "tencent-ci" ]]; then required_units+=(aigc-moderation-worker); fi
+    sudo systemctl is-active --quiet "${required_units[@]}"
     if ! node scripts/verify-observability.mjs; then
       docker ps -a --filter name=aigc-promtail
       docker logs --tail 100 aigc-promtail

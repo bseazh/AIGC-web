@@ -12,17 +12,16 @@
 ## After deployment
 
 - [ ] Web, Worker, timers, PostgreSQL, and Redis are healthy.
-- [ ] Upload confirmation returns `PENDING_REVIEW`, never `READY`.
-- [ ] An administrator can approve and reject upload and output review records.
-- [ ] Pending output cannot be previewed or downloaded by its owner or an unauthenticated request.
-- [ ] Approval settles frozen points; rejection and execution failure refund exactly once.
+- [ ] Upload confirmation returns `READY` and the asset can immediately be used for creation.
+- [ ] Generated output moves directly to `SUCCEEDED`, appears in task details, and can be downloaded by its owner.
+- [ ] Successful generation settles frozen points; execution failure refunds exactly once.
 - [ ] Complaint submission, administrator notes, closure, audit events, and email delivery work.
 - [ ] User freeze revokes sessions; unfreeze allows a new login.
 - [ ] Password reset revokes all previous sessions; login rate limiting returns HTTP 429.
 - [ ] Account deletion is blocked while tasks or frozen points remain.
 - [ ] `aigc-lifecycle-maintenance.timer` is active; a manual run reports zero unexpected failures.
 - [ ] A queued task can be canceled exactly once and its frozen points are fully restored.
-- [ ] Review and notification backlog checks appear as `up` in `/api/health/`.
+- [ ] Notification and lifecycle checks appear as `up` in `/api/health/`.
 - [ ] `npm run verify:ark-video` passes and its JSON report is archived with the release record.
 - [ ] Loki reports ready on `127.0.0.1:3100`, Grafana reports healthy on `127.0.0.1:3001`, and Promtail is running.
 - [ ] Nginx responses contain `X-Request-ID` and its JSON access log appears in Loki.
@@ -35,5 +34,5 @@
 
 - Any access to a non-`READY` asset through user APIs.
 - Wallet balance or ledger mismatch, duplicate settlement, or missing rejection refund.
-- Worker cannot move generated output to `PENDING_REVIEW`.
+- Worker cannot persist generated output as `READY` and settle the task as `SUCCEEDED`.
 - Authentication accepts a revoked, expired, suspended, or deleted session.

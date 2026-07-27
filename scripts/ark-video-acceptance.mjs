@@ -135,40 +135,19 @@ try {
   const uploadResponse = await fetch(presign.uploadUrl, { method: "PUT", headers: { "Content-Type": mimeType }, body: inputBuffer });
   if (!uploadResponse.ok) throw new Error(`COS upload returned ${uploadResponse.status}`);
   const confirmation = (await api("/api/uploads/confirm/", { cookie: userCookie, method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assetId: presign.assetId }) })).body;
-  if (confirmation.status !== "PENDING_REVIEW") throw new Error(`Upload bypassed review with status ${confirmation.status}`);
-  record("upload transitions to PENDING_REVIEW", "PASS", { assetId: presign.assetId });
-
-  const canceledCreation = await createTask(userCookie, presign.assetId);
-  if (canceledCreation.status !== "PENDING_INPUT_REVIEW") throw new Error("Cancelable acceptance task did not wait for input review");
-  const cancellation = (await api(`/api/tasks/${canceledCreation.taskId}/cancel/`, { cookie: userCookie, method: "POST" })).body;
-  if (cancellation.status !== "CANCELED" || cancellation.refundedPoints !== canceledCreation.points) throw new Error("Task cancellation did not return the frozen points");
-  const walletAfterCancel = await wallet(userCookie);
-  if (walletAfterCancel.wallet.availablePoints !== walletBefore.wallet.availablePoints || walletAfterCancel.wallet.frozenPoints !== walletBefore.wallet.frozenPoints) throw new Error("Cancellation did not restore wallet balances");
-  record("pre-execution cancellation and refund", "PASS", { taskId: canceledCreation.taskId });
+  if (confirmation.status !== "READY") throw new Error(`Upload confirmation returned ${confirmation.status}`);
+  record("upload becomes immediately ready", "PASS", { assetId: presign.assetId });
+  record("pre-execution cancellation and refund", "SKIP", { reason: "content review is disabled and tasks enter the generation queue immediately" });
 
   const successCreation = await createTask(userCookie, presign.assetId);
-  if (successCreation.status !== "PENDING_INPUT_REVIEW") throw new Error(`Task bypassed input review with status ${successCreation.status}`);
+  if (successCreation.status !== "QUEUED") throw new Error(`Task creation returned ${successCreation.status}`);
   const walletFrozen = await wallet(userCookie);
   if (!walletFrozen.ledger.some((entry) => entry.businessId === successCreation.taskId && entry.type === "FREEZE")) throw new Error("Task freeze ledger entry missing");
-  record("task waits for input review with point freeze", "PASS", { taskId: successCreation.taskId, points: successCreation.points });
+  record("task enters generation queue with point freeze", "PASS", { taskId: successCreation.taskId, points: successCreation.points });
 
-  const inputReview = await waitForReview(adminCookie, (review) => review.assetId === presign.assetId);
-  const inputDecision = await decideReview(adminCookie, inputReview.id, "APPROVE");
-  const assetStatus = (await api(`/api/assets/${presign.assetId}/status/`, { cookie: userCookie })).body;
-  if (assetStatus.status !== "READY") throw new Error("Approved input asset is not READY");
-  if (!inputDecision.alreadyDecided && inputDecision.activatedTasks < 1) throw new Error("Input approval did not activate the waiting task");
-  record("upload review and automatic queue activation", "PASS", { reviewId: inputReview.id, decisionSource: inputDecision.alreadyDecided ? "automatic" : "acceptance-admin" });
-
-  const generated = await waitTask(userCookie, successCreation.taskId, ["PENDING_REVIEW", "SUCCEEDED"]);
-  if (generated.status === "PENDING_REVIEW") {
-    const outputReview = await waitForReview(adminCookie, (review) => review.taskId === successCreation.taskId);
-    const outputReviews = (await activeReviews(adminCookie)).filter((review) => review.taskId === successCreation.taskId);
-    if (!outputReviews.some((review) => review.id === outputReview.id)) outputReviews.push(outputReview);
-    for (const review of outputReviews) await decideReview(adminCookie, review.id, "APPROVE");
-  }
   const succeededTask = await waitTask(userCookie, successCreation.taskId, ["SUCCEEDED"]);
   if (!succeededTask.outputs.length) throw new Error("Succeeded task has no downloadable output");
-  record("worker output review and task settlement", "PASS", { outputCount: succeededTask.outputs.length });
+  record("worker output persistence and task settlement", "PASS", { outputCount: succeededTask.outputs.length });
 
   const walletSettled = await wallet(userCookie);
   if (!walletSettled.ledger.some((entry) => entry.businessId === successCreation.taskId && entry.type === "SETTLE")) throw new Error("Task settlement ledger entry missing");
@@ -193,22 +172,7 @@ try {
   if (!taskLog?.details?.requestId) throw new Error("Task log is missing requestId correlation");
   record("administrator unified correlated logs", "PASS", { taskId: successCreation.taskId, requestId: taskLog.details.requestId, categories: logCategories });
 
-  if (process.env.ACCEPTANCE_VERIFY_REFUND !== "false") {
-    const rejectionCreation = await createTask(userCookie, presign.assetId);
-    const generatedForRejection = await waitTask(userCookie, rejectionCreation.taskId, ["PENDING_REVIEW", "SUCCEEDED", "REJECTED"]);
-    if (generatedForRejection.status === "PENDING_REVIEW") {
-      const rejectionReview = await waitForReview(adminCookie, (review) => review.taskId === rejectionCreation.taskId);
-      await decideReview(adminCookie, rejectionReview.id, "REJECT");
-    }
-    const rejectionResult = await waitTask(userCookie, rejectionCreation.taskId, ["REJECTED", "SUCCEEDED"]);
-    if (rejectionResult.status === "REJECTED") {
-      const walletRefunded = await wallet(userCookie);
-      if (rejectionResult.errorCode !== "CONTENT_REJECTED") throw new Error("Rejected task did not record CONTENT_REJECTED");
-      if (!walletRefunded.ledger.some((entry) => entry.businessId === rejectionCreation.taskId && entry.type === "REFUND")) throw new Error("Rejected task refund ledger entry missing");
-      if (walletRefunded.wallet.availablePoints !== walletSettled.wallet.availablePoints || walletRefunded.wallet.frozenPoints !== walletSettled.wallet.frozenPoints) throw new Error("Refund did not restore wallet balances");
-      record("review rejection and automatic refund", "PASS", { taskId: rejectionCreation.taskId, points: rejectionCreation.points });
-    } else record("review rejection and automatic refund", "SKIP", { reason: "automatic provider approved output before the acceptance administrator could reject it" });
-  } else record("review rejection and automatic refund", "SKIP", { reason: "ACCEPTANCE_VERIFY_REFUND=false" });
+  record("review rejection and automatic refund", "SKIP", { reason: "content review is disabled" });
 
   report.status = "PASSED";
   report.evidence = { userId: session.user.id, inputAssetId: presign.assetId, successfulTaskId: successCreation.taskId, successfulOutputIds: succeededTask.outputs.map((item) => item.assetId), walletBefore: walletBefore.wallet, walletAfter: (await wallet(userCookie)).wallet };

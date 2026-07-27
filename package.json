@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test:regression": "node scripts/regression-check.mjs && node --check scripts/worker.mjs && node --check scripts/moderation-worker.mjs && node --check scripts/wechat-reconcile.mjs && node --check scripts/wechat-pay-acceptance.mjs && node --check scripts/migrate.mjs && node --check scripts/lifecycle-maintenance.mjs",
+    "test:regression": "node scripts/regression-check.mjs && node scripts/check-health-alert.test.mjs && node --check scripts/worker.mjs && node --check scripts/moderation-worker.mjs && node --check scripts/wechat-reconcile.mjs && node --check scripts/wechat-pay-acceptance.mjs && node --check scripts/migrate.mjs && node --check scripts/lifecycle-maintenance.mjs",
     "test:db": "node scripts/state-machine-regression.mjs",
     "verify:production": "node scripts/production-preflight.mjs",
     "verify:ark-video": "node scripts/ark-video-acceptance.mjs",

@@ -140,7 +140,7 @@ async function upload(cookie) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ assetId: presign.assetId }),
   })).body;
-  if (confirmed.status !== "PENDING_REVIEW") throw new Error(`Input confirmation returned ${confirmed.status}`);
+  if (confirmed.status !== "READY") throw new Error(`Input confirmation returned ${confirmed.status}`);
   return presign.assetId;
 }
 
@@ -306,12 +306,7 @@ try {
   record("official recharge-code credit", "PASS", { rechargeCodeId: recharge.id, creditedPoints: 10 });
 
   const sourceAssetId = await upload(userCookie);
-  const [sourceReview] = await waitForReview(
-    "SELECT id, status FROM content_review_records WHERE asset_id = $1 ORDER BY created_at DESC LIMIT 1",
-    [sourceAssetId],
-  );
-  await manuallyApprove(adminCookie, sourceReview);
-  record("real upload and manual input review", "PASS", { assetId: sourceAssetId, reviewId: sourceReview.id, inputSource: input.source });
+  record("real upload becomes immediately ready", "PASS", { assetId: sourceAssetId, inputSource: input.source });
 
   const beforeTask = await wallet(userCookie);
   const created = await createTask(userCookie, sourceAssetId);
@@ -324,16 +319,9 @@ try {
   }, "real-user task freeze");
   record("real-user task creation and 10-point freeze", "PASS", { taskId: created.taskId, points: created.points });
 
-  await waitTask(userCookie, created.taskId, ["PENDING_REVIEW"]);
-  const outputReviews = await waitForReview(
-    "SELECT id, status FROM content_review_records WHERE task_id = $1 ORDER BY created_at",
-    [created.taskId],
-    4,
-  );
-  for (const review of outputReviews) await manuallyApprove(adminCookie, review);
   const succeeded = await waitTask(userCookie, created.taskId, ["SUCCEEDED"]);
   if (succeeded.outputs.length !== 4) throw new Error(`Product hero returned ${succeeded.outputs.length} outputs instead of 4`);
-  record("four manual output approvals", "PASS", { reviewIds: outputReviews.map((review) => review.id) });
+  record("four outputs complete without review", "PASS", { outputAssetIds: succeeded.outputs.map((output) => output.assetId) });
 
   const assets = await database.query(
     "SELECT id, storage_key, byte_size, audit_status FROM assets WHERE owner_id = $1 AND kind = 'OUTPUT' AND metadata_json->>'taskId' = $2 ORDER BY created_at",
@@ -348,7 +336,7 @@ try {
   }
   for (const output of succeeded.outputs) {
     const download = await api(`/api/assets/${output.assetId}/download/`, { cookie: userCookie });
-    if (!download.response.body || download.response.headers.get("x-content-review") !== "approved") {
+    if (!download.response.body || download.response.headers.get("x-content-review") !== "disabled") {
       throw new Error(`Output ${output.assetId} download contract is invalid`);
     }
   }

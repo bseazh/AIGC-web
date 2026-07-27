@@ -10,7 +10,7 @@
 2. 商品主图：商品素材 + 卖点 + 平台规格 -> 1-4 张电商首图。
 3. 模特穿搭：服装平铺/人台图 + 模特/场景参数 -> 上身结果。
 
-配套能力必须同时交付：短信/密码登录、素材上传、异步任务、资产库、积分钱包、订单、审核、失败退款和管理后台。带货视频与详情页放到第二阶段，因为它们涉及更长任务、更多中间产物与更高失败成本。
+配套能力必须同时交付：短信/密码登录、素材上传、异步任务、资产库、积分钱包、订单、失败退款和管理后台。内容审核结构作为历史兼容保留，但当前运行时关闭。带货视频与详情页放到第二阶段，因为它们涉及更长任务、更多中间产物与更高失败成本。
 
 ## 2. 页面与路由
 
@@ -119,7 +119,7 @@ INPUT_REVIEW / RUNNING / OUTPUT_REVIEW
 - `POST /api/tasks/:id/retry`：仅对可重试终态开放。
 - `POST /api/tasks/:id/cancel`。
 
-取消仅允许在 `PENDING_INPUT_REVIEW` 或 `QUEUED` 阶段执行；任务状态、积分退款、流水和审计在同一事务提交。小时级生命周期维护负责审核超时退款、漏排队恢复及注销冷静期后的数据清理。
+取消仅允许在等待处理或 `QUEUED` 阶段执行；任务状态、积分退款、流水和审计在同一事务提交。小时级生命周期维护负责释放历史待审核数据、漏排队恢复及注销冷静期后的数据清理。
 - `GET /api/assets`、`DELETE /api/assets/:id`。
 
 ### Wallet and Orders
@@ -195,13 +195,12 @@ Next.js Web
      -> Redis / BullMQ
      -> Object Storage (OSS/S3)
      -> Payment Adapter
-     -> Moderation Adapter
      -> AI Provider Router
           -> OpenAI-compatible image provider
           -> Volcano Engine image/video provider
 
 BullMQ Workers
-  -> moderation -> generation -> post-process -> watermark/metadata -> asset
+  -> generation -> post-process -> watermark/metadata -> asset
 
 Admin Web
   -> users / tasks / orders / reviews / workflow versions / provider health

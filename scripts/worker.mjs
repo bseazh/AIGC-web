@@ -21,7 +21,8 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5 });
 const cos = new COS({ SecretId: process.env.COS_SECRET_ID, SecretKey: process.env.COS_SECRET_KEY });
 const redisUrl = new URL(process.env.REDIS_URL);
 const workerId = `${process.env.HOSTNAME || "worker"}:${process.pid}`;
-const moderationQueue = process.env.CONTENT_REVIEW_PROVIDER === "tencent-ci" ? new Queue("moderation", { connection: { host: redisUrl.hostname, port: Number(redisUrl.port || 6379), password: redisUrl.password || undefined, maxRetriesPerRequest: null } }) : null;
+const contentReviewEnabled = process.env.CONTENT_REVIEW_ENABLED === "true";
+const moderationQueue = contentReviewEnabled && process.env.CONTENT_REVIEW_PROVIDER === "tencent-ci" ? new Queue("moderation", { connection: { host: redisUrl.hostname, port: Number(redisUrl.port || 6379), password: redisUrl.password || undefined, maxRetriesPerRequest: null } }) : null;
 
 async function heartbeat() {
   await pool.query(
@@ -248,6 +249,48 @@ async function generateMix(inputUrls, input, task) {
   } finally { await rm(dir, { recursive: true, force: true }); }
 }
 
+async function settleSuccess(task, savedAssets) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const current = await client.query("SELECT status FROM generation_tasks WHERE id = $1 FOR UPDATE", [task.id]);
+    if (!["QUEUED", "RUNNING"].includes(current.rows[0]?.status)) {
+      await client.query("ROLLBACK");
+      return false;
+    }
+    await client.query(
+      "UPDATE generation_tasks SET status = 'SUCCEEDED', output_json = $2::jsonb, error_code = NULL, updated_at = NOW() WHERE id = $1",
+      [task.id, JSON.stringify({ assets: savedAssets })],
+    );
+    const adminExempt = task.input_json?.billingMode === "ADMIN_EXEMPT";
+    if (!adminExempt) {
+      const wallet = await client.query("SELECT available_points, frozen_points FROM wallets WHERE user_id = $1 FOR UPDATE", [task.user_id]);
+      if (!wallet.rows[0] || Number(wallet.rows[0].frozen_points) < task.points) throw new Error(`Insufficient frozen points for task ${task.id}`);
+      await client.query("UPDATE wallets SET frozen_points = frozen_points - $2, version = version + 1, updated_at = NOW() WHERE user_id = $1", [task.user_id, task.points]);
+      await client.query(
+        `INSERT INTO wallet_ledger (user_id, type, amount, balance_after, business_type, business_id, idempotency_key)
+         VALUES ($1, 'SETTLE', 0, $2, 'GENERATION_TASK', $3, $4) ON CONFLICT (idempotency_key) DO NOTHING`,
+        [task.user_id, wallet.rows[0].available_points, task.id, `settle:${task.id}`],
+      );
+    }
+    if (task.email && process.env.EMAIL_NOTIFY_TASK_SUCCEEDED === "true") {
+      const html = `<div style="font-family:Arial,sans-serif;color:#283241;line-height:1.7"><h2>芭乐AIGC</h2><p>任务 <strong>${task.id}</strong>（${task.workflow_key}）已生成，可以下载。</p><p><a href="${process.env.PUBLIC_APP_URL || "https://aigc.bigapple.store"}/tasks/${task.id}">查看任务详情</a></p></div>`;
+      await client.query(
+        `INSERT INTO notification_outbox (user_id, recipient, event_type, subject, html_body, idempotency_key)
+         VALUES ($1, $2, 'TASK_COMPLETED', '你的创作任务已完成', $3, $4) ON CONFLICT (idempotency_key) DO NOTHING`,
+        [task.user_id, task.email, html, `task_completed:${task.id}`],
+      );
+    }
+    await client.query("COMMIT");
+    return true;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function submitForReview(task, savedAssets) {
   const client = await pool.connect();
   try {
@@ -389,14 +432,15 @@ const worker = new Worker("generation", async (job) => {
       const key = `users/${task.user_id}/outputs/${task.id}/${index + 1}-${randomUUID()}.${extension}`;
       await putObject(key, buffer, contentType);
       savedKeys.push(key);
+      const auditStatus = contentReviewEnabled ? "PENDING_REVIEW" : "READY";
       const asset = await pool.query(
         `INSERT INTO assets (owner_id, kind, storage_key, mime_type, byte_size, audit_status, original_name, metadata_json)
-         VALUES ($1, 'OUTPUT', $2, $3, $4, 'PENDING_REVIEW', $5, $6::jsonb) RETURNING id`,
-        [task.user_id, key, contentType, buffer.length, `${task.workflow_key}-${index + 1}.${extension}`, JSON.stringify({ taskId: task.id, workflowKey: task.workflow_key, provider: isVideoTask ? "ark" : "sophnet", model: isVideoTask ? (process.env.ARK_MODEL || "doubao-seedance-2-0-260128") : process.env.AI_MODEL, aiGenerated: true, aiContentLabel: "AI_GENERATED", provenance: { generatedAt: new Date().toISOString(), workerId }, moderation: { status: "PENDING_REVIEW" } })],
+         VALUES ($1, 'OUTPUT', $2, $3, $4, $5, $6, $7::jsonb) RETURNING id`,
+        [task.user_id, key, contentType, buffer.length, auditStatus, `${task.workflow_key}-${index + 1}.${extension}`, JSON.stringify({ taskId: task.id, workflowKey: task.workflow_key, provider: isVideoTask ? "ark" : "sophnet", model: isVideoTask ? (process.env.ARK_MODEL || "doubao-seedance-2-0-260128") : process.env.AI_MODEL, aiGenerated: true, aiContentLabel: "AI_GENERATED", provenance: { generatedAt: new Date().toISOString(), workerId }, moderation: { status: contentReviewEnabled ? "PENDING_REVIEW" : "BYPASSED" } })],
       );
       savedAssets.push({ assetId: asset.rows[0].id, storageKey: key });
     }
-    const settled = await submitForReview(task, savedAssets);
+    const settled = contentReviewEnabled ? await submitForReview(task, savedAssets) : await settleSuccess(task, savedAssets);
     if (!settled) {
       await Promise.all(savedKeys.map(deleteObject));
       await pool.query("DELETE FROM assets WHERE id = ANY($1::uuid[])", [savedAssets.map((asset) => asset.assetId)]);

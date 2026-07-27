@@ -20,7 +20,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const found = await client.query<{ status: string; points: number; input_json: Record<string, unknown> }>("SELECT status, points, input_json FROM generation_tasks WHERE id = $1 AND user_id = $2 FOR UPDATE", [id, user.id]);
     const task = found.rows[0];
     if (!task) { await client.query("ROLLBACK"); return NextResponse.json({ code: "TASK_NOT_FOUND" }, { status: 404 }); }
-    if (!cancelableStatuses.has(task.status)) { await client.query("ROLLBACK"); return NextResponse.json({ code: "TASK_NOT_CANCELABLE", message: "只有素材审核中或排队中的任务可以取消" }, { status: 409 }); }
+    if (!cancelableStatuses.has(task.status)) { await client.query("ROLLBACK"); return NextResponse.json({ code: "TASK_NOT_CANCELABLE", message: "只有等待处理或排队中的任务可以取消" }, { status: 409 }); }
     previousStatus = task.status; points = task.points; adminExempt = isAdminExemptTask(task.input_json);
     const wallet = await client.query<{ available_points: number }>("SELECT available_points FROM wallets WHERE user_id = $1 FOR UPDATE", [user.id]);
     const balance = wallet.rows[0]?.available_points || 0;

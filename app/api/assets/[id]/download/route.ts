@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSignedObjectUrl } from "@/lib/cos";
 import { db } from "@/lib/db";
 import { authenticatedUser } from "@/lib/session";
+import { contentReviewEnabled } from "@/lib/content-review";
 
 export const runtime = "nodejs";
 
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(downloadName(asset.original_name, asset.mime_type))}`,
       "Cache-Control": "private, no-store",
       "X-AI-Generated": asset.metadata_json?.aiGenerated === true ? "true" : "false",
-      "X-Content-Review": "approved",
+      "X-Content-Review": contentReviewEnabled() ? "approved" : "disabled",
     },
   });
 }

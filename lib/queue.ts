@@ -1,4 +1,5 @@
 import { Queue } from "bullmq";
+import { contentReviewEnabled } from "@/lib/content-review";
 
 let generationQueue: Queue | undefined;
 let moderationQueue: Queue | undefined;
@@ -23,7 +24,7 @@ export function getGenerationQueue() {
 }
 
 export function automaticModerationEnabled() {
-  return process.env.CONTENT_REVIEW_PROVIDER === "tencent-ci";
+  return contentReviewEnabled() && process.env.CONTENT_REVIEW_PROVIDER === "tencent-ci";
 }
 
 export function getModerationQueue() {
