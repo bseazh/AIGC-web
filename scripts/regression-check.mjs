@@ -11,6 +11,7 @@ const checks = [
   ["asset library separates uploads and generated results", "app/assets/page.tsx", "title: \"生成结果\", assets: generatedAssets"],
   ["asset thumbnails open media preview", "app/assets/page.tsx", "<button className=\"asset-media\" type=\"button\""],
   ["asset downloads remain explicit", "app/assets/page.tsx", "href={`/api/assets/${asset.id}/download/`}"],
+  ["ready generated assets can be reused as task inputs", "lib/task-creation.ts", "kind = 'OUTPUT' AND audit_status = 'READY'"],
   ["administrator content assets entry", "app/admin/page.tsx", "<Link href=\"/assets\"><Boxes"],
   ["task outputs open media preview", "app/tasks/[id]/page.tsx", "setPreviewOutput(output)"],
   ["image workflows show elapsed generation time", "app/components/image-workflow-page.tsx", "<GenerationProgress"],

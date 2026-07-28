@@ -54,7 +54,9 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
   const reviewEnabled = contentReviewEnabled();
   const acceptedStatuses = reviewEnabled ? ["PENDING_REVIEW", "READY"] : ["READY"];
   const assetResult = await db.query<ReadyAsset>(
-    "SELECT id, storage_key, mime_type, metadata_json, audit_status FROM assets WHERE id = ANY($1::uuid[]) AND owner_id = $2 AND audit_status = ANY($3::text[]) AND kind = 'INPUT'",
+    `SELECT id, storage_key, mime_type, metadata_json, audit_status FROM assets
+     WHERE id = ANY($1::uuid[]) AND owner_id = $2
+       AND ((kind = 'INPUT' AND audit_status = ANY($3::text[])) OR (kind = 'OUTPUT' AND audit_status = 'READY'))`,
     [assetIds, user.id, acceptedStatuses],
   );
   const assetsById = new Map(assetResult.rows.map((asset) => [asset.id, asset]));
