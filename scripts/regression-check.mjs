@@ -13,6 +13,8 @@ const checks = [
   ["asset downloads remain explicit", "app/assets/page.tsx", "href={`/api/assets/${asset.id}/download/`}"],
   ["administrator content assets entry", "app/admin/page.tsx", "<Link href=\"/assets\"><Boxes"],
   ["task outputs open media preview", "app/tasks/[id]/page.tsx", "setPreviewOutput(output)"],
+  ["image workflows show elapsed generation time", "app/components/image-workflow-page.tsx", "<GenerationProgress"],
+  ["model wear shows elapsed generation time", "app/create/model-wear/page.tsx", "<GenerationProgress"],
   ["content rejection refund", "app/api/admin/reviews/[id]/route.ts", "CONTENT_REJECTED"],
   ["server-side revocable sessions", "lib/session.ts", "login_sessions"],
   ["login failure limit", "app/api/auth/login/route.ts", "LOGIN_RATE_LIMITED"],
