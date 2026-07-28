@@ -75,6 +75,8 @@ if [[ -f .env.production && "${CONTENT_REVIEW_ENABLED:-false}" == "true" && "${C
 fi
 
 ./scripts/infra.sh
+bash scripts/install-yt-dlp.sh
+bash scripts/refresh-douyin-profile.sh
 
 npm ci --include=dev --no-audit --no-fund
 npm run test:regression

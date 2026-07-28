@@ -92,6 +92,31 @@ const checks = [
     "<VideoGenerationProgress",
   ],
   [
+    "recreate video accepts Douyin links",
+    "app/components/recreate-video-page.tsx",
+    'fetch("/api/imports/douyin/"',
+  ],
+  [
+    "Douyin imports enforce a 15 second limit",
+    "lib/douyin-import.ts",
+    "DOUYIN_MAX_DURATION_SECONDS = 15",
+  ],
+  [
+    "Douyin import only accepts allowlisted hosts",
+    "lib/douyin-import.ts",
+    "hostname.endsWith(`.${domain}`)",
+  ],
+  [
+    "Douyin import installs browser impersonation support",
+    "scripts/install-yt-dlp.sh",
+    "yt-dlp[default,curl-cffi]",
+  ],
+  [
+    "Douyin import can reuse a headless browser profile",
+    "lib/douyin-import.ts",
+    'args.push("--cookies-from-browser"',
+  ],
+  [
     "content rejection refund",
     "app/api/admin/reviews/[id]/route.ts",
     "CONTENT_REJECTED",

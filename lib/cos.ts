@@ -1,4 +1,5 @@
 import COS from "cos-nodejs-sdk-v5";
+import { createReadStream } from "node:fs";
 
 let client: COS | undefined;
 
@@ -21,37 +22,74 @@ export function getCosClient() {
   return client;
 }
 
-export function createSignedObjectUrl(Key: string, Method: "GET" | "PUT", expires = 600) {
+export function createSignedObjectUrl(
+  Key: string,
+  Method: "GET" | "PUT",
+  expires = 600,
+) {
   const { Bucket, Region } = config();
   return new Promise<string>((resolve, reject) => {
-    getCosClient().getObjectUrl({ Bucket, Region, Key, Method, Sign: true, Expires: expires }, (error, data) => {
-      if (error || !data?.Url) reject(error || new Error("COS did not return a signed URL"));
-      else resolve(data.Url);
-    });
+    getCosClient().getObjectUrl(
+      { Bucket, Region, Key, Method, Sign: true, Expires: expires },
+      (error, data) => {
+        if (error || !data?.Url)
+          reject(error || new Error("COS did not return a signed URL"));
+        else resolve(data.Url);
+      },
+    );
   });
 }
 
 export async function inspectObject(Key: string) {
   const { Bucket, Region } = config();
-  return new Promise<{ contentLength: number; contentType: string }>((resolve, reject) => {
-    getCosClient().getObject({ Bucket, Region, Key, Range: "bytes=0-0" }, (error, data) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      const headers = data.headers as Record<string, string>;
-      const contentRange = headers["content-range"];
-      resolve({
-        contentLength: contentRange ? Number(contentRange.split("/").pop()) : Number(headers["content-length"] || 0),
-        contentType: String(headers["content-type"] || "").split(";")[0],
-      });
-    });
-  });
+  return new Promise<{ contentLength: number; contentType: string }>(
+    (resolve, reject) => {
+      getCosClient().getObject(
+        { Bucket, Region, Key, Range: "bytes=0-0" },
+        (error, data) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          const headers = data.headers as Record<string, string>;
+          const contentRange = headers["content-range"];
+          resolve({
+            contentLength: contentRange
+              ? Number(contentRange.split("/").pop())
+              : Number(headers["content-length"] || 0),
+            contentType: String(headers["content-type"] || "").split(";")[0],
+          });
+        },
+      );
+    },
+  );
 }
 
 export async function removeObject(Key: string) {
   const { Bucket, Region } = config();
   return new Promise<void>((resolve, reject) => {
-    getCosClient().deleteObject({ Bucket, Region, Key }, (error) => error ? reject(error) : resolve());
+    getCosClient().deleteObject({ Bucket, Region, Key }, (error) =>
+      error ? reject(error) : resolve(),
+    );
+  });
+}
+
+export async function uploadLocalObject(
+  Key: string,
+  filePath: string,
+  contentType: string,
+) {
+  const { Bucket, Region } = config();
+  return new Promise<void>((resolve, reject) => {
+    getCosClient().putObject(
+      {
+        Bucket,
+        Region,
+        Key,
+        Body: createReadStream(filePath),
+        ContentType: contentType,
+      },
+      (error) => (error ? reject(error) : resolve()),
+    );
   });
 }

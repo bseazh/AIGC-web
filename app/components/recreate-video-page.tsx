@@ -7,6 +7,7 @@ import {
   Film,
   FolderOpen,
   ImagePlus,
+  Link2,
   LoaderCircle,
   ShieldCheck,
   Sparkles,
@@ -26,6 +27,7 @@ type Item = {
   file?: File;
   assetId?: string;
   durationSeconds?: number;
+  source?: "douyin";
 };
 type Asset = {
   id: string;
@@ -55,6 +57,11 @@ export function RecreateVideoPage() {
   const [products, setProducts] = useState<Item[]>([]);
   const [scene, setScene] = useState<Item | null>(null);
   const [tab, setTab] = useState<SourceKind | null>(null);
+  const [videoSource, setVideoSource] = useState<
+    "local" | "library" | "douyin"
+  >("local");
+  const [douyinInput, setDouyinInput] = useState("");
+  const [douyinImporting, setDouyinImporting] = useState(false);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [info, setInfo] = useState("");
   const [special, setSpecial] = useState("");
@@ -112,9 +119,9 @@ export function RecreateVideoPage() {
         return setError("对标视频不能超过 100MB");
       try {
         const durationSeconds = await readVideoDuration(file);
-        if (durationSeconds < 3 || durationSeconds > 20)
+        if (durationSeconds < 3 || durationSeconds > 15)
           return setError(
-            `对标视频时长为 ${durationSeconds.toFixed(1)} 秒，需在 3–20 秒之间`,
+            `该视频 ${durationSeconds.toFixed(1)} 秒，当前仅支持 3–15 秒。为避免截错内容，系统不会自动裁剪，请先剪辑后上传。`,
           );
         setReference({
           file,
@@ -147,6 +154,7 @@ export function RecreateVideoPage() {
     resetTask();
   };
   const openLibrary = async (kind: SourceKind) => {
+    if (kind === "video") setVideoSource("library");
     setTab(kind);
     setError("");
     try {
@@ -171,9 +179,9 @@ export function RecreateVideoPage() {
       tab === "video" &&
       (!asset.durationSeconds ||
         asset.durationSeconds < 3 ||
-        asset.durationSeconds > 20)
+        asset.durationSeconds > 15)
     )
-      return setError("该视频未记录有效时长或不在 3–20 秒内，请重新上传后使用");
+      return setError("该视频未记录有效时长或不在 3–15 秒内，请重新上传后使用");
     const selected = {
       assetId: asset.id,
       preview: asset.url,
@@ -193,6 +201,35 @@ export function RecreateVideoPage() {
       );
     setTab(null);
     resetTask();
+  };
+  const importDouyin = async () => {
+    if (!douyinInput.trim() || douyinImporting) return;
+    setError("");
+    setDouyinImporting(true);
+    try {
+      const response = await fetch("/api/imports/douyin/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: douyinInput }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok || body?.status !== "READY") {
+        throw new Error(body?.message || "抖音视频导入失败");
+      }
+      setReference({
+        assetId: body.assetId,
+        preview: body.url,
+        name: body.name,
+        byteSize: body.byteSize,
+        durationSeconds: body.durationSeconds,
+        source: "douyin",
+      });
+      resetTask();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "抖音视频导入失败");
+    } finally {
+      setDouyinImporting(false);
+    }
   };
   const removeProduct = (index: number) =>
     setProducts((current) => {
@@ -321,25 +358,104 @@ export function RecreateVideoPage() {
         <div className="ad-field-title">
           {title} {required && <em>*</em>}
         </div>
-        <div className="ad-source-tabs">
+        <div className={`ad-source-tabs ${kind === "video" ? "three" : ""}`}>
           <button
             type="button"
-            className={tab !== kind ? "active" : ""}
-            onClick={() => refs[kind].current?.click()}
+            className={
+              kind === "video"
+                ? videoSource === "local"
+                  ? "active"
+                  : ""
+                : tab !== kind
+                  ? "active"
+                  : ""
+            }
+            onClick={() => {
+              if (kind === "video") {
+                setVideoSource("local");
+                setTab(null);
+              }
+              refs[kind].current?.click();
+            }}
           >
             <Upload size={16} />
             本地上传
           </button>
           <button
             type="button"
-            className={tab === kind ? "active" : ""}
+            className={
+              kind === "video"
+                ? videoSource === "library"
+                  ? "active"
+                  : ""
+                : tab === kind
+                  ? "active"
+                  : ""
+            }
             onClick={() => openLibrary(kind)}
           >
             <FolderOpen size={17} />
             资产库
           </button>
+          {kind === "video" && (
+            <button
+              type="button"
+              className={videoSource === "douyin" ? "active" : ""}
+              onClick={() => {
+                setVideoSource("douyin");
+                setTab(null);
+                setError("");
+              }}
+            >
+              <Link2 size={17} />
+              抖音链接
+            </button>
+          )}
         </div>
-        {tab === kind ? (
+        {kind === "video" && videoSource === "douyin" ? (
+          <div className="douyin-import-panel">
+            <label>
+              抖音分享链接
+              <textarea
+                value={douyinInput}
+                onChange={(event) => setDouyinInput(event.target.value)}
+                maxLength={5000}
+                placeholder="粘贴抖音分享链接或完整分享文案"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={importDouyin}
+              disabled={!douyinInput.trim() || douyinImporting}
+            >
+              {douyinImporting ? (
+                <LoaderCircle className="generation-spinner" size={17} />
+              ) : (
+                <Link2 size={17} />
+              )}
+              {douyinImporting ? "正在解析并导入" : "解析链接"}
+            </button>
+            <p>
+              仅支持可公开播放的抖音作品，时长需为 3–15 秒；长视频不会自动裁剪。
+            </p>
+            {reference?.source === "douyin" && (
+              <div className="douyin-imported-video">
+                <video
+                  src={reference.preview}
+                  controls
+                  playsInline
+                  preload="metadata"
+                />
+                <span>
+                  <strong>{reference.name}</strong>
+                  <small>
+                    {reference.durationSeconds?.toFixed(1)} 秒 · 已保存到素材库
+                  </small>
+                </span>
+              </div>
+            )}
+          </div>
+        ) : tab === kind ? (
           <div className="recreate-library">
             {assets.length ? (
               assets.map((asset) => (
@@ -416,7 +532,7 @@ export function RecreateVideoPage() {
           <strong>复刻爆款带货视频-新版</strong>
         </div>
         <div className="ad-studio-body">
-          {box("video", "对标视频", true, "视频时长需在 3–20 秒之间", Video)}
+          {box("video", "对标视频", true, "视频时长需在 3–15 秒之间", Video)}
           {reference?.durationSeconds && (
             <p className="recreate-review">
               <Video size={15} />
@@ -602,6 +718,8 @@ export function RecreateVideoPage() {
                 setModelInfo("");
                 setModelOn(false);
                 setUsageAuthorized(false);
+                setVideoSource("local");
+                setDouyinInput("");
                 resetTask();
               }}
             >
