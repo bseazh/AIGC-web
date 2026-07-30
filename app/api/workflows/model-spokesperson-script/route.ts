@@ -83,6 +83,22 @@ function joinPoints(points: string[], limit: number) {
     .join("；");
 }
 
+function concise(value: string, maxLength: number) {
+  return value.replace(/[。；;，,]+$/g, "").trim().slice(0, maxLength);
+}
+
+function conciseList(value: string, maxItems: number, maxLength: number) {
+  return concise(
+    value
+      .split(/[，,、]|(?:和|及|与)/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, maxItems)
+      .join("、"),
+    maxLength,
+  );
+}
+
 function createSegments(input: {
   productName: string;
   points: string[];
@@ -95,11 +111,26 @@ function createSegments(input: {
 }): Segment[] {
   const copy = toneCopy[input.tone];
   const opener = choose(copy.openers, input.productName, input.variant);
-  const audience = input.audience ? `，尤其适合${input.audience}` : "";
-  const scene = input.usageScene ? `在${input.usageScene}时` : "日常使用时";
-  const closing = input.callToAction || copy.closing;
-  const primary = joinPoints(input.points, input.duration === 15 ? 2 : 3);
-  const secondary = joinPoints(input.points.slice(3), 3);
+  const productName = concise(input.productName, input.duration === 60 ? 30 : 14);
+  const audienceValue =
+    input.duration === 15
+      ? ""
+      : concise(input.audience, input.duration === 60 ? 32 : 12);
+  const sceneValue = conciseList(
+    input.usageScene,
+    input.duration === 15 ? 2 : 3,
+    input.duration === 15 ? 12 : input.duration === 30 ? 20 : 36,
+  );
+  const audience = audienceValue ? `，尤其适合${audienceValue}` : "";
+  const scene = sceneValue ? `在${sceneValue}时` : "日常使用时";
+  const closing = concise(
+    input.callToAction || copy.closing,
+    input.duration === 15 ? 12 : input.duration === 30 ? 18 : 48,
+  );
+  const pointLength = input.duration === 15 ? 12 : input.duration === 30 ? 18 : 32;
+  const concisePoints = input.points.map((point) => concise(point, pointLength));
+  const primary = joinPoints(concisePoints, input.duration === 15 ? 2 : 3);
+  const secondary = joinPoints(concisePoints.slice(3), 3);
 
   if (input.duration === 15) {
     return [
@@ -107,21 +138,21 @@ function createSegments(input: {
         id: randomUUID(),
         stage: "开场吸引",
         timeRange: "0–3 秒",
-        narration: `${opener}——${input.productName}。`,
+        narration: `这是${productName}。`,
         visual: "模特半身正面出镜，快速建立视线交流。",
       },
       {
         id: randomUUID(),
         stage: "核心卖点",
         timeRange: "3–10 秒",
-        narration: `${copy.transition}：${primary}${audience}。`,
+        narration: `它${primary.replace(/；另外，/g, "，而且")}${audience}。`,
         visual: "模特口播与商品特写交替，卖点关键词同步上屏。",
       },
       {
         id: randomUUID(),
         stage: "使用场景",
         timeRange: "10–13 秒",
-        narration: `${scene}，它能让整个体验更轻松、更顺手。`,
+        narration: `${scene}，使用更省心。`,
         visual: "展示商品使用场景或细节动作。",
       },
       {
@@ -139,21 +170,30 @@ function createSegments(input: {
       id: randomUUID(),
       stage: "开场吸引",
       timeRange: input.duration === 30 ? "0–4 秒" : "0–6 秒",
-      narration: `${opener}，它就是${input.productName}${audience}。`,
+      narration:
+        input.duration === 30
+          ? `今天介绍${productName}${audience}。`
+          : `${opener}，它就是${productName}${audience}。`,
       visual: "模特半身近景开场，商品放在画面侧前方。",
     },
     {
       id: randomUUID(),
       stage: "需求共鸣",
       timeRange: input.duration === 30 ? "4–9 秒" : "6–15 秒",
-      narration: `很多人在选择这类产品时，既希望好用，也在意细节和实际体验。`,
+      narration:
+        input.duration === 30
+          ? "选择这类产品，既要好用，也要兼顾实际体验。"
+          : "很多人在选择这类产品时，既希望好用，也在意细节和实际体验。",
       visual: "模特自然口播，搭配用户需求关键词字幕。",
     },
     {
       id: randomUUID(),
       stage: "卖点讲解",
       timeRange: input.duration === 30 ? "9–20 秒" : "15–35 秒",
-      narration: `${copy.transition}：${primary}。这些特点不是简单堆砌，而是直接服务于真实使用需求。`,
+      narration:
+        input.duration === 30
+          ? `${copy.transition}：${primary}。`
+          : `${copy.transition}：${primary}。这些特点不是简单堆砌，而是直接服务于真实使用需求。`,
       visual: "依次穿插商品全景、材质和功能细节。",
     },
   ];
@@ -175,7 +215,10 @@ function createSegments(input: {
       id: randomUUID(),
       stage: "场景说明",
       timeRange: input.duration === 30 ? "20–26 秒" : "46–55 秒",
-      narration: `${scene}，它能帮助你减少不必要的麻烦，让使用过程更自然顺畅。`,
+      narration:
+        input.duration === 30
+          ? `${scene}，使用起来更省心。`
+          : `${scene}，它能帮助你减少不必要的麻烦，让使用过程更自然顺畅。`,
       visual: "切换到真实使用场景，保留模特画外音。",
     },
     {
