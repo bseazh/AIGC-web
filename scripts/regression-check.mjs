@@ -107,6 +107,21 @@ const checks = [
     "--download-sections",
   ],
   [
+    "Recreate video keeps an ordered Douyin clip collection",
+    "app/components/recreate-video-page.tsx",
+    "douyinClips",
+  ],
+  [
+    "Recreate video hands clips to video mix",
+    "app/components/recreate-video-page.tsx",
+    "aigc-video-mix-asset-ids",
+  ],
+  [
+    "Video mix accepts an ordered dynamic material list",
+    "app/components/video-workflow-page.tsx",
+    "mixUploads",
+  ],
+  [
     "Douyin import only accepts allowlisted hosts",
     "lib/douyin-import.ts",
     "hostname.endsWith(`.${domain}`)",

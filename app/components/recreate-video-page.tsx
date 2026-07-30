@@ -2,6 +2,8 @@
 
 import {
   ArrowLeft,
+  ArrowDown,
+  ArrowUp,
   ChevronDown,
   Download,
   Film,
@@ -28,6 +30,8 @@ type Item = {
   assetId?: string;
   durationSeconds?: number;
   source?: "douyin";
+  clipStartSeconds?: number;
+  clipEndSeconds?: number;
 };
 type Asset = {
   id: string;
@@ -49,6 +53,7 @@ type DouyinAnalysis = {
 };
 type SourceKind = "video" | "product" | "scene";
 const imageAccept = "image/jpeg,image/png,image/webp";
+const videoMixHandoffKey = "aigc-video-mix-asset-ids";
 
 export function RecreateVideoPage() {
   const router = useRouter();
@@ -75,6 +80,7 @@ export function RecreateVideoPage() {
   );
   const [douyinStart, setDouyinStart] = useState(0);
   const [douyinClipDuration, setDouyinClipDuration] = useState(15);
+  const [douyinClips, setDouyinClips] = useState<Item[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [info, setInfo] = useState("");
   const [special, setSpecial] = useState("");
@@ -249,6 +255,10 @@ export function RecreateVideoPage() {
   };
   const importDouyin = async () => {
     if (!douyinAnalysis || douyinBusy) return;
+    if (douyinClips.length >= 10) {
+      setDouyinError("已保留 10 个片段，请先移除一个片段再继续截取");
+      return;
+    }
     setError("");
     setDouyinError("");
     setDouyinBusy("importing");
@@ -271,14 +281,22 @@ export function RecreateVideoPage() {
       if (!response.ok || body?.status !== "READY") {
         throw new Error(body?.message || "抖音视频导入失败");
       }
-      setReference({
+      const importedClip: Item = {
         assetId: body.assetId,
         preview: body.url,
         name: body.name,
         byteSize: body.byteSize,
         durationSeconds: body.durationSeconds,
         source: "douyin",
-      });
+        clipStartSeconds: body.clipStartSeconds,
+        clipEndSeconds: body.clipEndSeconds,
+      };
+      setReference(importedClip);
+      setDouyinClips((current) =>
+        current.some((item) => item.assetId === importedClip.assetId)
+          ? current
+          : [...current, importedClip].slice(0, 10),
+      );
       setDouyinError("");
       resetTask();
     } catch (caught) {
@@ -295,6 +313,33 @@ export function RecreateVideoPage() {
       if (item?.file) URL.revokeObjectURL(item.preview);
       return current.filter((_, itemIndex) => itemIndex !== index);
     });
+  const moveDouyinClip = (index: number, direction: -1 | 1) =>
+    setDouyinClips((current) => {
+      const target = index + direction;
+      if (target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  const removeDouyinClip = (assetId?: string) => {
+    if (!assetId) return;
+    setDouyinClips((current) =>
+      current.filter((item) => item.assetId !== assetId),
+    );
+    if (reference?.assetId === assetId) setReference(null);
+    resetTask();
+  };
+  const goToVideoMix = () => {
+    const assetIds = douyinClips
+      .map((item) => item.assetId)
+      .filter((assetId): assetId is string => Boolean(assetId));
+    if (assetIds.length) {
+      sessionStorage.setItem(videoMixHandoffKey, JSON.stringify(assetIds));
+    } else {
+      sessionStorage.removeItem(videoMixHandoffKey);
+    }
+    router.push("/create/video-mix");
+  };
   const upload = async (item: Item) => {
     if (item.assetId) return item.assetId;
     if (!item.file) throw new Error("素材未找到");
@@ -579,7 +624,7 @@ export function RecreateVideoPage() {
                 <button
                   type="button"
                   onClick={importDouyin}
-                  disabled={Boolean(douyinBusy)}
+                  disabled={Boolean(douyinBusy) || douyinClips.length >= 10}
                 >
                   {douyinBusy === "importing" ? (
                     <LoaderCircle className="generation-spinner" size={17} />
@@ -588,6 +633,8 @@ export function RecreateVideoPage() {
                   )}
                   {douyinBusy === "importing"
                     ? "正在截取并保存"
+                    : douyinClips.length >= 10
+                      ? "片段列表已满"
                     : douyinAnalysis.clipRequired
                       ? "截取并导入"
                       : "导入完整视频"}
@@ -634,6 +681,92 @@ export function RecreateVideoPage() {
                   </button>
                 )}
               </div>
+            )}
+            {douyinClips.length > 0 && (
+              <section className="douyin-clip-collection">
+                <header>
+                  <div>
+                    <strong>已截取片段</strong>
+                    <small>按此顺序带入智能混剪 · {douyinClips.length}/10</small>
+                  </div>
+                  <button type="button" onClick={goToVideoMix}>
+                    <Film size={14} />
+                    带入混剪
+                  </button>
+                </header>
+                <div>
+                  {douyinClips.map((clip, index) => (
+                    <article
+                      className={
+                        reference?.assetId === clip.assetId ? "active" : ""
+                      }
+                      key={clip.assetId}
+                    >
+                      <button
+                        type="button"
+                        className="douyin-clip-preview"
+                        onClick={() => {
+                          setReference(clip);
+                          resetTask();
+                        }}
+                        aria-label={`选择片段 ${index + 1} 用于复刻`}
+                      >
+                        <video
+                          src={clip.preview}
+                          muted
+                          playsInline
+                          preload="metadata"
+                        />
+                        <span>{index + 1}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="douyin-clip-name"
+                        onClick={() => {
+                          setReference(clip);
+                          resetTask();
+                        }}
+                      >
+                        <strong>{clip.name}</strong>
+                        <small>
+                          {typeof clip.clipStartSeconds === "number" &&
+                          typeof clip.clipEndSeconds === "number"
+                            ? `${clip.clipStartSeconds.toFixed(1)}–${clip.clipEndSeconds.toFixed(1)} 秒`
+                            : `${clip.durationSeconds?.toFixed(1)} 秒`}
+                          {reference?.assetId === clip.assetId
+                            ? " · 当前复刻片段"
+                            : ""}
+                        </small>
+                      </button>
+                      <div className="douyin-clip-actions">
+                        <button
+                          type="button"
+                          disabled={index === 0}
+                          onClick={() => moveDouyinClip(index, -1)}
+                          aria-label="片段上移"
+                        >
+                          <ArrowUp size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={index === douyinClips.length - 1}
+                          onClick={() => moveDouyinClip(index, 1)}
+                          aria-label="片段下移"
+                        >
+                          <ArrowDown size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeDouyinClip(clip.assetId)}
+                          aria-label="从片段列表移除"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
             )}
           </div>
         ) : tab === kind ? (
@@ -874,10 +1007,13 @@ export function RecreateVideoPage() {
                 <Download size={16} />
                 下载视频
               </a>
-              <a href="/create/video-mix">
+              <button type="button" onClick={goToVideoMix}>
                 <Film size={16} />
                 前往智能混剪
-              </a>
+                {douyinClips.length > 0
+                  ? `（已带入 ${douyinClips.length} 段）`
+                  : ""}
+              </button>
             </div>
           )}
           <div className="ad-actions">
@@ -909,6 +1045,7 @@ export function RecreateVideoPage() {
                 setDouyinAnalysis(null);
                 setDouyinStart(0);
                 setDouyinClipDuration(15);
+                setDouyinClips([]);
                 resetTask();
               }}
             >

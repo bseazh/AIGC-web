@@ -2,6 +2,8 @@
 
 import {
   ArrowLeft,
+  ArrowDown,
+  ArrowUp,
   Check,
   Download,
   Film,
@@ -45,6 +47,7 @@ type Asset = {
   originalName: string;
   url: string;
   kind: string;
+  durationSeconds?: number | null;
 };
 type Result = {
   taskId: string;
@@ -171,6 +174,7 @@ const templateConfig = {
 
 const durations = [5, 10, 15];
 const resolutions = ["480p", "720p", "1080p"];
+const videoMixHandoffKey = "aigc-video-mix-asset-ids";
 
 export function VideoWorkflowPage({ template = "seedance" }: Props) {
   const router = useRouter();
@@ -188,6 +192,8 @@ export function VideoWorkflowPage({ template = "seedance" }: Props) {
   const [uploads, setUploads] = useState<Partial<Record<UploadSlot, Uploaded>>>(
     {},
   );
+  const [mixUploads, setMixUploads] = useState<Uploaded[]>([]);
+  const [mixHandoffLoaded, setMixHandoffLoaded] = useState(false);
   const [ratio, setRatio] = useState("16:9");
   const [duration, setDuration] = useState(15);
   const [resolution, setResolution] = useState("720p");
@@ -212,12 +218,55 @@ export function VideoWorkflowPage({ template = "seedance" }: Props) {
       .catch(() => router.replace("/"));
   }, [router]);
 
+  useEffect(() => {
+    if (template !== "mix" || mixHandoffLoaded) return;
+    setMixHandoffLoaded(true);
+    const raw = sessionStorage.getItem(videoMixHandoffKey);
+    if (!raw) return;
+    sessionStorage.removeItem(videoMixHandoffKey);
+    let assetIds: string[] = [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        assetIds = parsed.filter(
+          (value): value is string => typeof value === "string",
+        );
+      }
+    } catch {
+      return;
+    }
+    if (!assetIds.length) return;
+    fetch("/api/assets/?kind=ALL", { cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error();
+        const byId = new Map(
+          (body.assets || []).map((asset: Asset) => [asset.id, asset]),
+        );
+        const selected = assetIds
+          .map((assetId) => byId.get(assetId) as Asset | undefined)
+          .filter(
+            (asset): asset is Asset => asset?.mimeType === "video/mp4",
+          )
+          .slice(0, 10)
+          .map((asset) => ({
+            assetId: asset.id,
+            preview: asset.url,
+            name: asset.originalName,
+            byteSize: asset.byteSize,
+          }));
+        setMixUploads(selected);
+      })
+      .catch(() => setError("自动带入素材失败，请从素材库重新选择"));
+  }, [mixHandoffLoaded, template]);
+
   const choose = (key: UploadSlot, file?: File) => {
     if (!file) return;
     const definition = definitions.find((item) => item.key === key)!;
     if (!definition.accepts.split(",").includes(file.type))
       return setError(`${definition.label}的文件格式不正确`);
-    const max = key === "video" ? 100 : key === "audio" ? 30 : 10;
+    const max =
+      key === "video" || key === "video2" ? 100 : key === "audio" ? 30 : 10;
     if (file.size > max * 1024 * 1024)
       return setError(`${definition.label}不能超过 ${max}MB`);
     setUploads((current) => {
@@ -253,6 +302,26 @@ export function VideoWorkflowPage({ template = "seedance" }: Props) {
     }
   };
   const selectAsset = (slot: UploadSlot, asset: Asset) => {
+    if (template === "mix") {
+      setMixUploads((current) =>
+        current.some((item) => item.assetId === asset.id)
+          ? current
+          : [
+              ...current,
+              {
+                assetId: asset.id,
+                preview: asset.url,
+                name: asset.originalName,
+                byteSize: asset.byteSize,
+              },
+            ].slice(0, 10),
+      );
+      setLibrarySlot(null);
+      setError("");
+      setResult(null);
+      setPhase("idle");
+      return;
+    }
     setUploads((current) => ({
       ...current,
       [slot]: {
@@ -267,6 +336,44 @@ export function VideoWorkflowPage({ template = "seedance" }: Props) {
     setResult(null);
     setPhase("idle");
   };
+  const chooseMixFiles = (files?: FileList | null) => {
+    if (!files?.length) return;
+    const selected = Array.from(files)
+      .filter((file) => file.type === "video/mp4")
+      .filter((file) => file.size <= 100 * 1024 * 1024)
+      .map((file) => ({
+        file,
+        preview: URL.createObjectURL(file),
+        name: file.name,
+        byteSize: file.size,
+      }));
+    if (!selected.length) {
+      setError("请选择 100MB 以内的 MP4 视频");
+      return;
+    }
+    setMixUploads((current) => {
+      const room = Math.max(0, 10 - current.length);
+      selected.slice(room).forEach((item) => URL.revokeObjectURL(item.preview));
+      return [...current, ...selected.slice(0, room)];
+    });
+    setError("");
+    setResult(null);
+    setPhase("idle");
+  };
+  const moveMixUpload = (index: number, direction: -1 | 1) =>
+    setMixUploads((current) => {
+      const target = index + direction;
+      if (target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  const removeMixUpload = (index: number) =>
+    setMixUploads((current) => {
+      const item = current[index];
+      if (item?.file) URL.revokeObjectURL(item.preview);
+      return current.filter((_, itemIndex) => itemIndex !== index);
+    });
   const upload = async (item: Uploaded) => {
     if (item.assetId) return item.assetId;
     if (!item.file) throw new Error("素材未找到");
@@ -322,9 +429,11 @@ export function VideoWorkflowPage({ template = "seedance" }: Props) {
     setPhase("uploading");
     try {
       const assetIds = await Promise.all(
-        definitions
-          .filter((definition) => uploads[definition.key])
-          .map((definition) => upload(uploads[definition.key]!)),
+        template === "mix"
+          ? mixUploads.map(upload)
+          : definitions
+              .filter((definition) => uploads[definition.key])
+              .map((definition) => upload(uploads[definition.key]!)),
       );
       const promptValue = [
         `产品信息：${productInfo.trim()}`,
@@ -372,16 +481,20 @@ export function VideoWorkflowPage({ template = "seedance" }: Props) {
   const mixPoints =
     duration === 15 ? 40 : duration === 30 ? 70 : duration === 45 ? 100 : 130;
   const missingRequired =
-    definitions.some(
-      (definition) => definition.required && !uploads[definition.key],
-    ) ||
+    (template === "mix"
+      ? mixUploads.length < 2
+      : definitions.some(
+          (definition) => definition.required && !uploads[definition.key],
+        )) ||
     (template === "mix" && !authorizationConfirmed);
   const compatibleAssets = librarySlot
     ? assets.filter((asset) =>
         definitions
           .find((definition) => definition.key === librarySlot)!
           .accepts.split(",")
-          .includes(asset.mimeType),
+          .includes(asset.mimeType) &&
+        (template !== "mix" ||
+          !mixUploads.some((item) => item.assetId === asset.id)),
       )
     : [];
   const imageCount = imageKeys.filter((key) => uploads[key]).length;
@@ -493,9 +606,89 @@ export function VideoWorkflowPage({ template = "seedance" }: Props) {
               {template === "ad" && <span>已添加 {imageCount}/5</span>}
             </div>
             <div
-              className={`video-upload-grid ${template === "ad" ? "ad-image-grid" : ""}`}
+              className={`video-upload-grid ${template === "ad" ? "ad-image-grid" : ""} ${template === "mix" ? "video-mix-upload-grid" : ""}`}
             >
-              {definitions.map(inputCard)}
+              {template === "mix" ? (
+                <section className="video-mix-materials">
+                  <header>
+                    <div>
+                      <strong>混剪素材顺序</strong>
+                      <small>
+                        至少 2 段，最多 10 段 · 当前 {mixUploads.length}/10
+                      </small>
+                    </div>
+                    <button type="button" onClick={() => openLibrary("video")}>
+                      <FolderOpen size={15} />
+                      从素材库添加
+                    </button>
+                  </header>
+                  {mixUploads.length > 0 ? (
+                    <div className="video-mix-list">
+                      {mixUploads.map((item, index) => (
+                        <article key={item.assetId || `${item.name}-${index}`}>
+                          <video
+                            src={item.preview}
+                            muted
+                            playsInline
+                            preload="metadata"
+                          />
+                          <span>{index + 1}</span>
+                          <div>
+                            <strong>{item.name}</strong>
+                            <small>
+                              {item.assetId ? "内容资产" : "等待上传"} ·{" "}
+                              {Math.max(1, Math.ceil(item.byteSize / 1024 / 1024))} MB
+                            </small>
+                          </div>
+                          <nav>
+                            <button
+                              type="button"
+                              disabled={index === 0}
+                              onClick={() => moveMixUpload(index, -1)}
+                              aria-label="视频上移"
+                            >
+                              <ArrowUp size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={index === mixUploads.length - 1}
+                              onClick={() => moveMixUpload(index, 1)}
+                              aria-label="视频下移"
+                            >
+                              <ArrowDown size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeMixUpload(index)}
+                              aria-label="移除视频"
+                            >
+                              <X size={14} />
+                            </button>
+                          </nav>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="video-mix-empty">
+                      <Film size={28} />
+                      <strong>还没有混剪素材</strong>
+                      <small>可从复刻页面自动带入，或在这里添加视频。</small>
+                    </div>
+                  )}
+                  <label className="video-mix-local-add">
+                    <Upload size={15} />
+                    添加本地 MP4
+                    <input
+                      type="file"
+                      accept="video/mp4"
+                      multiple
+                      onChange={(event) => chooseMixFiles(event.target.files)}
+                    />
+                  </label>
+                </section>
+              ) : (
+                definitions.map(inputCard)
+              )}
             </div>
             <label className="ad-text-field">
               产品信息（可选）
@@ -654,12 +847,13 @@ export function VideoWorkflowPage({ template = "seedance" }: Props) {
               <div>
                 <span>内容资产</span>
                 <h2>
-                  选择
-                  {
-                    definitions.find(
-                      (definition) => definition.key === librarySlot,
-                    )?.label
-                  }
+                  {template === "mix"
+                    ? "添加混剪视频"
+                    : `选择${
+                        definitions.find(
+                          (definition) => definition.key === librarySlot,
+                        )?.label || "素材"
+                      }`}
                 </h2>
               </div>
               <button
