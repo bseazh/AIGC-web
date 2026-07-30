@@ -122,6 +122,21 @@ const checks = [
     "mixUploads",
   ],
   [
+    "Video center exposes the model spokesperson module",
+    "app/components/video-center-page.tsx",
+    "/create/model-spokesperson-video",
+  ],
+  [
+    "Model spokesperson starts with an editable script workflow",
+    "app/components/model-spokesperson-script-page.tsx",
+    "使用文案生成口播视频 · 下一阶段",
+  ],
+  [
+    "Model spokesperson scripts are server generated and rate limited",
+    "app/api/workflows/model-spokesperson-script/route.ts",
+    "spokesperson-script:attempts",
+  ],
+  [
     "Douyin import only accepts allowlisted hosts",
     "lib/douyin-import.ts",
     "hostname.endsWith(`.${domain}`)",
