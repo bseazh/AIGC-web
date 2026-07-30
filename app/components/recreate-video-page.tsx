@@ -42,6 +42,11 @@ type Result = {
   status: string;
   outputs: Array<{ assetId: string; url: string }>;
 };
+type DouyinAnalysis = {
+  title: string;
+  durationSeconds: number;
+  clipRequired: boolean;
+};
 type SourceKind = "video" | "product" | "scene";
 const imageAccept = "image/jpeg,image/png,image/webp";
 
@@ -61,7 +66,15 @@ export function RecreateVideoPage() {
     "local" | "library" | "douyin"
   >("local");
   const [douyinInput, setDouyinInput] = useState("");
-  const [douyinImporting, setDouyinImporting] = useState(false);
+  const [douyinBusy, setDouyinBusy] = useState<
+    "analyzing" | "importing" | null
+  >(null);
+  const [douyinError, setDouyinError] = useState("");
+  const [douyinAnalysis, setDouyinAnalysis] = useState<DouyinAnalysis | null>(
+    null,
+  );
+  const [douyinStart, setDouyinStart] = useState(0);
+  const [douyinClipDuration, setDouyinClipDuration] = useState(15);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [info, setInfo] = useState("");
   const [special, setSpecial] = useState("");
@@ -202,15 +215,57 @@ export function RecreateVideoPage() {
     setTab(null);
     resetTask();
   };
-  const importDouyin = async () => {
-    if (!douyinInput.trim() || douyinImporting) return;
+  const analyzeDouyin = async () => {
+    if (!douyinInput.trim() || douyinBusy) return;
     setError("");
-    setDouyinImporting(true);
+    setDouyinError("");
+    setDouyinBusy("analyzing");
     try {
       const response = await fetch("/api/imports/douyin/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: douyinInput }),
+        body: JSON.stringify({ url: douyinInput, action: "analyze" }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok || body?.status !== "ANALYZED") {
+        throw new Error(body?.message || "抖音链接解析失败");
+      }
+      setDouyinAnalysis({
+        title: body.title,
+        durationSeconds: body.durationSeconds,
+        clipRequired: body.clipRequired === true,
+      });
+      setDouyinStart(0);
+      setDouyinClipDuration(
+        body.durationSeconds >= 15 ? 15 : body.durationSeconds >= 10 ? 10 : 5,
+      );
+    } catch (caught) {
+      setDouyinError(
+        caught instanceof Error ? caught.message : "抖音链接解析失败",
+      );
+    } finally {
+      setDouyinBusy(null);
+    }
+  };
+  const importDouyin = async () => {
+    if (!douyinAnalysis || douyinBusy) return;
+    setError("");
+    setDouyinError("");
+    setDouyinBusy("importing");
+    try {
+      const response = await fetch("/api/imports/douyin/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: douyinInput,
+          action: "import",
+          ...(douyinAnalysis.clipRequired
+            ? {
+                startSeconds: douyinStart,
+                clipDurationSeconds: douyinClipDuration,
+              }
+            : {}),
+        }),
       });
       const body = await response.json().catch(() => null);
       if (!response.ok || body?.status !== "READY") {
@@ -224,11 +279,14 @@ export function RecreateVideoPage() {
         durationSeconds: body.durationSeconds,
         source: "douyin",
       });
+      setDouyinError("");
       resetTask();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "抖音视频导入失败");
+      setDouyinError(
+        caught instanceof Error ? caught.message : "抖音视频导入失败",
+      );
     } finally {
-      setDouyinImporting(false);
+      setDouyinBusy(null);
     }
   };
   const removeProduct = (index: number) =>
@@ -353,6 +411,9 @@ export function RecreateVideoPage() {
     Icon: typeof Video,
   ) => {
     const item = kind === "video" ? reference : kind === "scene" ? scene : null;
+    const maxDouyinStart = douyinAnalysis
+      ? Math.max(0, douyinAnalysis.durationSeconds - douyinClipDuration)
+      : 0;
     return (
       <section className="recreate-source">
         <div className="ad-field-title">
@@ -405,6 +466,7 @@ export function RecreateVideoPage() {
                 setVideoSource("douyin");
                 setTab(null);
                 setError("");
+                setDouyinError("");
               }}
             >
               <Link2 size={17} />
@@ -418,26 +480,133 @@ export function RecreateVideoPage() {
               抖音分享链接
               <textarea
                 value={douyinInput}
-                onChange={(event) => setDouyinInput(event.target.value)}
+                onChange={(event) => {
+                  setDouyinInput(event.target.value);
+                  setDouyinError("");
+                  setDouyinAnalysis(null);
+                  if (reference?.source === "douyin") {
+                    setReference(null);
+                    resetTask();
+                  }
+                }}
                 maxLength={5000}
                 placeholder="粘贴抖音分享链接或完整分享文案"
               />
             </label>
-            <button
-              type="button"
-              onClick={importDouyin}
-              disabled={!douyinInput.trim() || douyinImporting}
-            >
-              {douyinImporting ? (
-                <LoaderCircle className="generation-spinner" size={17} />
-              ) : (
-                <Link2 size={17} />
-              )}
-              {douyinImporting ? "正在解析并导入" : "解析链接"}
-            </button>
-            <p>
-              仅支持可公开播放的抖音作品，时长需为 3–15 秒；长视频不会自动裁剪。
-            </p>
+            {!douyinAnalysis && (
+              <button
+                type="button"
+                onClick={analyzeDouyin}
+                disabled={!douyinInput.trim() || Boolean(douyinBusy)}
+              >
+                {douyinBusy === "analyzing" ? (
+                  <LoaderCircle className="generation-spinner" size={17} />
+                ) : (
+                  <Link2 size={17} />
+                )}
+                {douyinBusy === "analyzing" ? "正在读取视频信息" : "解析链接"}
+              </button>
+            )}
+            {douyinAnalysis && reference?.source !== "douyin" && (
+              <div className="douyin-clip-editor">
+                <header>
+                  <div>
+                    <strong>{douyinAnalysis.title}</strong>
+                    <small>
+                      视频总时长 {douyinAnalysis.durationSeconds.toFixed(1)} 秒
+                    </small>
+                  </div>
+                  <span>
+                    {douyinAnalysis.clipRequired ? "选择片段" : "完整视频"}
+                  </span>
+                </header>
+                {douyinAnalysis.clipRequired ? (
+                  <>
+                    <div className="douyin-clip-range">
+                      <span>开始时间</span>
+                      <strong>
+                        {douyinStart.toFixed(1)}s –{" "}
+                        {(douyinStart + douyinClipDuration).toFixed(1)}s
+                      </strong>
+                      <input
+                        type="range"
+                        min={0}
+                        max={maxDouyinStart}
+                        step={0.1}
+                        value={Math.min(douyinStart, maxDouyinStart)}
+                        aria-label="片段开始时间"
+                        onChange={(event) =>
+                          setDouyinStart(Number(event.target.value))
+                        }
+                      />
+                      <small>
+                        <span>0s</span>
+                        <span>{maxDouyinStart.toFixed(1)}s</span>
+                      </small>
+                    </div>
+                    <div className="douyin-clip-length">
+                      <span>片段长度</span>
+                      <div>
+                        {[5, 10, 15].map((seconds) => (
+                          <button
+                            type="button"
+                            className={
+                              douyinClipDuration === seconds ? "active" : ""
+                            }
+                            key={seconds}
+                            onClick={() => {
+                              setDouyinClipDuration(seconds);
+                              setDouyinStart((current) =>
+                                Math.min(
+                                  current,
+                                  Math.max(
+                                    0,
+                                    douyinAnalysis.durationSeconds - seconds,
+                                  ),
+                                ),
+                              );
+                            }}
+                          >
+                            {seconds} 秒
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <p>该视频不超过 15 秒，将导入完整内容。</p>
+                )}
+                <button
+                  type="button"
+                  onClick={importDouyin}
+                  disabled={Boolean(douyinBusy)}
+                >
+                  {douyinBusy === "importing" ? (
+                    <LoaderCircle className="generation-spinner" size={17} />
+                  ) : (
+                    <Download size={17} />
+                  )}
+                  {douyinBusy === "importing"
+                    ? "正在截取并保存"
+                    : douyinAnalysis.clipRequired
+                      ? "截取并导入"
+                      : "导入完整视频"}
+                </button>
+                <p>
+                  片段会保存到素材库；可重复选择其他片段，生成后前往智能混剪拼接。
+                </p>
+              </div>
+            )}
+            {!douyinAnalysis && (
+              <p>
+                支持完整抖音分享文案；长视频解析后可选择 5、10 或 15 秒片段。
+              </p>
+            )}
+            {douyinError && (
+              <p className="creator-error" role="alert">
+                {douyinError}
+              </p>
+            )}
             {reference?.source === "douyin" && (
               <div className="douyin-imported-video">
                 <video
@@ -452,6 +621,18 @@ export function RecreateVideoPage() {
                     {reference.durationSeconds?.toFixed(1)} 秒 · 已保存到素材库
                   </small>
                 </span>
+                {douyinAnalysis?.clipRequired && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReference(null);
+                      setDouyinError("");
+                      resetTask();
+                    }}
+                  >
+                    选择其他片段
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -693,6 +874,10 @@ export function RecreateVideoPage() {
                 <Download size={16} />
                 下载视频
               </a>
+              <a href="/create/video-mix">
+                <Film size={16} />
+                前往智能混剪
+              </a>
             </div>
           )}
           <div className="ad-actions">
@@ -720,6 +905,10 @@ export function RecreateVideoPage() {
                 setUsageAuthorized(false);
                 setVideoSource("local");
                 setDouyinInput("");
+                setDouyinError("");
+                setDouyinAnalysis(null);
+                setDouyinStart(0);
+                setDouyinClipDuration(15);
                 resetTask();
               }}
             >

@@ -102,6 +102,11 @@ const checks = [
     "DOUYIN_MAX_DURATION_SECONDS = 15",
   ],
   [
+    "Douyin imports support server-validated time ranges",
+    "lib/douyin-import.ts",
+    "--download-sections",
+  ],
+  [
     "Douyin import only accepts allowlisted hosts",
     "lib/douyin-import.ts",
     "hostname.endsWith(`.${domain}`)",

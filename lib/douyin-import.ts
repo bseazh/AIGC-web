@@ -7,7 +7,9 @@ import { promisify } from "node:util";
 
 export const DOUYIN_MIN_DURATION_SECONDS = 3;
 export const DOUYIN_MAX_DURATION_SECONDS = 15;
+export const DOUYIN_MAX_SOURCE_DURATION_SECONDS = 30 * 60;
 export const DOUYIN_MAX_BYTES = 100 * 1024 * 1024;
+export const DOUYIN_CLIP_DURATIONS = [5, 10, 15] as const;
 
 const execute = promisify(execFile);
 const ytDlpPath =
@@ -16,6 +18,9 @@ const ytDlpPath =
 const ffprobePath =
   process.env.FFPROBE_PATH ||
   (process.platform === "darwin" ? "ffprobe" : "/usr/bin/ffprobe");
+const ffmpegPath =
+  process.env.FFMPEG_PATH ||
+  (process.platform === "darwin" ? "ffmpeg" : "/usr/bin/ffmpeg");
 
 export class DouyinImportError extends Error {
   code: string;
@@ -70,10 +75,6 @@ export function normalizeDouyinUrl(input: unknown) {
   return url.toString();
 }
 
-function durationMessage(duration: number) {
-  return `该视频 ${duration.toFixed(1)} 秒，当前仅支持 ${DOUYIN_MIN_DURATION_SECONDS}–${DOUYIN_MAX_DURATION_SECONDS} 秒。为避免截错内容，系统不会自动裁剪，请先剪辑后上传，或粘贴剪辑后作品的链接。`;
-}
-
 export function validateDouyinDuration(value: unknown) {
   const duration = Number(value);
   if (!Number.isFinite(duration) || duration <= 0) {
@@ -89,7 +90,7 @@ export function validateDouyinDuration(value: unknown) {
   ) {
     throw new DouyinImportError(
       "DOUYIN_VIDEO_DURATION_UNSUPPORTED",
-      durationMessage(duration),
+      `截取结果为 ${duration.toFixed(1)} 秒，必须在 ${DOUYIN_MIN_DURATION_SECONDS}–${DOUYIN_MAX_DURATION_SECONDS} 秒之间`,
       422,
       {
         durationSeconds: duration,
@@ -98,6 +99,96 @@ export function validateDouyinDuration(value: unknown) {
     );
   }
   return duration;
+}
+
+function cleanTitle(value: unknown) {
+  return String(value || "抖音对标视频")
+    .replace(/[\u0000-\u001f\u007f/\\]/g, " ")
+    .trim()
+    .slice(0, 200);
+}
+
+function validateSourceDuration(value: unknown) {
+  const duration = Number(value);
+  if (!Number.isFinite(duration) || duration <= 0) {
+    throw new DouyinImportError(
+      "DOUYIN_DURATION_UNKNOWN",
+      "无法读取该视频时长，请确认作品可以公开播放后重试",
+      422,
+    );
+  }
+  if (duration < DOUYIN_MIN_DURATION_SECONDS) {
+    throw new DouyinImportError(
+      "DOUYIN_VIDEO_TOO_SHORT",
+      `该视频只有 ${duration.toFixed(1)} 秒，对标视频至少需要 ${DOUYIN_MIN_DURATION_SECONDS} 秒`,
+      422,
+      { durationSeconds: duration },
+    );
+  }
+  if (duration > DOUYIN_MAX_SOURCE_DURATION_SECONDS) {
+    throw new DouyinImportError(
+      "DOUYIN_SOURCE_TOO_LONG",
+      "原视频超过 30 分钟，请先在抖音剪辑后再导入",
+      422,
+      { durationSeconds: duration },
+    );
+  }
+  return duration;
+}
+
+export type DouyinVideoInfo = {
+  title: string;
+  sourceId: string | null;
+  durationSeconds: number;
+};
+
+export type DouyinClip = {
+  startSeconds: number;
+  endSeconds: number;
+  durationSeconds: number;
+  isFullVideo: boolean;
+};
+
+export function resolveDouyinClip(
+  sourceDurationValue: unknown,
+  startValue?: unknown,
+  durationValue?: unknown,
+): DouyinClip {
+  const sourceDuration = validateSourceDuration(sourceDurationValue);
+  if (sourceDuration <= DOUYIN_MAX_DURATION_SECONDS && durationValue == null) {
+    return {
+      startSeconds: 0,
+      endSeconds: sourceDuration,
+      durationSeconds: sourceDuration,
+      isFullVideo: true,
+    };
+  }
+  const startSeconds = Math.round(Number(startValue) * 10) / 10;
+  const durationSeconds = Number(durationValue);
+  if (!Number.isFinite(startSeconds) || startSeconds < 0) {
+    throw new DouyinImportError(
+      "DOUYIN_CLIP_RANGE_INVALID",
+      "请选择有效的片段开始时间",
+      400,
+    );
+  }
+  if (!DOUYIN_CLIP_DURATIONS.includes(durationSeconds as 5 | 10 | 15)) {
+    throw new DouyinImportError(
+      "DOUYIN_CLIP_DURATION_INVALID",
+      "片段长度只能选择 5、10 或 15 秒",
+      400,
+    );
+  }
+  const endSeconds = Math.round((startSeconds + durationSeconds) * 10) / 10;
+  if (endSeconds > sourceDuration + 0.05) {
+    throw new DouyinImportError(
+      "DOUYIN_CLIP_RANGE_INVALID",
+      `所选片段超出原视频范围，最晚可从 ${(sourceDuration - durationSeconds).toFixed(1)} 秒开始`,
+      400,
+      { durationSeconds: sourceDuration },
+    );
+  }
+  return { startSeconds, endSeconds, durationSeconds, isFullVideo: false };
 }
 
 function commonArgs() {
@@ -139,10 +230,69 @@ function commonArgs() {
   return args;
 }
 
+function executionError(error: unknown) {
+  if (error instanceof DouyinImportError) return error;
+  const message = error instanceof Error ? error.message : "unknown error";
+  if (/ENOENT/.test(message)) {
+    return new DouyinImportError(
+      "DOUYIN_IMPORT_UNAVAILABLE",
+      "抖音导入服务暂不可用，请改用本地上传",
+      503,
+    );
+  }
+  if (/Fresh cookies|Sign in to confirm|cookies.*needed/i.test(message)) {
+    return new DouyinImportError(
+      "DOUYIN_COOKIES_EXPIRED",
+      "抖音解析服务正在更新，请稍后重试或改用本地上传",
+      503,
+    );
+  }
+  if (/timed out|TIMEOUT/i.test(message)) {
+    return new DouyinImportError(
+      "DOUYIN_IMPORT_TIMEOUT",
+      "抖音响应超时，请稍后重试或改用本地上传",
+      504,
+    );
+  }
+  return new DouyinImportError(
+    "DOUYIN_IMPORT_FAILED",
+    "链接解析失败，请确认作品可公开播放，并粘贴最新的分享链接",
+    422,
+  );
+}
+
+export async function inspectDouyinVideo(
+  sourceUrl: string,
+): Promise<DouyinVideoInfo> {
+  try {
+    const result = await execute(
+      ytDlpPath,
+      [...commonArgs(), "--dump-single-json", sourceUrl],
+      { timeout: 30_000, maxBuffer: 4 * 1024 * 1024 },
+    );
+    const metadata = JSON.parse(result.stdout.trim()) as {
+      duration?: number;
+      title?: string;
+      id?: string;
+    };
+    return {
+      title: cleanTitle(metadata.title),
+      sourceId: typeof metadata.id === "string" ? metadata.id : null,
+      durationSeconds:
+        Math.round(validateSourceDuration(metadata.duration) * 1000) / 1000,
+    };
+  } catch (error) {
+    throw executionError(error);
+  }
+}
+
 export type ImportedDouyinVideo = {
   filePath: string;
   title: string;
   sourceId: string | null;
+  sourceDurationSeconds: number;
+  clipStartSeconds: number;
+  clipEndSeconds: number;
   durationSeconds: number;
   byteSize: number;
   cleanup: () => Promise<void>;
@@ -150,36 +300,29 @@ export type ImportedDouyinVideo = {
 
 export async function downloadDouyinVideo(
   sourceUrl: string,
+  metadata: DouyinVideoInfo,
+  clip: DouyinClip,
 ): Promise<ImportedDouyinVideo> {
   const directory = await mkdtemp(join(tmpdir(), "aigc-douyin-"));
   const cleanup = () => rm(directory, { recursive: true, force: true });
   try {
-    const metadataResult = await execute(
-      ytDlpPath,
-      [...commonArgs(), "--dump-single-json", sourceUrl],
-      { timeout: 30_000, maxBuffer: 4 * 1024 * 1024 },
-    );
-    const metadata = JSON.parse(metadataResult.stdout.trim()) as {
-      duration?: number;
-      title?: string;
-      id?: string;
-    };
-    validateDouyinDuration(metadata.duration);
-
     await execute(
       ytDlpPath,
       [
         ...commonArgs(),
-        "--match-filters",
-        `duration >= ${DOUYIN_MIN_DURATION_SECONDS} & duration <= ${DOUYIN_MAX_DURATION_SECONDS}`,
-        "--max-filesize",
-        "100M",
+        ...(clip.isFullVideo
+          ? ["--max-filesize", "100M"]
+          : [
+              "--download-sections",
+              `*${clip.startSeconds}-${clip.endSeconds}`,
+              "--force-keyframes-at-cuts",
+            ]),
         "--format",
         "b[ext=mp4]/b",
         "--remux-video",
         "mp4",
         "--output",
-        join(directory, "reference.%(ext)s"),
+        join(directory, "source.%(ext)s"),
         sourceUrl,
       ],
       { timeout: 90_000, maxBuffer: 4 * 1024 * 1024 },
@@ -194,7 +337,38 @@ export async function downloadDouyinVideo(
         "该作品无法转换为 MP4，请换一个链接重试",
         422,
       );
-    const filePath = join(directory, fileName);
+    const downloadedPath = join(directory, fileName);
+    const filePath = clip.isFullVideo
+      ? downloadedPath
+      : join(directory, "reference-clipped.mp4");
+    if (!clip.isFullVideo) {
+      await execute(
+        ffmpegPath,
+        [
+          "-y",
+          "-i",
+          downloadedPath,
+          "-t",
+          String(clip.durationSeconds),
+          "-map",
+          "0:v:0",
+          "-map",
+          "0:a?",
+          "-c:v",
+          "libx264",
+          "-preset",
+          "veryfast",
+          "-crf",
+          "20",
+          "-c:a",
+          "aac",
+          "-movflags",
+          "+faststart",
+          filePath,
+        ],
+        { timeout: 60_000, maxBuffer: 4 * 1024 * 1024 },
+      );
+    }
     const file = await stat(filePath);
     if (file.size <= 0 || file.size > DOUYIN_MAX_BYTES) {
       throw new DouyinImportError(
@@ -231,47 +405,22 @@ export async function downloadDouyinVideo(
         422,
       );
     }
-    const title = String(metadata.title || "抖音对标视频")
-      .replace(/[\u0000-\u001f\u007f/\\]/g, " ")
-      .trim()
-      .slice(0, 220);
+    const clipLabel = clip.isFullVideo
+      ? ""
+      : ` ${clip.startSeconds.toFixed(1)}-${clip.endSeconds.toFixed(1)}s`;
     return {
       filePath,
-      title: `${title || "抖音对标视频"}.mp4`,
-      sourceId: typeof metadata.id === "string" ? metadata.id : null,
+      title: `${metadata.title}${clipLabel}.mp4`.slice(0, 255),
+      sourceId: metadata.sourceId,
+      sourceDurationSeconds: metadata.durationSeconds,
+      clipStartSeconds: clip.startSeconds,
+      clipEndSeconds: clip.endSeconds,
       durationSeconds: Math.round(durationSeconds * 1000) / 1000,
       byteSize: file.size,
       cleanup,
     };
   } catch (error) {
     await cleanup();
-    if (error instanceof DouyinImportError) throw error;
-    const message = error instanceof Error ? error.message : "unknown error";
-    if (/ENOENT/.test(message)) {
-      throw new DouyinImportError(
-        "DOUYIN_IMPORT_UNAVAILABLE",
-        "抖音导入服务暂不可用，请改用本地上传",
-        503,
-      );
-    }
-    if (/Fresh cookies|Sign in to confirm|cookies.*needed/i.test(message)) {
-      throw new DouyinImportError(
-        "DOUYIN_COOKIES_EXPIRED",
-        "抖音解析服务正在更新，请稍后重试或改用本地上传",
-        503,
-      );
-    }
-    if (/timed out|TIMEOUT/i.test(message)) {
-      throw new DouyinImportError(
-        "DOUYIN_IMPORT_TIMEOUT",
-        "抖音响应超时，请稍后重试或改用本地上传",
-        504,
-      );
-    }
-    throw new DouyinImportError(
-      "DOUYIN_IMPORT_FAILED",
-      "链接解析失败，请确认作品可公开播放，并粘贴最新的分享链接",
-      422,
-    );
+    throw executionError(error);
   }
 }

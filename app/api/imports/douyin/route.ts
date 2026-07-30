@@ -12,7 +12,9 @@ import { db } from "@/lib/db";
 import {
   DouyinImportError,
   downloadDouyinVideo,
+  inspectDouyinVideo,
   normalizeDouyinUrl,
+  resolveDouyinClip,
 } from "@/lib/douyin-import";
 import { enqueueContentReview } from "@/lib/queue";
 import { redis } from "@/lib/redis";
@@ -52,11 +54,11 @@ export async function POST(request: NextRequest) {
   const attemptsKey = `douyin-import:attempts:${user.id}`;
   const attempts = await redis.incr(attemptsKey);
   if (attempts === 1) await redis.expire(attemptsKey, 10 * 60);
-  if (attempts > 5) {
+  if (attempts > 20) {
     return NextResponse.json(
       {
         code: "DOUYIN_IMPORT_RATE_LIMITED",
-        message: "链接导入过于频繁，请 10 分钟后再试",
+        message: "链接解析和导入过于频繁，请 10 分钟后再试",
       },
       { status: 429, headers: { "Retry-After": "600" } },
     );
@@ -78,7 +80,26 @@ export async function POST(request: NextRequest) {
   let uploadedKey = "";
   let persisted = false;
   try {
-    const imported = await downloadDouyinVideo(sourceUrl);
+    const source = await inspectDouyinVideo(sourceUrl);
+    if (body?.action === "analyze") {
+      await audit(user.id, "DOUYIN_VIDEO_ANALYZED", request, undefined, {
+        sourceId: source.sourceId,
+        durationSeconds: source.durationSeconds,
+      });
+      return NextResponse.json({
+        status: "ANALYZED",
+        title: source.title,
+        durationSeconds: source.durationSeconds,
+        clipRequired: source.durationSeconds > 15,
+        clipDurations: [5, 10, 15],
+      });
+    }
+    const clip = resolveDouyinClip(
+      source.durationSeconds,
+      body?.startSeconds,
+      body?.clipDurationSeconds,
+    );
+    const imported = await downloadDouyinVideo(sourceUrl, source, clip);
     try {
       const storage = await storageSummary(user.id);
       if (storage.usedBytes + imported.byteSize > storage.quotaBytes) {
@@ -100,6 +121,9 @@ export async function POST(request: NextRequest) {
         durationSeconds: imported.durationSeconds,
         source: "DOUYIN",
         sourceId: imported.sourceId,
+        sourceDurationSeconds: imported.sourceDurationSeconds,
+        clipStartSeconds: imported.clipStartSeconds,
+        clipEndSeconds: imported.clipEndSeconds,
         importedAt: new Date().toISOString(),
         moderation: reviewEnabled
           ? { status: "PENDING_REVIEW", submittedAt: new Date().toISOString() }
@@ -163,6 +187,9 @@ export async function POST(request: NextRequest) {
           durationSeconds: imported.durationSeconds,
           byteSize: imported.byteSize,
           sourceId: imported.sourceId,
+          sourceDurationSeconds: imported.sourceDurationSeconds,
+          clipStartSeconds: imported.clipStartSeconds,
+          clipEndSeconds: imported.clipEndSeconds,
         },
       );
       if (reviewEnabled) {
@@ -177,6 +204,9 @@ export async function POST(request: NextRequest) {
         name: imported.title,
         byteSize: imported.byteSize,
         durationSeconds: imported.durationSeconds,
+        sourceDurationSeconds: imported.sourceDurationSeconds,
+        clipStartSeconds: imported.clipStartSeconds,
+        clipEndSeconds: imported.clipEndSeconds,
         url: await createSignedObjectUrl(uploadedKey, "GET", 3600),
       });
     } finally {

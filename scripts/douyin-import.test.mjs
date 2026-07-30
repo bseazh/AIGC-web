@@ -4,6 +4,7 @@ import {
   DOUYIN_MAX_DURATION_SECONDS,
   DouyinImportError,
   normalizeDouyinUrl,
+  resolveDouyinClip,
   validateDouyinDuration,
 } from "../lib/douyin-import.ts";
 
@@ -28,8 +29,31 @@ assert.throws(
   () => validateDouyinDuration(15.1),
   (error) =>
     error instanceof DouyinImportError &&
-    error.code === "DOUYIN_VIDEO_DURATION_UNSUPPORTED" &&
-    error.message.includes("不会自动裁剪"),
+    error.code === "DOUYIN_VIDEO_DURATION_UNSUPPORTED",
+);
+assert.deepEqual(resolveDouyinClip(66, 12, 15), {
+  startSeconds: 12,
+  endSeconds: 27,
+  durationSeconds: 15,
+  isFullVideo: false,
+});
+assert.deepEqual(resolveDouyinClip(8.7), {
+  startSeconds: 0,
+  endSeconds: 8.7,
+  durationSeconds: 8.7,
+  isFullVideo: true,
+});
+assert.throws(
+  () => resolveDouyinClip(66, 52, 15),
+  (error) =>
+    error instanceof DouyinImportError &&
+    error.code === "DOUYIN_CLIP_RANGE_INVALID",
+);
+assert.throws(
+  () => resolveDouyinClip(66, 12, 7),
+  (error) =>
+    error instanceof DouyinImportError &&
+    error.code === "DOUYIN_CLIP_DURATION_INVALID",
 );
 
 console.log("PASS: Douyin URL and duration validation");
