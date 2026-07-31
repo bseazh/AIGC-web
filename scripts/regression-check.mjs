@@ -127,6 +127,16 @@ const checks = [
     "visibleDrafts = useMemo(() => serverDrafts.slice(0, 1)",
   ],
   [
+    "Recreate video supports previous step navigation",
+    "app/components/recreate-video-page.tsx",
+    "goPreviousStep",
+  ],
+  [
+    "Recreate video no longer forces forward navigation",
+    "app/components/recreate-video-page.tsx",
+    "workflowSteps.findIndex((item) => item.key === step) > unlockedIndex",
+  ],
+  [
     "Workflow drafts archive duplicate active records",
     "app/api/workflow-drafts/route.ts",
     "archiveDuplicateDrafts",

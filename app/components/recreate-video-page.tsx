@@ -393,21 +393,20 @@ export function RecreateVideoPage() {
       : 1
     : 0;
   const currentIndex = Math.min(
-    workflowSteps.findIndex((item) => item.key === step),
+    Math.max(0, workflowSteps.findIndex((item) => item.key === step)),
     unlockedIndex,
   );
+  const canGoPrevious = currentIndex > 0 && phase !== "uploading" && phase !== "generating";
+  const goPreviousStep = () => {
+    if (!canGoPrevious) return;
+    setStep(workflowSteps[currentIndex - 1].key);
+  };
 
   useEffect(() => {
     const next = workflowSteps[Math.max(0, unlockedIndex)].key;
-    if (step === "source" && sourceReady) setStep("clip");
-    if (step === "clip" && clipReady && unlockedIndex >= 2) setStep("product");
-    if (step === "product" && productReady && unlockedIndex >= 3)
-      setStep("reference");
-    if (step === "reference" && referenceReady && unlockedIndex >= 4)
-      setStep("generate");
     if (workflowSteps.findIndex((item) => item.key === step) > unlockedIndex)
       setStep(next);
-  }, [clipReady, productReady, referenceReady, sourceReady, step, unlockedIndex]);
+  }, [step, unlockedIndex]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -1946,6 +1945,15 @@ export function RecreateVideoPage() {
         </div>
       )}
       <div className="recreate-actions">
+        <button
+          className="secondary"
+          type="button"
+          onClick={goPreviousStep}
+          disabled={!canGoPrevious}
+        >
+          <ArrowLeft size={16} />
+          上一步
+        </button>
         <button className="primary" type="submit" disabled={!generateReady || phase !== "idle"}>
           {phase === "uploading" || phase === "generating" ? (
             <LoaderCircle className="generation-spinner" size={18} />
@@ -2080,7 +2088,13 @@ export function RecreateVideoPage() {
               <strong>{activeStep.number} / 5</strong>
               <small>{activeStep.title}</small>
             </div>
-            <span>当前步骤会自动保存到项目</span>
+            <div className="recreate-flow-toolbar-actions">
+              <button type="button" onClick={goPreviousStep} disabled={!canGoPrevious}>
+                <ArrowLeft size={14} />
+                上一步
+              </button>
+              <span>当前步骤会自动保存到项目</span>
+            </div>
           </div>
           {step === "source" && sourcePanel}
           {step === "clip" && clipPanel}
