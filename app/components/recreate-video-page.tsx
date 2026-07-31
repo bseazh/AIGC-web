@@ -1017,162 +1017,172 @@ export function RecreateVideoPage() {
         </button>
       </div>
       {videoSource === "douyin" ? (
-        <div className="recreate-source-block">
-          <label className="recreate-field">
-            粘贴抖音作品分享链接
-            <textarea
-              value={douyinInput}
-              onChange={(event) => {
-                setDouyinInput(event.target.value);
-                setDouyinError("");
-                setDouyinAnalysis(null);
-              }}
-              placeholder="粘贴抖音分享链接或完整分享文案"
-            />
-          </label>
-          <div className="recreate-inline-actions">
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => {
-                setDouyinInput(
-                  "复制打开抖音，看看【编导小咪的作品】不儿，ai我让你买个西瓜这么难吗？ # AI创作浪潮",
-                );
-              }}
-            >
-              示例
-            </button>
-            <button
-              type="button"
-              onClick={analyzeDouyin}
-              disabled={!douyinInput.trim() || Boolean(douyinBusy)}
-            >
-              {douyinBusy === "analyzing" ? (
-                <LoaderCircle className="generation-spinner" size={17} />
-              ) : (
-                <Link2 size={17} />
-              )}
-              {douyinBusy === "analyzing" ? "正在读取视频信息" : "获取视频"}
-            </button>
-          </div>
-          {!douyinAnalysis && (
-            <p className="recreate-hint">
-              支持完整分享文案；长视频解析后可选择 5、10 或 15 秒片段。
-            </p>
-          )}
-          {douyinAnalysis && (
-            <div className="recreate-clip-editor">
-              <header>
-                <div>
-                  <strong>{douyinAnalysis.title}</strong>
-                  <small>视频总时长 {douyinAnalysis.durationSeconds.toFixed(1)} 秒</small>
-                </div>
-                <span>{douyinAnalysis.clipRequired ? "选择片段" : "完整视频"}</span>
-              </header>
-              {douyinAnalysis.cachePreviewUrl && (
-                <div className="recreate-source-cache">
-                  <video src={douyinAnalysis.cachePreviewUrl} controls playsInline preload="metadata" />
-                  <div>
-                    <strong>原视频临时预览</strong>
-                    <small>
-                      已缓存到云端临时区
-                      {douyinAnalysis.cacheByteSize
-                        ? ` · ${formatBytes(douyinAnalysis.cacheByteSize)}`
-                        : ""}
-                    </small>
-                    <small>
-                      {douyinAnalysis.cacheExpiresAt
-                        ? `缓存将在 ${new Date(douyinAnalysis.cacheExpiresAt).toLocaleTimeString("zh-CN", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })} 后自动清理`
-                        : "缓存保留约 1 小时"}
-                    </small>
-                  </div>
-                </div>
-              )}
-              {douyinAnalysis.keyframeSeconds?.length ? (
-                <div className="recreate-reference-plan">
-                  <strong>多帧参考建议</strong>
-                  <small>
-                    建议二次查看这些关键帧：
-                    {douyinAnalysis.keyframeSeconds.map((second) => `${second.toFixed(1)}s`).join(" / ")}
-                  </small>
-                  {douyinAnalysis.referencePrompt && <p>{douyinAnalysis.referencePrompt}</p>}
-                </div>
-              ) : null}
-              {douyinAnalysis.clipRequired ? (
-                <>
-                  <div className="recreate-range">
-                    <span>开始时间</span>
-                    <strong>
-                      {douyinStart.toFixed(1)}s –{" "}
-                      {(douyinStart + douyinClipDuration).toFixed(1)}s
-                    </strong>
-                    <input
-                      type="range"
-                      min={0}
-                      max={sourceMaxStart}
-                      step={0.1}
-                      value={Math.min(douyinStart, sourceMaxStart)}
-                      aria-label="片段开始时间"
-                      onChange={(event) =>
-                        setDouyinStart(Number(event.target.value))
-                      }
-                    />
-                    <small>
-                      <span>0s</span>
-                      <span>{sourceMaxStart.toFixed(1)}s</span>
-                    </small>
-                  </div>
-                  <div className="recreate-length">
-                    <span>片段长度</span>
-                    <div>
-                      {[5, 10, 15].map((seconds) => (
-                        <button
-                          type="button"
-                          key={seconds}
-                          className={douyinClipDuration === seconds ? "active" : ""}
-                          onClick={() => {
-                            setDouyinClipDuration(seconds);
-                            setDouyinStart((current) =>
-                              Math.min(
-                                current,
-                                Math.max(0, douyinAnalysis.durationSeconds - seconds),
-                              ),
-                            );
-                          }}
-                        >
-                          {seconds} 秒
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <p>该视频不超过 15 秒，将直接导入完整内容。</p>
-              )}
+        <div className="recreate-source-block recreate-douyin-layout">
+          <div className="recreate-douyin-left">
+            <label className="recreate-field">
+              粘贴抖音作品分享链接
+              <textarea
+                value={douyinInput}
+                onChange={(event) => {
+                  setDouyinInput(event.target.value);
+                  setDouyinError("");
+                  setDouyinAnalysis(null);
+                }}
+                placeholder="粘贴抖音分享链接或完整分享文案"
+              />
+            </label>
+            <div className="recreate-inline-actions">
               <button
                 type="button"
-                onClick={importDouyin}
-                disabled={Boolean(douyinBusy)}
+                className="ghost"
+                onClick={() => {
+                  setDouyinInput(
+                    "复制打开抖音，看看【编导小咪的作品】不儿，ai我让你买个西瓜这么难吗？ # AI创作浪潮",
+                  );
+                }}
               >
-                {douyinBusy === "importing" ? (
+                示例
+              </button>
+              <button
+                type="button"
+                onClick={analyzeDouyin}
+                disabled={!douyinInput.trim() || Boolean(douyinBusy)}
+              >
+                {douyinBusy === "analyzing" ? (
                   <LoaderCircle className="generation-spinner" size={17} />
                 ) : (
-                  <Download size={17} />
+                  <Link2 size={17} />
                 )}
-                {douyinBusy === "importing"
-                  ? "正在截取并保存"
-                  : douyinAnalysis.clipRequired
-                    ? "截取并导入"
-                    : "导入完整视频"}
+                {douyinBusy === "analyzing" ? "正在读取视频信息" : "获取视频"}
               </button>
-              <p>
-                片段会保存到素材库；可重复选择其他片段，再进入后面的复刻和混剪。
-              </p>
             </div>
-          )}
+            {!douyinAnalysis && (
+              <p className="recreate-hint">
+                支持完整分享文案；解析后右侧会临时缓存并预览原视频，可再选择 5、10 或 15 秒片段。
+              </p>
+            )}
+            {douyinAnalysis && (
+              <div className="recreate-clip-editor">
+                <header>
+                  <div>
+                    <strong>{douyinAnalysis.title}</strong>
+                    <small>视频总时长 {douyinAnalysis.durationSeconds.toFixed(1)} 秒</small>
+                  </div>
+                  <span>{douyinAnalysis.clipRequired ? "选择片段" : "完整视频"}</span>
+                </header>
+                {douyinAnalysis.keyframeSeconds?.length ? (
+                  <div className="recreate-reference-plan">
+                    <strong>多帧参考建议</strong>
+                    <small>
+                      建议二次查看这些关键帧：
+                      {douyinAnalysis.keyframeSeconds.map((second) => `${second.toFixed(1)}s`).join(" / ")}
+                    </small>
+                    {douyinAnalysis.referencePrompt && <p>{douyinAnalysis.referencePrompt}</p>}
+                  </div>
+                ) : null}
+                {douyinAnalysis.clipRequired ? (
+                  <>
+                    <div className="recreate-range">
+                      <span>开始时间</span>
+                      <strong>
+                        {douyinStart.toFixed(1)}s –{" "}
+                        {(douyinStart + douyinClipDuration).toFixed(1)}s
+                      </strong>
+                      <input
+                        type="range"
+                        min={0}
+                        max={sourceMaxStart}
+                        step={0.1}
+                        value={Math.min(douyinStart, sourceMaxStart)}
+                        aria-label="片段开始时间"
+                        onChange={(event) =>
+                          setDouyinStart(Number(event.target.value))
+                        }
+                      />
+                      <small>
+                        <span>0s</span>
+                        <span>{sourceMaxStart.toFixed(1)}s</span>
+                      </small>
+                    </div>
+                    <div className="recreate-length">
+                      <span>片段长度</span>
+                      <div>
+                        {[5, 10, 15].map((seconds) => (
+                          <button
+                            type="button"
+                            key={seconds}
+                            className={douyinClipDuration === seconds ? "active" : ""}
+                            onClick={() => {
+                              setDouyinClipDuration(seconds);
+                              setDouyinStart((current) =>
+                                Math.min(
+                                  current,
+                                  Math.max(0, douyinAnalysis.durationSeconds - seconds),
+                                ),
+                              );
+                            }}
+                          >
+                            {seconds} 秒
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <p>该视频不超过 15 秒，将直接导入完整内容。</p>
+                )}
+                <button
+                  type="button"
+                  onClick={importDouyin}
+                  disabled={Boolean(douyinBusy)}
+                >
+                  {douyinBusy === "importing" ? (
+                    <LoaderCircle className="generation-spinner" size={17} />
+                  ) : (
+                    <Download size={17} />
+                  )}
+                  {douyinBusy === "importing"
+                    ? "正在截取并保存"
+                    : douyinAnalysis.clipRequired
+                      ? "截取并导入"
+                      : "导入完整视频"}
+                </button>
+                <p>
+                  片段会保存到素材库；可重复选择其他片段，再进入后面的复刻和混剪。
+                </p>
+              </div>
+            )}
+          </div>
+          <aside className="recreate-douyin-preview">
+            {douyinAnalysis?.cachePreviewUrl ? (
+              <div className="recreate-source-cache">
+                <video src={douyinAnalysis.cachePreviewUrl} controls playsInline preload="metadata" />
+                <div>
+                  <strong>原视频临时预览</strong>
+                  <small>
+                    已缓存到云端临时区
+                    {douyinAnalysis.cacheByteSize
+                      ? ` · ${formatBytes(douyinAnalysis.cacheByteSize)}`
+                      : ""}
+                  </small>
+                  <small>
+                    {douyinAnalysis.cacheExpiresAt
+                      ? `缓存将在 ${new Date(douyinAnalysis.cacheExpiresAt).toLocaleTimeString("zh-CN", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })} 后自动清理`
+                      : "缓存保留约 1 小时"}
+                  </small>
+                </div>
+              </div>
+            ) : (
+              <div className="recreate-preview-empty">
+                <Video size={30} />
+                <strong>等待原视频预览</strong>
+                <small>粘贴链接并获取视频后，会在这里以竖屏方式展示。</small>
+              </div>
+            )}
+          </aside>
         </div>
       ) : (
         <div className="recreate-source-block">
