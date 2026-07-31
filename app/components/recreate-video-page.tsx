@@ -1,9 +1,10 @@
 "use client";
 
 import {
-  ArrowLeft,
   ArrowDown,
+  ArrowLeft,
   ArrowUp,
+  Check,
   ChevronDown,
   Download,
   Film,
@@ -11,17 +12,19 @@ import {
   ImagePlus,
   Link2,
   LoaderCircle,
-  ShieldCheck,
+  Save,
   Sparkles,
   Upload,
   Video,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { VideoGenerationProgress } from "@/app/components/video-generation-progress";
 
+type Account = { wallet: { availablePoints: number } };
 type Item = {
   preview: string;
   name: string;
@@ -41,19 +44,119 @@ type Asset = {
   url: string;
   durationSeconds?: number | null;
 };
-type Account = { wallet: { availablePoints: number } };
 type Result = {
   status: string;
   outputs: Array<{ assetId: string; url: string }>;
+  taskId?: string;
 };
 type DouyinAnalysis = {
   title: string;
   durationSeconds: number;
   clipRequired: boolean;
+  clipDurations?: number[];
 };
 type SourceKind = "video" | "product" | "scene";
+type WorkflowStep = "source" | "clip" | "product" | "reference" | "generate";
+type SourceMode = "douyin" | "upload" | "library";
+type Draft = {
+  step: WorkflowStep;
+  sourceMode: SourceMode;
+  douyinInput: string;
+  douyinAnalysis: DouyinAnalysis | null;
+  douyinStart: number;
+  douyinClipDuration: number;
+  sourceItem: Pick<
+    Item,
+    | "preview"
+    | "name"
+    | "byteSize"
+    | "assetId"
+    | "durationSeconds"
+    | "source"
+    | "clipStartSeconds"
+    | "clipEndSeconds"
+  > | null;
+  douyinClips: Array<
+    Pick<
+      Item,
+      | "preview"
+      | "name"
+      | "byteSize"
+      | "assetId"
+      | "durationSeconds"
+      | "source"
+      | "clipStartSeconds"
+      | "clipEndSeconds"
+    >
+  >;
+  activeClipId: string | null;
+  products: Array<Pick<Item, "preview" | "name" | "byteSize" | "assetId">>;
+  referenceImage: Pick<Item, "preview" | "name" | "byteSize" | "assetId"> | null;
+  referenceConfirmed: boolean;
+  usageAuthorized: boolean;
+  productInfo: string;
+  special: string;
+  modelOn: boolean;
+  modelInfo: string;
+  ratio: string;
+  duration: string;
+  resolution: string;
+};
+
 const imageAccept = "image/jpeg,image/png,image/webp";
-const videoMixHandoffKey = "aigc-video-mix-asset-ids";
+const draftStorageKey = "aigc-recreate-flow-draft";
+const workflowSteps: Array<{
+  key: WorkflowStep;
+  number: number;
+  title: string;
+  subtitle: string;
+}> = [
+  { key: "source", number: 1, title: "添加对标视频", subtitle: "抖音获取或本地上传" },
+  { key: "clip", number: 2, title: "选择关键画面", subtitle: "拆分并锁定复刻片段" },
+  { key: "product", number: 3, title: "批量替换商品", subtitle: "选择商品图" },
+  { key: "reference", number: 4, title: "确认复刻参考图", subtitle: "确认最终参考图" },
+  { key: "generate", number: 5, title: "生成复刻视频", subtitle: "开始任务输出" },
+];
+
+function cloneItem(item: Item | null | undefined): Item | null {
+  if (!item) return null;
+  const { file, ...rest } = item;
+  return rest;
+}
+
+function restoreItem(raw: unknown): Item | null {
+  if (!raw || typeof raw !== "object") return null;
+  const item = raw as Partial<Item>;
+  if (
+    typeof item.preview !== "string" ||
+    typeof item.name !== "string" ||
+    typeof item.byteSize !== "number"
+  )
+    return null;
+  if (!item.assetId && item.preview.startsWith("blob:")) return null;
+  return {
+    preview: item.preview,
+    name: item.name,
+    byteSize: item.byteSize,
+    assetId: typeof item.assetId === "string" ? item.assetId : undefined,
+    durationSeconds:
+      typeof item.durationSeconds === "number" ? item.durationSeconds : undefined,
+    source: item.source === "douyin" ? "douyin" : undefined,
+    clipStartSeconds:
+      typeof item.clipStartSeconds === "number"
+        ? item.clipStartSeconds
+        : undefined,
+    clipEndSeconds:
+      typeof item.clipEndSeconds === "number" ? item.clipEndSeconds : undefined,
+  };
+}
+
+function formatBytes(byteSize: number) {
+  if (byteSize < 1024) return `${byteSize} B`;
+  const kb = byteSize / 1024;
+  if (kb < 1024) return `${kb.toFixed(1)} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
+}
 
 export function RecreateVideoPage() {
   const router = useRouter();
@@ -62,39 +165,46 @@ export function RecreateVideoPage() {
     product: useRef<HTMLInputElement>(null),
     scene: useRef<HTMLInputElement>(null),
   };
+
   const [account, setAccount] = useState<Account | null>(null);
-  const [reference, setReference] = useState<Item | null>(null);
+  const [step, setStep] = useState<WorkflowStep>("source");
+  const [sourceMode, setSourceMode] = useState<SourceMode>("douyin");
+  const [videoSource, setVideoSource] = useState<"local" | "library" | "douyin">(
+    "douyin",
+  );
+  const [libraryKind, setLibraryKind] = useState<SourceKind | null>(null);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [assetsLoading, setAssetsLoading] = useState(false);
+  const [sourceItem, setSourceItem] = useState<Item | null>(null);
+  const [douyinClips, setClips] = useState<Item[]>([]);
+  const [activeClipId, setActiveClipId] = useState<string | null>(null);
   const [products, setProducts] = useState<Item[]>([]);
-  const [scene, setScene] = useState<Item | null>(null);
-  const [tab, setTab] = useState<SourceKind | null>(null);
-  const [videoSource, setVideoSource] = useState<
-    "local" | "library" | "douyin"
-  >("local");
+  const [referenceImage, setReferenceImage] = useState<Item | null>(null);
+  const [referenceConfirmed, setReferenceConfirmed] = useState(false);
+  const [usageAuthorized, setUsageAuthorized] = useState(false);
   const [douyinInput, setDouyinInput] = useState("");
-  const [douyinBusy, setDouyinBusy] = useState<
-    "analyzing" | "importing" | null
-  >(null);
+  const [douyinBusy, setDouyinBusy] = useState<"analyzing" | "importing" | null>(
+    null,
+  );
   const [douyinError, setDouyinError] = useState("");
   const [douyinAnalysis, setDouyinAnalysis] = useState<DouyinAnalysis | null>(
     null,
   );
   const [douyinStart, setDouyinStart] = useState(0);
   const [douyinClipDuration, setDouyinClipDuration] = useState(15);
-  const [douyinClips, setDouyinClips] = useState<Item[]>([]);
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [info, setInfo] = useState("");
+  const [productInfo, setProductInfo] = useState("");
   const [special, setSpecial] = useState("");
   const [modelOn, setModelOn] = useState(false);
   const [modelInfo, setModelInfo] = useState("");
   const [ratio, setRatio] = useState("9:16");
   const [duration, setDuration] = useState("15");
   const [resolution, setResolution] = useState("720p");
-  const [usageAuthorized, setUsageAuthorized] = useState(false);
   const [phase, setPhase] = useState<
     "idle" | "uploading" | "generating" | "succeeded" | "failed"
   >("idle");
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     fetch("/api/auth/session/", { cache: "no-store" })
@@ -105,11 +215,153 @@ export function RecreateVideoPage() {
       .catch(() => router.replace("/"));
   }, [router]);
 
-  const resetTask = () => {
+  useEffect(() => {
+    const stored = localStorage.getItem(draftStorageKey);
+    if (!stored) return;
+    try {
+      const draft = JSON.parse(stored) as Partial<Draft>;
+      if (draft.step) setStep(draft.step);
+      if (draft.sourceMode) setSourceMode(draft.sourceMode);
+      setVideoSource(
+        draft.sourceMode === "douyin"
+          ? "douyin"
+          : draft.sourceMode === "library"
+            ? "library"
+            : "local",
+      );
+      if (draft.douyinInput) setDouyinInput(draft.douyinInput);
+      if (draft.douyinAnalysis) setDouyinAnalysis(draft.douyinAnalysis);
+      if (typeof draft.douyinStart === "number") setDouyinStart(draft.douyinStart);
+      if (typeof draft.douyinClipDuration === "number")
+        setDouyinClipDuration(draft.douyinClipDuration);
+      setSourceItem(restoreItem(draft.sourceItem));
+      setClips((draft.douyinClips || []).map(restoreItem).filter(Boolean) as Item[]);
+      setActiveClipId(draft.activeClipId || null);
+      setProducts((draft.products || []).map(restoreItem).filter(Boolean) as Item[]);
+      setReferenceImage(restoreItem(draft.referenceImage));
+      setReferenceConfirmed(Boolean(draft.referenceConfirmed));
+      setUsageAuthorized(Boolean(draft.usageAuthorized));
+      setProductInfo(draft.productInfo || "");
+      setSpecial(draft.special || "");
+      setModelOn(Boolean(draft.modelOn));
+      setModelInfo(draft.modelInfo || "");
+      if (draft.ratio) setRatio(draft.ratio);
+      if (draft.duration) setDuration(draft.duration);
+      if (draft.resolution) setResolution(draft.resolution);
+    } catch {
+      localStorage.removeItem(draftStorageKey);
+    }
+  }, []);
+
+  const sourceSelection = useMemo(
+    () => (activeClipId ? douyinClips.find((item) => item.assetId === activeClipId) : null) || sourceItem,
+    [activeClipId, douyinClips, sourceItem],
+  );
+  const selectedClip = sourceSelection?.assetId
+    ? douyinClips.find((item) => item.assetId === sourceSelection.assetId) || null
+    : sourceSelection;
+  const sourceReady = Boolean(sourceSelection);
+  const clipReady = sourceReady && (sourceMode !== "douyin" || douyinClips.length > 0 || !douyinAnalysis?.clipRequired);
+  const productReady = products.length > 0;
+  const referenceReady = Boolean(referenceImage && referenceConfirmed);
+  const generateReady =
+    sourceReady && clipReady && productReady && referenceReady && usageAuthorized;
+  const completedCount = [sourceReady, clipReady, productReady, referenceReady, phase === "succeeded"].filter(
+    Boolean,
+  ).length;
+  const unlockedIndex = sourceReady
+    ? clipReady
+      ? productReady
+        ? referenceReady
+          ? 4
+          : 3
+        : 2
+      : 1
+    : 0;
+  const currentIndex = Math.min(
+    workflowSteps.findIndex((item) => item.key === step),
+    unlockedIndex,
+  );
+
+  useEffect(() => {
+    const next = workflowSteps[Math.max(0, unlockedIndex)].key;
+    if (step === "source" && sourceReady) setStep("clip");
+    if (step === "clip" && clipReady && unlockedIndex >= 2) setStep("product");
+    if (step === "product" && productReady && unlockedIndex >= 3)
+      setStep("reference");
+    if (step === "reference" && referenceReady && unlockedIndex >= 4)
+      setStep("generate");
+    if (workflowSteps.findIndex((item) => item.key === step) > unlockedIndex)
+      setStep(next);
+  }, [clipReady, productReady, referenceReady, sourceReady, step, unlockedIndex]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const draft: Draft = {
+        step,
+        sourceMode,
+        douyinInput,
+        douyinAnalysis,
+        douyinStart,
+        douyinClipDuration,
+        sourceItem: cloneItem(sourceItem),
+        douyinClips: douyinClips.map((item) => cloneItem(item)).filter(Boolean) as Draft["douyinClips"],
+        activeClipId,
+        products: products.map((item) => cloneItem(item)).filter(Boolean) as Draft["products"],
+        referenceImage: cloneItem(referenceImage),
+        referenceConfirmed,
+        usageAuthorized,
+        productInfo,
+        special,
+        modelOn,
+        modelInfo,
+        ratio,
+        duration,
+        resolution,
+      };
+      localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [
+    activeClipId,
+    douyinClips,
+    douyinAnalysis,
+    douyinClipDuration,
+    douyinInput,
+    douyinStart,
+    duration,
+    modelInfo,
+    modelOn,
+    phase,
+    productInfo,
+    products,
+    ratio,
+    referenceConfirmed,
+    referenceImage,
+    resolution,
+    sourceItem,
+    sourceMode,
+    special,
+    step,
+    usageAuthorized,
+  ]);
+
+  useEffect(() => {
+    setVideoSource(
+      sourceMode === "douyin"
+        ? "douyin"
+        : sourceMode === "library"
+          ? "library"
+          : "local",
+    );
+  }, [sourceMode]);
+
+  const clearTaskState = () => {
     setError("");
     setResult(null);
     setPhase("idle");
   };
+
   const readVideoDuration = (file: File) =>
     new Promise<number>((resolve, reject) => {
       const video = document.createElement("video");
@@ -128,27 +380,138 @@ export function RecreateVideoPage() {
       };
       video.src = objectUrl;
     });
+
+  const openLibrary = async (kind: SourceKind) => {
+    setLibraryKind(kind);
+    setAssetsLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/assets/?kind=ALL", { cache: "no-store" });
+      const body = await response.json();
+      if (!response.ok) throw new Error();
+      setAssets(
+        (body.assets || []).filter((asset: Asset) =>
+          kind === "video"
+            ? asset.mimeType === "video/mp4"
+            : asset.mimeType.startsWith("image/"),
+        ),
+      );
+    } catch {
+      setError("素材库加载失败，请稍后再试");
+    } finally {
+      setAssetsLoading(false);
+    }
+  };
+
+  const saveDraft = () => {
+    const draft: Draft = {
+      step,
+      sourceMode,
+      douyinInput,
+      douyinAnalysis,
+      douyinStart,
+      douyinClipDuration,
+      sourceItem: cloneItem(sourceItem),
+      douyinClips: douyinClips.map((item) => cloneItem(item)).filter(Boolean) as Draft["douyinClips"],
+      activeClipId,
+      products: products.map((item) => cloneItem(item)).filter(Boolean) as Draft["products"],
+      referenceImage: cloneItem(referenceImage),
+      referenceConfirmed,
+      usageAuthorized,
+      productInfo,
+      special,
+      modelOn,
+      modelInfo,
+      ratio,
+      duration,
+      resolution,
+    };
+    localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+    setNotice("草稿已保存");
+    window.setTimeout(() => setNotice(""), 1800);
+  };
+
+  const selectAsset = (asset: Asset) => {
+    if (libraryKind === "video") {
+      if (asset.durationSeconds && (asset.durationSeconds < 3 || asset.durationSeconds > 15))
+        return setError("该视频需在 3–15 秒内，请重新上传后使用");
+      const selected: Item = {
+        assetId: asset.id,
+        preview: asset.url,
+        name: asset.originalName,
+        byteSize: asset.byteSize,
+        durationSeconds: asset.durationSeconds || undefined,
+      };
+      setSourceMode("library");
+      setVideoSource("library");
+      setSourceItem(selected);
+      setClips([selected]);
+      setActiveClipId(selected.assetId || null);
+      setDouyinAnalysis(null);
+      setDouyinInput("");
+      clearTaskState();
+      setStep("clip");
+    } else if (libraryKind === "product") {
+      const selected: Item = {
+        assetId: asset.id,
+        preview: asset.url,
+        name: asset.originalName,
+        byteSize: asset.byteSize,
+      };
+      setProducts((current) =>
+        current.some((item) => item.assetId === asset.id)
+          ? current.filter((item) => item.assetId !== asset.id)
+          : current.length < 5
+            ? [...current, selected]
+            : current,
+      );
+      clearTaskState();
+    } else if (libraryKind === "scene") {
+      const selected: Item = {
+        assetId: asset.id,
+        preview: asset.url,
+        name: asset.originalName,
+        byteSize: asset.byteSize,
+      };
+      setReferenceImage(selected);
+      setReferenceConfirmed(false);
+      clearTaskState();
+      setStep("reference");
+    }
+    setLibraryKind(null);
+  };
+
   const choose = async (kind: SourceKind, files?: FileList | null) => {
     if (!files?.length) return;
     const list = Array.from(files);
     if (kind === "video") {
       const file = list[0];
-      if (file.type !== "video/mp4") return setError("对标视频仅支持 MP4 格式");
+      if (file.type !== "video/mp4")
+        return setError("对标视频仅支持 MP4 格式");
       if (file.size > 100 * 1024 * 1024)
         return setError("对标视频不能超过 100MB");
       try {
         const durationSeconds = await readVideoDuration(file);
         if (durationSeconds < 3 || durationSeconds > 15)
           return setError(
-            `该视频 ${durationSeconds.toFixed(1)} 秒，当前仅支持 3–15 秒。为避免截错内容，系统不会自动裁剪，请先剪辑后上传。`,
+            `该视频 ${durationSeconds.toFixed(1)} 秒，当前仅支持 3–15 秒。超出部分请先截取后再上传。`,
           );
-        setReference({
+        const selected = {
           file,
           preview: URL.createObjectURL(file),
           name: file.name,
           byteSize: file.size,
           durationSeconds,
-        });
+        };
+      setSourceMode("upload");
+      setVideoSource("local");
+      setSourceItem(selected);
+      setClips([selected]);
+      setActiveClipId(null);
+        setDouyinAnalysis(null);
+        setDouyinInput("");
+        clearTaskState();
+        setStep("clip");
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "无法读取视频时长");
       }
@@ -167,60 +530,17 @@ export function RecreateVideoPage() {
         }));
       if (!valid.length)
         return setError("请上传 10MB 以内的 JPG、PNG 或 WebP 图片");
-      if (kind === "scene") setScene(valid[0]);
-      else setProducts((current) => [...current, ...valid].slice(0, 5));
-    }
-    resetTask();
-  };
-  const openLibrary = async (kind: SourceKind) => {
-    if (kind === "video") setVideoSource("library");
-    setTab(kind);
-    setError("");
-    try {
-      const response = await fetch("/api/assets/?kind=ALL", {
-        cache: "no-store",
-      });
-      const body = await response.json();
-      if (!response.ok) throw new Error();
-      setAssets(
-        (body.assets || []).filter((asset: Asset) =>
-          kind === "video"
-            ? asset.mimeType === "video/mp4"
-            : asset.mimeType.startsWith("image/"),
-        ),
-      );
-    } catch {
-      setError("素材库加载失败，请稍后再试");
+      if (kind === "scene") {
+        setReferenceImage(valid[0]);
+        setReferenceConfirmed(false);
+        setStep("reference");
+      } else {
+        setProducts((current) => [...current, ...valid].slice(0, 5));
+      }
+      clearTaskState();
     }
   };
-  const select = (asset: Asset) => {
-    if (
-      tab === "video" &&
-      (!asset.durationSeconds ||
-        asset.durationSeconds < 3 ||
-        asset.durationSeconds > 15)
-    )
-      return setError("该视频未记录有效时长或不在 3–15 秒内，请重新上传后使用");
-    const selected = {
-      assetId: asset.id,
-      preview: asset.url,
-      name: asset.originalName,
-      byteSize: asset.byteSize,
-      durationSeconds: asset.durationSeconds || undefined,
-    };
-    if (tab === "video") setReference(selected);
-    if (tab === "scene") setScene(selected);
-    if (tab === "product")
-      setProducts((current) =>
-        current.some((item) => item.assetId === asset.id)
-          ? current.filter((item) => item.assetId !== asset.id)
-          : current.length < 5
-            ? [...current, selected]
-            : current,
-      );
-    setTab(null);
-    resetTask();
-  };
+
   const analyzeDouyin = async () => {
     if (!douyinInput.trim() || douyinBusy) return;
     setError("");
@@ -233,13 +553,13 @@ export function RecreateVideoPage() {
         body: JSON.stringify({ url: douyinInput, action: "analyze" }),
       });
       const body = await response.json().catch(() => null);
-      if (!response.ok || body?.status !== "ANALYZED") {
+      if (!response.ok || body?.status !== "ANALYZED")
         throw new Error(body?.message || "抖音链接解析失败");
-      }
       setDouyinAnalysis({
         title: body.title,
         durationSeconds: body.durationSeconds,
         clipRequired: body.clipRequired === true,
+        clipDurations: body.clipDurations || [5, 10, 15],
       });
       setDouyinStart(0);
       setDouyinClipDuration(
@@ -253,6 +573,7 @@ export function RecreateVideoPage() {
       setDouyinBusy(null);
     }
   };
+
   const importDouyin = async () => {
     if (!douyinAnalysis || douyinBusy) return;
     if (douyinClips.length >= 10) {
@@ -278,9 +599,8 @@ export function RecreateVideoPage() {
         }),
       });
       const body = await response.json().catch(() => null);
-      if (!response.ok || body?.status !== "READY") {
+      if (!response.ok || body?.status !== "READY")
         throw new Error(body?.message || "抖音视频导入失败");
-      }
       const importedClip: Item = {
         assetId: body.assetId,
         preview: body.url,
@@ -291,14 +611,19 @@ export function RecreateVideoPage() {
         clipStartSeconds: body.clipStartSeconds,
         clipEndSeconds: body.clipEndSeconds,
       };
-      setReference(importedClip);
-      setDouyinClips((current) =>
+      setSourceMode("douyin");
+      setVideoSource("douyin");
+      setSourceItem(importedClip);
+      setClips((current) =>
         current.some((item) => item.assetId === importedClip.assetId)
           ? current
           : [...current, importedClip].slice(0, 10),
       );
-      setDouyinError("");
-      resetTask();
+      setActiveClipId(importedClip.assetId || null);
+      clearTaskState();
+      setStep("clip");
+      setNotice("片段已保存到素材库");
+      window.setTimeout(() => setNotice(""), 1800);
     } catch (caught) {
       setDouyinError(
         caught instanceof Error ? caught.message : "抖音视频导入失败",
@@ -307,39 +632,31 @@ export function RecreateVideoPage() {
       setDouyinBusy(null);
     }
   };
-  const removeProduct = (index: number) =>
-    setProducts((current) => {
-      const item = current[index];
-      if (item?.file) URL.revokeObjectURL(item.preview);
-      return current.filter((_, itemIndex) => itemIndex !== index);
-    });
-  const moveDouyinClip = (index: number, direction: -1 | 1) =>
-    setDouyinClips((current) => {
+
+  const moveClip = (index: number, direction: -1 | 1) =>
+    setClips((current) => {
       const target = index + direction;
       if (target < 0 || target >= current.length) return current;
       const next = [...current];
       [next[index], next[target]] = [next[target], next[index]];
       return next;
     });
-  const removeDouyinClip = (assetId?: string) => {
+
+  const removeClip = (assetId?: string) => {
     if (!assetId) return;
-    setDouyinClips((current) =>
-      current.filter((item) => item.assetId !== assetId),
-    );
-    if (reference?.assetId === assetId) setReference(null);
-    resetTask();
+    setClips((current) => current.filter((item) => item.assetId !== assetId));
+    if (activeClipId === assetId) setActiveClipId(null);
+    if (sourceItem?.assetId === assetId) setSourceItem(null);
+    clearTaskState();
   };
-  const goToVideoMix = () => {
-    const assetIds = douyinClips
-      .map((item) => item.assetId)
-      .filter((assetId): assetId is string => Boolean(assetId));
-    if (assetIds.length) {
-      sessionStorage.setItem(videoMixHandoffKey, JSON.stringify(assetIds));
-    } else {
-      sessionStorage.removeItem(videoMixHandoffKey);
-    }
-    router.push("/create/video-mix");
-  };
+
+  const removeProduct = (index: number) =>
+    setProducts((current) => {
+      const item = current[index];
+      if (item?.file) URL.revokeObjectURL(item.preview);
+      return current.filter((_, itemIndex) => itemIndex !== index);
+    });
+
   const upload = async (item: Item) => {
     if (item.assetId) return item.assetId;
     if (!item.file) throw new Error("素材未找到");
@@ -380,6 +697,7 @@ export function RecreateVideoPage() {
     }
     return presign.assetId as string;
   };
+
   const poll = async (taskId: string) => {
     const deadline = Date.now() + 15 * 60 * 1000;
     while (Date.now() < deadline) {
@@ -399,21 +717,31 @@ export function RecreateVideoPage() {
     }
     throw new Error("视频仍在生成中，请稍后在任务中心查看");
   };
+
+  const goToVideoMix = () => {
+    const assetIds = douyinClips
+      .map((item) => item.assetId)
+      .filter((assetId): assetId is string => Boolean(assetId));
+    if (assetIds.length)
+      sessionStorage.setItem("aigc-video-mix-asset-ids", JSON.stringify(assetIds));
+    else sessionStorage.removeItem("aigc-video-mix-asset-ids");
+    router.push("/create/video-mix");
+  };
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!reference || !products.length || !usageAuthorized || phase !== "idle")
-      return;
+    if (!generateReady || phase !== "idle") return;
     setError("");
     setResult(null);
     setPhase("uploading");
     try {
       const assetIds = [
         ...(await Promise.all(products.map(upload))),
-        await upload(reference),
-        ...(scene ? [await upload(scene)] : []),
+        await upload(selectedClip || sourceItem!),
+        ...(referenceImage ? [await upload(referenceImage)] : []),
       ];
       const prompt = [
-        `产品信息：${info.trim()}`,
+        `产品信息：${productInfo.trim()}`,
         `视频特殊要求：${special.trim()}`,
         modelOn && modelInfo.trim()
           ? `自定义模特信息：${modelInfo.trim()}`
@@ -442,617 +770,950 @@ export function RecreateVideoPage() {
       if (!response.ok)
         throw new Error(created.message || created.code || "创建任务失败");
       setPhase("generating");
+      setStep("generate");
       await poll(created.taskId);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "创建失败");
       setPhase("failed");
     }
   };
-  const box = (
-    kind: SourceKind,
-    title: string,
-    required: boolean,
-    description: string,
-    Icon: typeof Video,
-  ) => {
-    const item = kind === "video" ? reference : kind === "scene" ? scene : null;
-    const maxDouyinStart = douyinAnalysis
-      ? Math.max(0, douyinAnalysis.durationSeconds - douyinClipDuration)
-      : 0;
+
+  const activeStep = workflowSteps[currentIndex] || workflowSteps[0];
+  const sourceMaxStart = douyinAnalysis
+    ? Math.max(0, douyinAnalysis.durationSeconds - douyinClipDuration)
+    : 0;
+  const durationSeconds = Number(duration);
+
+  const stepButton = (item: (typeof workflowSteps)[number], index: number) => {
+    const completed =
+      (item.key === "source" && sourceReady) ||
+      (item.key === "clip" && clipReady) ||
+      (item.key === "product" && productReady) ||
+      (item.key === "reference" && referenceReady) ||
+      (item.key === "generate" && phase === "succeeded");
+    const unlocked = index <= unlockedIndex;
     return (
-      <section className="recreate-source">
-        <div className="ad-field-title">
-          {title} {required && <em>*</em>}
+      <button
+        type="button"
+        className={`recreate-step-item ${index === currentIndex ? "active" : ""} ${completed ? "done" : ""}`}
+        disabled={!unlocked}
+        onClick={() => setStep(item.key)}
+      >
+        <span>{completed ? <Check size={12} /> : item.number}</span>
+        <div>
+          <strong>{item.title}</strong>
+          <small>{item.subtitle}</small>
         </div>
-        <div className={`ad-source-tabs ${kind === "video" ? "three" : ""}`}>
-          <button
-            type="button"
-            className={
-              kind === "video"
-                ? videoSource === "local"
-                  ? "active"
-                  : ""
-                : tab !== kind
-                  ? "active"
-                  : ""
-            }
-            onClick={() => {
-              if (kind === "video") {
-                setVideoSource("local");
-                setTab(null);
-              }
-              refs[kind].current?.click();
-            }}
-          >
-            <Upload size={16} />
-            本地上传
-          </button>
-          <button
-            type="button"
-            className={
-              kind === "video"
-                ? videoSource === "library"
-                  ? "active"
-                  : ""
-                : tab === kind
-                  ? "active"
-                  : ""
-            }
-            onClick={() => openLibrary(kind)}
-          >
-            <FolderOpen size={17} />
-            资产库
-          </button>
-          {kind === "video" && (
+      </button>
+    );
+  };
+
+  const sourcePanel = (
+    <section className="recreate-panel">
+      <header className="recreate-panel-head">
+        <div>
+          <strong>当前步骤</strong>
+          <h2>添加对标视频</h2>
+        </div>
+        <span>1 / 5</span>
+      </header>
+      <p className="recreate-panel-copy">
+        视频来源可通过链接解析，也可以直接上传或从素材库挑选。
+      </p>
+      <div className="recreate-tabs" role="tablist" aria-label="视频来源">
+        <button
+          type="button"
+          className={videoSource === "douyin" ? "active" : ""}
+          onClick={() => {
+            setVideoSource("douyin");
+            setSourceMode("douyin");
+            setLibraryKind(null);
+          }}
+        >
+          链接获取
+          <small>粘贴抖音分享链接</small>
+        </button>
+        <button
+          type="button"
+          className={videoSource === "local" ? "active" : ""}
+          onClick={() => {
+            setVideoSource("local");
+            setSourceMode("upload");
+            setLibraryKind(null);
+          }}
+        >
+          上传视频
+          <small>本地上传或资产库</small>
+        </button>
+      </div>
+      {videoSource === "douyin" ? (
+        <div className="recreate-source-block">
+          <label className="recreate-field">
+            粘贴抖音作品分享链接
+            <textarea
+              value={douyinInput}
+              onChange={(event) => {
+                setDouyinInput(event.target.value);
+                setDouyinError("");
+                setDouyinAnalysis(null);
+              }}
+              placeholder="粘贴抖音分享链接或完整分享文案"
+            />
+          </label>
+          <div className="recreate-inline-actions">
             <button
               type="button"
-              className={videoSource === "douyin" ? "active" : ""}
+              className="ghost"
               onClick={() => {
-                setVideoSource("douyin");
-                setTab(null);
-                setError("");
-                setDouyinError("");
+                setDouyinInput(
+                  "复制打开抖音，看看【编导小咪的作品】不儿，ai我让你买个西瓜这么难吗？ # AI创作浪潮",
+                );
               }}
             >
-              <Link2 size={17} />
-              抖音链接
+              示例
             </button>
+            <button
+              type="button"
+              onClick={analyzeDouyin}
+              disabled={!douyinInput.trim() || Boolean(douyinBusy)}
+            >
+              {douyinBusy === "analyzing" ? (
+                <LoaderCircle className="generation-spinner" size={17} />
+              ) : (
+                <Link2 size={17} />
+              )}
+              {douyinBusy === "analyzing" ? "正在读取视频信息" : "获取视频"}
+            </button>
+          </div>
+          {!douyinAnalysis && (
+            <p className="recreate-hint">
+              支持完整分享文案；长视频解析后可选择 5、10 或 15 秒片段。
+            </p>
           )}
-        </div>
-        {kind === "video" && videoSource === "douyin" ? (
-          <div className="douyin-import-panel">
-            <label>
-              抖音分享链接
-              <textarea
-                value={douyinInput}
-                onChange={(event) => {
-                  setDouyinInput(event.target.value);
-                  setDouyinError("");
-                  setDouyinAnalysis(null);
-                  if (reference?.source === "douyin") {
-                    setReference(null);
-                    resetTask();
-                  }
-                }}
-                maxLength={5000}
-                placeholder="粘贴抖音分享链接或完整分享文案"
-              />
-            </label>
-            {!douyinAnalysis && (
-              <button
-                type="button"
-                onClick={analyzeDouyin}
-                disabled={!douyinInput.trim() || Boolean(douyinBusy)}
-              >
-                {douyinBusy === "analyzing" ? (
-                  <LoaderCircle className="generation-spinner" size={17} />
-                ) : (
-                  <Link2 size={17} />
-                )}
-                {douyinBusy === "analyzing" ? "正在读取视频信息" : "解析链接"}
-              </button>
-            )}
-            {douyinAnalysis && reference?.source !== "douyin" && (
-              <div className="douyin-clip-editor">
-                <header>
-                  <div>
-                    <strong>{douyinAnalysis.title}</strong>
+          {douyinAnalysis && (
+            <div className="recreate-clip-editor">
+              <header>
+                <div>
+                  <strong>{douyinAnalysis.title}</strong>
+                  <small>视频总时长 {douyinAnalysis.durationSeconds.toFixed(1)} 秒</small>
+                </div>
+                <span>{douyinAnalysis.clipRequired ? "选择片段" : "完整视频"}</span>
+              </header>
+              {douyinAnalysis.clipRequired ? (
+                <>
+                  <div className="recreate-range">
+                    <span>开始时间</span>
+                    <strong>
+                      {douyinStart.toFixed(1)}s –{" "}
+                      {(douyinStart + douyinClipDuration).toFixed(1)}s
+                    </strong>
+                    <input
+                      type="range"
+                      min={0}
+                      max={sourceMaxStart}
+                      step={0.1}
+                      value={Math.min(douyinStart, sourceMaxStart)}
+                      aria-label="片段开始时间"
+                      onChange={(event) =>
+                        setDouyinStart(Number(event.target.value))
+                      }
+                    />
                     <small>
-                      视频总时长 {douyinAnalysis.durationSeconds.toFixed(1)} 秒
+                      <span>0s</span>
+                      <span>{sourceMaxStart.toFixed(1)}s</span>
                     </small>
                   </div>
-                  <span>
-                    {douyinAnalysis.clipRequired ? "选择片段" : "完整视频"}
-                  </span>
-                </header>
-                {douyinAnalysis.clipRequired ? (
-                  <>
-                    <div className="douyin-clip-range">
-                      <span>开始时间</span>
-                      <strong>
-                        {douyinStart.toFixed(1)}s –{" "}
-                        {(douyinStart + douyinClipDuration).toFixed(1)}s
-                      </strong>
-                      <input
-                        type="range"
-                        min={0}
-                        max={maxDouyinStart}
-                        step={0.1}
-                        value={Math.min(douyinStart, maxDouyinStart)}
-                        aria-label="片段开始时间"
-                        onChange={(event) =>
-                          setDouyinStart(Number(event.target.value))
-                        }
-                      />
-                      <small>
-                        <span>0s</span>
-                        <span>{maxDouyinStart.toFixed(1)}s</span>
-                      </small>
+                  <div className="recreate-length">
+                    <span>片段长度</span>
+                    <div>
+                      {[5, 10, 15].map((seconds) => (
+                        <button
+                          type="button"
+                          key={seconds}
+                          className={douyinClipDuration === seconds ? "active" : ""}
+                          onClick={() => {
+                            setDouyinClipDuration(seconds);
+                            setDouyinStart((current) =>
+                              Math.min(
+                                current,
+                                Math.max(0, douyinAnalysis.durationSeconds - seconds),
+                              ),
+                            );
+                          }}
+                        >
+                          {seconds} 秒
+                        </button>
+                      ))}
                     </div>
-                    <div className="douyin-clip-length">
-                      <span>片段长度</span>
-                      <div>
-                        {[5, 10, 15].map((seconds) => (
-                          <button
-                            type="button"
-                            className={
-                              douyinClipDuration === seconds ? "active" : ""
-                            }
-                            key={seconds}
-                            onClick={() => {
-                              setDouyinClipDuration(seconds);
-                              setDouyinStart((current) =>
-                                Math.min(
-                                  current,
-                                  Math.max(
-                                    0,
-                                    douyinAnalysis.durationSeconds - seconds,
-                                  ),
-                                ),
-                              );
-                            }}
-                          >
-                            {seconds} 秒
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </>
+                  </div>
+                </>
+              ) : (
+                <p>该视频不超过 15 秒，将直接导入完整内容。</p>
+              )}
+              <button
+                type="button"
+                onClick={importDouyin}
+                disabled={Boolean(douyinBusy)}
+              >
+                {douyinBusy === "importing" ? (
+                  <LoaderCircle className="generation-spinner" size={17} />
                 ) : (
-                  <p>该视频不超过 15 秒，将导入完整内容。</p>
+                  <Download size={17} />
                 )}
+                {douyinBusy === "importing"
+                  ? "正在截取并保存"
+                  : douyinAnalysis.clipRequired
+                    ? "截取并导入"
+                    : "导入完整视频"}
+              </button>
+              <p>
+                片段会保存到素材库；可重复选择其他片段，再进入后面的复刻和混剪。
+              </p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="recreate-source-block">
+          <div className="recreate-source-tabs">
+            <button
+              type="button"
+              className={sourceMode === "upload" ? "active" : ""}
+              onClick={() => {
+                setSourceMode("upload");
+                setLibraryKind(null);
+                refs.video.current?.click();
+              }}
+            >
+              <Upload size={16} />
+              本地上传
+            </button>
+            <button
+              type="button"
+              className={sourceMode === "library" ? "active" : ""}
+              onClick={() => {
+                setSourceMode("library");
+                openLibrary("video");
+              }}
+            >
+              <FolderOpen size={16} />
+              资产库
+            </button>
+          </div>
+          {libraryKind === "video" ? (
+            <div className="recreate-library">
+              {assetsLoading ? (
+                <p>正在加载素材库</p>
+              ) : assets.length ? (
+                assets.map((asset) => (
+                  <button
+                    type="button"
+                    key={asset.id}
+                    onClick={() => selectAsset(asset)}
+                  >
+                    <span className="recreate-library-media">
+                      <Video size={23} />
+                    </span>
+                    <small>{asset.originalName}</small>
+                  </button>
+                ))
+              ) : (
+                <p>暂无可用视频素材</p>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              className={`recreate-drop ${sourceSelection ? "has-file" : ""}`}
+              onClick={() => refs.video.current?.click()}
+            >
+              <span>
+                <Video size={27} />
+              </span>
+              <strong>上传对标视频</strong>
+              <small>支持 MP4，最大 100MB，视频时长 3–15 秒</small>
+              <small>
+                {sourceSelection
+                  ? `${sourceSelection.name} · ${formatBytes(sourceSelection.byteSize)}`
+                  : "已上传 0 / 1 个"}
+              </small>
+              <input
+                ref={refs.video}
+                type="file"
+                accept="video/mp4"
+                onChange={(event) => choose("video", event.target.files)}
+              />
+            </button>
+          )}
+          {sourceSelection && (
+            <div className="recreate-selected-source">
+              <video
+                src={sourceSelection.preview}
+                controls
+                playsInline
+                preload="metadata"
+              />
+              <div>
+                <strong>{sourceSelection.name}</strong>
+                <small>
+                  {sourceSelection.durationSeconds
+                    ? `${sourceSelection.durationSeconds.toFixed(1)} 秒`
+                    : "已保存到素材库"}
+                </small>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {douyinError && (
+        <p className="creator-error" role="alert">
+          {douyinError}
+        </p>
+      )}
+      <div className="recreate-source-footer">
+        <button
+          type="button"
+          className="primary"
+          onClick={() => setStep("clip")}
+          disabled={!sourceReady}
+        >
+          下一步：选择关键画面
+        </button>
+      </div>
+    </section>
+  );
+
+  const clipPanel = (
+    <section className="recreate-panel">
+      <header className="recreate-panel-head">
+        <div>
+          <strong>当前步骤</strong>
+          <h2>选择关键画面</h2>
+        </div>
+        <span>2 / 5</span>
+      </header>
+      <p className="recreate-panel-copy">
+        这里保留当前复刻用的片段，也可以继续截取其他片段，后面再带去智能混剪。
+      </p>
+      {douyinAnalysis?.clipRequired && videoSource === "douyin" ? (
+        <div className="recreate-clip-editor">
+          <header>
+            <div>
+              <strong>{douyinAnalysis.title}</strong>
+              <small>
+                视频总时长 {douyinAnalysis.durationSeconds.toFixed(1)} 秒
+              </small>
+            </div>
+            <span>片段抽取</span>
+          </header>
+          <div className="recreate-range">
+            <span>开始时间</span>
+            <strong>
+              {douyinStart.toFixed(1)}s –{" "}
+              {(douyinStart + douyinClipDuration).toFixed(1)}s
+            </strong>
+            <input
+              type="range"
+              min={0}
+              max={sourceMaxStart}
+              step={0.1}
+              value={Math.min(douyinStart, sourceMaxStart)}
+              aria-label="片段开始时间"
+              onChange={(event) => setDouyinStart(Number(event.target.value))}
+            />
+            <small>
+              <span>0s</span>
+              <span>{sourceMaxStart.toFixed(1)}s</span>
+            </small>
+          </div>
+          <div className="recreate-length">
+            <span>片段长度</span>
+            <div>
+              {[5, 10, 15].map((seconds) => (
                 <button
                   type="button"
-                  onClick={importDouyin}
-                  disabled={Boolean(douyinBusy) || douyinClips.length >= 10}
+                  key={seconds}
+                  className={douyinClipDuration === seconds ? "active" : ""}
+                  onClick={() => {
+                    setDouyinClipDuration(seconds);
+                    setDouyinStart((current) =>
+                      Math.min(current, Math.max(0, douyinAnalysis.durationSeconds - seconds)),
+                    );
+                  }}
                 >
-                  {douyinBusy === "importing" ? (
-                    <LoaderCircle className="generation-spinner" size={17} />
-                  ) : (
-                    <Download size={17} />
-                  )}
-                  {douyinBusy === "importing"
-                    ? "正在截取并保存"
-                    : douyinClips.length >= 10
-                      ? "片段列表已满"
-                    : douyinAnalysis.clipRequired
-                      ? "截取并导入"
-                      : "导入完整视频"}
+                  {seconds} 秒
                 </button>
-                <p>
-                  片段会保存到素材库；可重复选择其他片段，生成后前往智能混剪拼接。
-                </p>
-              </div>
+              ))}
+            </div>
+          </div>
+          <button type="button" onClick={importDouyin} disabled={Boolean(douyinBusy)}>
+            {douyinBusy === "importing" ? (
+              <LoaderCircle className="generation-spinner" size={17} />
+            ) : (
+              <Download size={17} />
             )}
-            {!douyinAnalysis && (
-              <p>
-                支持完整抖音分享文案；长视频解析后可选择 5、10 或 15 秒片段。
-              </p>
-            )}
-            {douyinError && (
-              <p className="creator-error" role="alert">
-                {douyinError}
-              </p>
-            )}
-            {reference?.source === "douyin" && (
-              <div className="douyin-imported-video">
+            {douyinBusy === "importing" ? "正在截取并保存" : "再截一段"}
+          </button>
+        </div>
+      ) : (
+        <div className="recreate-source-block">
+          <p className="recreate-hint">当前对标视频已可直接进入下一步。</p>
+          <div className="recreate-selected-source large">
+            {sourceSelection && (
+              <>
                 <video
-                  src={reference.preview}
+                  src={sourceSelection.preview}
                   controls
                   playsInline
                   preload="metadata"
                 />
-                <span>
-                  <strong>{reference.name}</strong>
-                  <small>
-                    {reference.durationSeconds?.toFixed(1)} 秒 · 已保存到素材库
-                  </small>
-                </span>
-                {douyinAnalysis?.clipRequired && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setReference(null);
-                      setDouyinError("");
-                      resetTask();
-                    }}
-                  >
-                    选择其他片段
-                  </button>
-                )}
-              </div>
-            )}
-            {douyinClips.length > 0 && (
-              <section className="douyin-clip-collection">
-                <header>
-                  <div>
-                    <strong>已截取片段</strong>
-                    <small>按此顺序带入智能混剪 · {douyinClips.length}/10</small>
-                  </div>
-                  <button type="button" onClick={goToVideoMix}>
-                    <Film size={14} />
-                    带入混剪
-                  </button>
-                </header>
                 <div>
-                  {douyinClips.map((clip, index) => (
-                    <article
-                      className={
-                        reference?.assetId === clip.assetId ? "active" : ""
-                      }
-                      key={clip.assetId}
-                    >
-                      <button
-                        type="button"
-                        className="douyin-clip-preview"
-                        onClick={() => {
-                          setReference(clip);
-                          resetTask();
-                        }}
-                        aria-label={`选择片段 ${index + 1} 用于复刻`}
-                      >
-                        <video
-                          src={clip.preview}
-                          muted
-                          playsInline
-                          preload="metadata"
-                        />
-                        <span>{index + 1}</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="douyin-clip-name"
-                        onClick={() => {
-                          setReference(clip);
-                          resetTask();
-                        }}
-                      >
-                        <strong>{clip.name}</strong>
-                        <small>
-                          {typeof clip.clipStartSeconds === "number" &&
-                          typeof clip.clipEndSeconds === "number"
-                            ? `${clip.clipStartSeconds.toFixed(1)}–${clip.clipEndSeconds.toFixed(1)} 秒`
-                            : `${clip.durationSeconds?.toFixed(1)} 秒`}
-                          {reference?.assetId === clip.assetId
-                            ? " · 当前复刻片段"
-                            : ""}
-                        </small>
-                      </button>
-                      <div className="douyin-clip-actions">
-                        <button
-                          type="button"
-                          disabled={index === 0}
-                          onClick={() => moveDouyinClip(index, -1)}
-                          aria-label="片段上移"
-                        >
-                          <ArrowUp size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          disabled={index === douyinClips.length - 1}
-                          onClick={() => moveDouyinClip(index, 1)}
-                          aria-label="片段下移"
-                        >
-                          <ArrowDown size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeDouyinClip(clip.assetId)}
-                          aria-label="从片段列表移除"
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
-                    </article>
-                  ))}
+                  <strong>{sourceSelection.name}</strong>
+                  <small>
+                    {sourceSelection.durationSeconds
+                      ? `${sourceSelection.durationSeconds.toFixed(1)} 秒`
+                      : "已选中"}
+                  </small>
                 </div>
-              </section>
+              </>
             )}
           </div>
-        ) : tab === kind ? (
-          <div className="recreate-library">
-            {assets.length ? (
-              assets.map((asset) => (
+        </div>
+      )}
+      {douyinClips.length > 0 && (
+        <section className="recreate-clip-collection">
+          <header>
+            <div>
+              <strong>已截取片段</strong>
+              <small>按此顺序带入智能混剪 · {douyinClips.length}/10</small>
+            </div>
+            <button type="button" onClick={goToVideoMix}>
+              <Film size={14} />
+              带入混剪
+            </button>
+          </header>
+          <div>
+            {douyinClips.map((clip, index) => (
+              <article
+                className={activeClipId === clip.assetId ? "active" : ""}
+                key={clip.assetId || `${clip.name}-${index}`}
+              >
                 <button
                   type="button"
-                  key={asset.id}
-                  onClick={() => select(asset)}
+                  className="recreate-clip-preview"
+                  onClick={() => {
+                    setActiveClipId(clip.assetId || null);
+                    setSourceItem(clip);
+                  }}
+                  aria-label={`选择片段 ${index + 1}`}
                 >
-                  {asset.mimeType === "video/mp4" ? (
-                    <span className="recreate-library-media">
-                      <Video size={23} />
-                    </span>
-                  ) : (
-                    <img src={asset.url} alt="" />
-                  )}
-                  <small>{asset.originalName}</small>
+                  <video src={clip.preview} muted playsInline preload="metadata" />
+                  <span>{index + 1}</span>
                 </button>
-              ))
-            ) : (
-              <p>暂无可用素材</p>
-            )}
+                <button
+                  type="button"
+                  className="recreate-clip-name"
+                  onClick={() => {
+                    setActiveClipId(clip.assetId || null);
+                    setSourceItem(clip);
+                  }}
+                >
+                  <strong>{clip.name}</strong>
+                  <small>
+                    {typeof clip.clipStartSeconds === "number" &&
+                    typeof clip.clipEndSeconds === "number"
+                      ? `${clip.clipStartSeconds.toFixed(1)}–${clip.clipEndSeconds.toFixed(1)} 秒`
+                      : `${clip.durationSeconds?.toFixed(1)} 秒`}
+                    {activeClipId === clip.assetId ? " · 当前复刻片段" : ""}
+                  </small>
+                </button>
+                <div className="recreate-clip-actions">
+                  <button
+                    type="button"
+                    disabled={index === 0}
+                    onClick={() => moveClip(index, -1)}
+                    aria-label="片段上移"
+                  >
+                    <ArrowUp size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={index === douyinClips.length - 1}
+                    onClick={() => moveClip(index, 1)}
+                    aria-label="片段下移"
+                  >
+                    <ArrowDown size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeClip(clip.assetId)}
+                    aria-label="从片段列表移除"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              </article>
+            ))}
           </div>
-        ) : (
-          <button
-            type="button"
-            className="ad-dropzone recreate-drop"
-            onClick={() => refs[kind].current?.click()}
-          >
-            <span>
-              <Icon size={27} />
-            </span>
-            <strong>{title}</strong>
-            <small>{description}</small>
-            <small>
-              {kind === "product"
-                ? `已上传 ${products.length}/5 个`
-                : item
-                  ? "已选择 1 个"
-                  : "已上传 0/1 个"}
-            </small>
-            <input
-              ref={refs[kind]}
-              type="file"
-              accept={kind === "video" ? "video/mp4" : imageAccept}
-              multiple={kind === "product"}
-              onChange={(event) => choose(kind, event.target.files)}
-            />
+        </section>
+      )}
+      <div className="recreate-source-footer">
+        <button
+          type="button"
+          className="primary"
+          onClick={() => setStep("product")}
+          disabled={!clipReady}
+        >
+          下一步：批量替换商品
+        </button>
+      </div>
+    </section>
+  );
+
+  const assetLibrary = libraryKind ? (
+    <div className="recreate-library">
+      {assetsLoading ? (
+        <p>正在加载素材库</p>
+      ) : assets.length ? (
+        assets.map((asset) => (
+          <button type="button" key={asset.id} onClick={() => selectAsset(asset)}>
+            {libraryKind === "video" ? (
+              <span className="recreate-library-media">
+                <Video size={23} />
+              </span>
+            ) : (
+              <img src={asset.url} alt="" />
+            )}
+            <small>{asset.originalName}</small>
           </button>
-        )}
-      </section>
-    );
-  };
-  const busy = phase === "uploading" || phase === "generating";
+        ))
+      ) : (
+        <p>暂无可用素材</p>
+      )}
+    </div>
+  ) : null;
+
+  const productPanel = (
+    <section className="recreate-panel">
+      <header className="recreate-panel-head">
+        <div>
+          <strong>当前步骤</strong>
+          <h2>批量替换商品</h2>
+        </div>
+        <span>3 / 5</span>
+      </header>
+      <p className="recreate-panel-copy">
+        选择商品图后，系统会把它们放到当前复刻链路里，作为最终任务的主体素材。
+      </p>
+      <div className="recreate-source-tabs three">
+        <button
+          type="button"
+          className={!libraryKind && !products.length ? "active" : ""}
+          onClick={() => {
+            setLibraryKind(null);
+            refs.product.current?.click();
+          }}
+        >
+          <Upload size={16} />
+          本地上传
+        </button>
+        <button
+          type="button"
+          className={libraryKind === "product" ? "active" : ""}
+          onClick={() => openLibrary("product")}
+        >
+          <FolderOpen size={16} />
+          资产库
+        </button>
+      </div>
+      {libraryKind === "product" ? (
+        assetLibrary
+      ) : (
+        <button
+          type="button"
+          className="recreate-drop"
+          onClick={() => refs.product.current?.click()}
+        >
+          <span>
+            <ImagePlus size={27} />
+          </span>
+          <strong>上传商品图片</strong>
+          <small>支持 JPG / PNG / WebP，单张不超过 10MB</small>
+          <small>已上传 {products.length}/5 个</small>
+        </button>
+      )}
+      {products.length > 0 && (
+        <div className="recreate-selected-images">
+          {products.map((product, index) => (
+            <article key={`${product.assetId || product.name}-${index}`}>
+              <img src={product.preview} alt="商品图片预览" />
+              <button
+                type="button"
+                onClick={() => {
+                  removeProduct(index);
+                  clearTaskState();
+                }}
+                aria-label="移除商品图"
+              >
+                <X size={14} />
+              </button>
+              <span>{index + 1}</span>
+            </article>
+          ))}
+        </div>
+      )}
+      <div className="recreate-source-footer">
+        <button
+          type="button"
+          className="primary"
+          onClick={() => setStep("reference")}
+          disabled={!productReady}
+        >
+          下一步：确认复刻参考图
+        </button>
+      </div>
+      <input
+        ref={refs.product}
+        type="file"
+        accept={imageAccept}
+        multiple
+        onChange={(event) => choose("product", event.target.files)}
+        hidden
+      />
+    </section>
+  );
+
+  const referencePanel = (
+    <section className="recreate-panel">
+      <header className="recreate-panel-head">
+        <div>
+          <strong>当前步骤</strong>
+          <h2>确认复刻参考图</h2>
+        </div>
+        <span>4 / 5</span>
+      </header>
+      <p className="recreate-panel-copy">
+        选一张能代表最终复刻效果的图，确认后就进入生成阶段。
+      </p>
+      <div className="recreate-source-tabs">
+        <button
+          type="button"
+          className="active"
+          onClick={() => refs.scene.current?.click()}
+        >
+          <Upload size={16} />
+          上传参考图
+        </button>
+        <button
+          type="button"
+          onClick={() => openLibrary("scene")}
+          className={libraryKind === "scene" ? "active" : ""}
+        >
+          <FolderOpen size={16} />
+          资产库
+        </button>
+      </div>
+      {libraryKind === "scene" ? (
+        assetLibrary
+      ) : (
+        <button
+          type="button"
+          className={`recreate-drop ${referenceImage ? "has-file" : ""}`}
+          onClick={() => refs.scene.current?.click()}
+        >
+          <span>
+            <ImagePlus size={27} />
+          </span>
+          <strong>确认复刻参考图</strong>
+          <small>上传一张最终确认图，或从素材库选择</small>
+          <small>{referenceImage ? "已选择 1 个" : "已上传 0 / 1 个"}</small>
+          <input
+            ref={refs.scene}
+            type="file"
+            accept={imageAccept}
+            onChange={(event) => choose("scene", event.target.files)}
+          />
+        </button>
+      )}
+      {referenceImage && (
+        <div className="recreate-reference-preview">
+          <img src={referenceImage.preview} alt="参考图预览" />
+          <div>
+            <strong>{referenceImage.name}</strong>
+            <small>{formatBytes(referenceImage.byteSize)}</small>
+          </div>
+        </div>
+      )}
+      <label className="recreate-consent">
+        <input
+          type="checkbox"
+          checked={referenceConfirmed}
+          onChange={(event) => {
+            setReferenceConfirmed(event.target.checked);
+            clearTaskState();
+          }}
+        />
+        我确认当前图片作为本次复刻参考图
+      </label>
+      <div className="recreate-source-footer">
+        <button
+          type="button"
+          className="primary"
+          onClick={() => setStep("generate")}
+          disabled={!referenceReady}
+        >
+          下一步：生成复刻视频
+        </button>
+      </div>
+    </section>
+  );
+
+  const generatePanel = (
+    <section className="recreate-panel">
+      <header className="recreate-panel-head">
+        <div>
+          <strong>当前步骤</strong>
+          <h2>生成复刻视频</h2>
+        </div>
+        <span>5 / 5</span>
+      </header>
+      <p className="recreate-panel-copy">
+        这里会把当前复刻链路提交到任务中心，并显示加载进度和预计时间。
+      </p>
+      <div className="recreate-meta-grid">
+        <label>
+          视频比例
+          <span className="recreate-select">
+            <select value={ratio} onChange={(event) => setRatio(event.target.value)}>
+              <option value="9:16">竖屏（9:16）</option>
+              <option value="16:9">横屏（16:9）</option>
+            </select>
+            <ChevronDown size={16} />
+          </span>
+        </label>
+        <label>
+          视频时长
+          <span className="recreate-select">
+            <select value={duration} onChange={(event) => setDuration(event.target.value)}>
+              <option value="5">5 秒</option>
+              <option value="10">10 秒</option>
+              <option value="15">15 秒</option>
+            </select>
+            <ChevronDown size={16} />
+          </span>
+        </label>
+        <label>
+          视频分辨率
+          <span className="recreate-select">
+            <select
+              value={resolution}
+              onChange={(event) => setResolution(event.target.value)}
+            >
+              <option>480p</option>
+              <option>720p</option>
+              <option>1080p</option>
+            </select>
+            <ChevronDown size={16} />
+          </span>
+        </label>
+      </div>
+      <label className="recreate-consent">
+        <input
+          type="checkbox"
+          checked={usageAuthorized}
+          onChange={(event) => {
+            setUsageAuthorized(event.target.checked);
+            clearTaskState();
+          }}
+        />
+        我确认拥有对标视频、商品图及其他上传素材的合法使用授权
+      </label>
+      <label className="recreate-toggle">
+        自定义模特信息
+        <input
+          type="checkbox"
+          checked={modelOn}
+          onChange={(event) => {
+            setModelOn(event.target.checked);
+            clearTaskState();
+          }}
+        />
+        <i />
+      </label>
+      {modelOn && (
+        <label className="recreate-field">
+          模特信息（可选）
+          <textarea
+            value={modelInfo}
+            onChange={(event) => setModelInfo(event.target.value)}
+            maxLength={300}
+            placeholder="例如：女性，25 岁，自然亲和，居家穿搭"
+          />
+        </label>
+      )}
+      <label className="recreate-field">
+        产品信息（可选）
+        <textarea
+          value={productInfo}
+          onChange={(event) => setProductInfo(event.target.value)}
+          maxLength={600}
+          placeholder="例如：产品名称、核心卖点、材质、目标人群"
+        />
+      </label>
+      <label className="recreate-field">
+        视频特殊要求（可选）
+        <textarea
+          value={special}
+          onChange={(event) => setSpecial(event.target.value)}
+          maxLength={600}
+          placeholder="例如：突出金属质感、镜头缓慢推进、电影级光影"
+        />
+      </label>
+      <p className="recreate-credit">
+        <Sparkles size={16} />
+        预计积分：
+        {generateReady ? "40 积分" : "待补全前置步骤"}
+      </p>
+      {phase === "uploading" || phase === "generating" ? (
+        <VideoGenerationProgress
+          phase={phase}
+          taskStatus={result?.status}
+          title="复刻带货视频"
+          durationSeconds={durationSeconds}
+        />
+      ) : null}
+      {error && (
+        <p className="creator-error" role="alert">
+          {error}
+        </p>
+      )}
+      {phase === "succeeded" && result?.outputs[0] && (
+        <div className="recreate-result">
+          <video src={result.outputs[0].url} controls playsInline />
+          <a href={`/api/assets/${result.outputs[0].assetId}/download/`}>
+            <Download size={16} />
+            下载视频
+          </a>
+          <button type="button" onClick={goToVideoMix}>
+            <Film size={16} />
+            前往智能混剪
+          </button>
+        </div>
+      )}
+      <div className="recreate-actions">
+        <button className="primary" type="submit" disabled={!generateReady || phase !== "idle"}>
+          {phase === "uploading" || phase === "generating" ? (
+            <LoaderCircle className="generation-spinner" size={18} />
+          ) : (
+            <Film size={18} />
+          )}
+          {phase === "uploading" || phase === "generating" ? "任务处理中" : "生成复刻视频"}
+        </button>
+        <button
+          className="secondary"
+          type="button"
+          onClick={() => {
+            setSourceItem(null);
+            setClips([]);
+            setProducts([]);
+            setReferenceImage(null);
+            setReferenceConfirmed(false);
+            setUsageAuthorized(false);
+            setProductInfo("");
+            setSpecial("");
+            setModelInfo("");
+            setModelOn(false);
+            setVideoSource("douyin");
+            setSourceMode("douyin");
+            setDouyinInput("");
+            setDouyinError("");
+            setDouyinAnalysis(null);
+            setDouyinStart(0);
+            setDouyinClipDuration(15);
+            setActiveClipId(null);
+            clearTaskState();
+            setStep("source");
+          }}
+        >
+          重置
+        </button>
+      </div>
+    </section>
+  );
+
   if (!account)
     return (
       <main className="workspace-loading">
-        <Sparkles />
+        <Sparkles size={22} />
+        <p>正在载入复刻工作台</p>
       </main>
     );
+
   return (
-    <main className="recreate-studio">
-      <header className="ad-studio-header">
-        <button
-          type="button"
-          onClick={() => router.push("/create/product-video")}
-        >
+    <main className="recreate-flow-shell">
+      <header className="recreate-flow-header">
+        <button type="button" onClick={() => router.push("/create/product-video")}>
           <ArrowLeft size={19} />
-          返回视频创作
+          返回一站式视频带货
         </button>
+        <div className="recreate-flow-header-actions">
+          <button type="button" onClick={saveDraft}>
+            <Save size={16} />
+            保存
+          </button>
+          <Link href="/tasks">
+            <Film size={16} />
+            同步任务中心
+          </Link>
+        </div>
       </header>
-      <form className="recreate-card" onSubmit={submit}>
-        <div className="ad-studio-title">
-          <Film size={22} />
-          <strong>复刻爆款带货视频-新版</strong>
-        </div>
-        <div className="ad-studio-body">
-          {box("video", "对标视频", true, "视频时长需在 3–15 秒之间", Video)}
-          {reference?.durationSeconds && (
-            <p className="recreate-review">
-              <Video size={15} />
-              已读取对标视频时长：{reference.durationSeconds.toFixed(1)} 秒
-            </p>
-          )}
-          {box("product", "商品图", true, "上传商品图片，支持多张", ImagePlus)}
-          {products.length > 0 && (
-            <div className="ad-selected-images">
-              {products.map((product, index) => (
-                <article key={`${product.assetId || product.name}-${index}`}>
-                  <img src={product.preview} alt="商品图片预览" />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      removeProduct(index);
-                      resetTask();
-                    }}
-                    aria-label="移除商品图"
-                  >
-                    <X size={14} />
-                  </button>
-                  <span>{index + 1}</span>
-                </article>
-              ))}
-            </div>
-          )}
-          <label className="recreate-consent">
-            <input
-              type="checkbox"
-              checked={usageAuthorized}
-              onChange={(event) => {
-                setUsageAuthorized(event.target.checked);
-                resetTask();
-              }}
-            />
-            我确认拥有对标视频、商品图及其他上传素材的合法使用授权，并同意平台记录本次确认。
-          </label>
-          <label className="recreate-toggle">
-            自定义模特信息{" "}
-            <input
-              type="checkbox"
-              checked={modelOn}
-              onChange={(event) => {
-                setModelOn(event.target.checked);
-                resetTask();
-              }}
-            />
-            <i />
-          </label>
-          <p className="recreate-review">
-            <ShieldCheck size={15} />
-            真人模特内容将按平台规则进行审核
-          </p>
-          {modelOn && (
-            <label className="ad-form-field">
-              模特信息（可选）
-              <textarea
-                value={modelInfo}
-                onChange={(event) => setModelInfo(event.target.value)}
-                maxLength={300}
-                placeholder="例如：女性，25 岁，自然亲和，居家穿搭"
-              />
-            </label>
-          )}
-          {box(
-            "scene",
-            "场景图（选填）",
-            false,
-            "上传希望出现的商品场景",
-            ImagePlus,
-          )}
-          <label className="ad-form-field">
-            产品信息（可选）
-            <textarea
-              value={info}
-              onChange={(event) => setInfo(event.target.value)}
-              maxLength={600}
-              placeholder="例如：产品名称、核心卖点、材质、目标人群"
-            />
-          </label>
-          <label className="ad-form-field">
-            视频特殊要求（可选）
-            <textarea
-              value={special}
-              onChange={(event) => setSpecial(event.target.value)}
-              maxLength={600}
-              placeholder="例如：突出金属质感、镜头缓慢推进、电影级光影"
-            />
-          </label>
-          <div className="ad-select-grid">
-            <label>
-              视频比例 <em>*</em>
-              <span className="ad-select">
-                <select
-                  value={ratio}
-                  onChange={(event) => setRatio(event.target.value)}
-                >
-                  <option value="9:16">竖屏（9:16）</option>
-                  <option value="16:9">横屏（16:9）</option>
-                </select>
-                <ChevronDown size={16} />
-              </span>
-            </label>
-            <label>
-              视频时长 <em>*</em>
-              <span className="ad-select">
-                <select
-                  value={duration}
-                  onChange={(event) => setDuration(event.target.value)}
-                >
-                  <option value="5">5 秒</option>
-                  <option value="10">10 秒</option>
-                  <option value="15">15 秒</option>
-                </select>
-                <ChevronDown size={16} />
-              </span>
-            </label>
-            <label>
-              视频分辨率 <em>*</em>
-              <span className="ad-select">
-                <select
-                  value={resolution}
-                  onChange={(event) => setResolution(event.target.value)}
-                >
-                  <option>480p</option>
-                  <option>720p</option>
-                  <option>1080p</option>
-                </select>
-                <ChevronDown size={16} />
-              </span>
-            </label>
+      <form className="recreate-flow-card" onSubmit={submit}>
+        <section className="recreate-flow-sidebar">
+          <div className="recreate-flow-brand">
+            <span>REFERENCE REPLICA</span>
+            <strong>爆款视频换品复刻</strong>
+            <p>我有对标视频：换商品、换模特，保留爆款节奏</p>
           </div>
-          <p className="ad-credit">
-            <Sparkles size={16} />
-            预计积分：
-            {reference && products.length
-              ? "40 积分"
-              : "待填写：对标视频和商品图"}
-          </p>
-          {busy && (
-            <VideoGenerationProgress
-              phase={phase}
-              taskStatus={result?.status}
-              title="复刻带货视频"
-              durationSeconds={Number(duration)}
-            />
-          )}
-          {error && (
+          <button type="button" className="recreate-tutorial">
+            <div>
+              <strong>开始前建议观看</strong>
+              <small>快速上手教学</small>
+            </div>
+            <span>立即观看</span>
+          </button>
+          <div className="recreate-flow-summary">
+            <strong>制作流程</strong>
+            <span>{completedCount}/5</span>
+          </div>
+          <div className="recreate-step-list">{workflowSteps.map((item, index) => stepButton(item, index))}</div>
+        </section>
+        <section className="recreate-flow-main">
+          <header className="recreate-stage-header">
+            <div>
+              <span>CURRENT STAGE</span>
+              <strong>{activeStep.title}</strong>
+              <small>{activeStep.subtitle}</small>
+            </div>
+            <span>离开时可保存</span>
+          </header>
+          <div className="recreate-flow-toolbar">
+            <div>
+              <strong>{activeStep.number} / 5</strong>
+              <small>{activeStep.title}</small>
+            </div>
+            <span>当前步骤会自动保留草稿</span>
+          </div>
+          {step === "source" && sourcePanel}
+          {step === "clip" && clipPanel}
+          {step === "product" && productPanel}
+          {step === "reference" && referencePanel}
+          {step === "generate" && generatePanel}
+          {notice && <p className="creator-success">{notice}</p>}
+          {douyinError && step !== "source" && (
             <p className="creator-error" role="alert">
-              {error}
+              {douyinError}
             </p>
           )}
-          {phase === "succeeded" && result?.outputs[0] && (
-            <div className="ad-result">
-              <video src={result.outputs[0].url} controls playsInline />
-              <a href={`/api/assets/${result.outputs[0].assetId}/download/`}>
-                <Download size={16} />
-                下载视频
-              </a>
-              <button type="button" onClick={goToVideoMix}>
-                <Film size={16} />
-                前往智能混剪
-                {douyinClips.length > 0
-                  ? `（已带入 ${douyinClips.length} 段）`
-                  : ""}
-              </button>
-            </div>
-          )}
-          <div className="ad-actions">
-            <button
-              className="ad-generate"
-              type="submit"
-              disabled={
-                !reference || !products.length || !usageAuthorized || busy
-              }
-            >
-              {busy ? <LoaderCircle size={18} /> : <Film size={18} />}
-              {busy ? "任务处理中" : "生成复刻带货视频"}
-            </button>
-            <button
-              className="ad-reset"
-              type="button"
-              onClick={() => {
-                setReference(null);
-                setProducts([]);
-                setScene(null);
-                setInfo("");
-                setSpecial("");
-                setModelInfo("");
-                setModelOn(false);
-                setUsageAuthorized(false);
-                setVideoSource("local");
-                setDouyinInput("");
-                setDouyinError("");
-                setDouyinAnalysis(null);
-                setDouyinStart(0);
-                setDouyinClipDuration(15);
-                setDouyinClips([]);
-                resetTask();
-              }}
-            >
-              重置
-            </button>
-          </div>
-        </div>
+        </section>
       </form>
     </main>
   );
