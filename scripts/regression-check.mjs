@@ -117,6 +117,21 @@ const checks = [
     "aigc-video-mix-asset-ids",
   ],
   [
+    "Recreate video saves account drafts",
+    "app/components/recreate-video-page.tsx",
+    'fetch("/api/workflow-drafts/"',
+  ],
+  [
+    "Workflow drafts persist to database",
+    "scripts/migrate.mjs",
+    "CREATE TABLE IF NOT EXISTS workflow_drafts",
+  ],
+  [
+    "Generated tasks archive source drafts",
+    "lib/task-creation.ts",
+    "UPDATE workflow_drafts",
+  ],
+  [
     "Video mix accepts an ordered dynamic material list",
     "app/components/video-workflow-page.tsx",
     "mixUploads",

@@ -72,6 +72,22 @@ try {
       CHECK (status IN ('DRAFT', 'PENDING_INPUT_REVIEW', 'QUEUED', 'RUNNING', 'PENDING_REVIEW', 'SUCCEEDED', 'FAILED', 'REJECTED', 'CANCELED'));
     CREATE UNIQUE INDEX IF NOT EXISTS generation_tasks_idempotency_unique ON generation_tasks (idempotency_key) WHERE idempotency_key IS NOT NULL;
 
+    CREATE TABLE IF NOT EXISTS workflow_drafts (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      workflow_key TEXT NOT NULL,
+      title TEXT NOT NULL DEFAULT '未命名草稿',
+      status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'ARCHIVED', 'DELETED')),
+      payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      task_id UUID REFERENCES generation_tasks(id) ON DELETE SET NULL,
+      archived_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS workflow_drafts_user_workflow_updated_idx
+      ON workflow_drafts (user_id, workflow_key, updated_at DESC) WHERE status = 'ACTIVE';
+    CREATE INDEX IF NOT EXISTS workflow_drafts_task_idx ON workflow_drafts (task_id) WHERE task_id IS NOT NULL;
+
     CREATE TABLE IF NOT EXISTS assets (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       owner_id UUID NOT NULL REFERENCES users(id),

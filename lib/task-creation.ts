@@ -29,6 +29,13 @@ type AssetValidator = (assets: ReadyAsset[]) => string | null;
 type RequestValidator = (body: Record<string, unknown>) => string | null;
 type InputExtras = (body: Record<string, unknown>) => Record<string, unknown>;
 
+function validUuid(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  );
+}
+
 export async function createImageTask(request: NextRequest, workflow: ImageWorkflow, selectAssets: AssetSelector = (body) => [typeof body.assetId === "string" ? body.assetId : ""], validateAssets?: AssetValidator, validateRequest?: RequestValidator, inputExtras?: InputExtras) {
   const user = await authenticatedUser(request);
   if (!user) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401 });
@@ -69,6 +76,7 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
   const taskId = randomUUID();
   const requestId = request.headers.get("x-request-id") || randomUUID();
   const idempotencyKey = request.headers.get("Idempotency-Key") || randomUUID();
+  const draftId = validUuid(body.draftId) ? body.draftId : null;
   const points = workflow.key === "video-mix" ? ({ 15: 40, 30: 70, 45: 100, 60: 130 } as Record<number, number>)[duration] : workflow.pointsPerTask;
   const adminExempt = isAdministrator(user.email || user.phone);
   const client = await db.connect();
@@ -87,6 +95,14 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
       [taskId, user.id, workflow.key, inputsReady ? "QUEUED" : "PENDING_INPUT_REVIEW", points, JSON.stringify(input), idempotencyKey, requestId],
     );
+    if (draftId) {
+      await client.query(
+        `UPDATE workflow_drafts
+         SET status = 'ARCHIVED', task_id = $4, archived_at = NOW(), updated_at = NOW()
+         WHERE id = $1 AND user_id = $2 AND workflow_key = $3 AND status = 'ACTIVE'`,
+        [draftId, user.id, workflow.key, taskId],
+      );
+    }
     if (adminExempt) {
       await client.query(
         `INSERT INTO wallet_ledger (user_id, type, amount, balance_after, business_type, business_id, idempotency_key)

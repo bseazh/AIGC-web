@@ -102,6 +102,15 @@ type Draft = {
   duration: string;
   resolution: string;
 };
+type ServerDraft = {
+  id: string;
+  title: string;
+  workflowKey: string;
+  payload: Partial<Draft>;
+  taskId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
 
 const imageAccept = "image/jpeg,image/png,image/webp";
 const draftStorageKey = "aigc-recreate-flow-draft";
@@ -205,6 +214,13 @@ export function RecreateVideoPage() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
   const [notice, setNotice] = useState("");
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [draftTitle, setDraftTitle] = useState("复刻视频草稿");
+  const [serverDrafts, setServerDrafts] = useState<ServerDraft[]>([]);
+  const [draftsLoading, setDraftsLoading] = useState(false);
+  const [draftSyncState, setDraftSyncState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const restoredLocalDraftRef = useRef(false);
+  const restoringServerDraftRef = useRef(false);
 
   useEffect(() => {
     fetch("/api/auth/session/", { cache: "no-store" })
@@ -215,43 +231,112 @@ export function RecreateVideoPage() {
       .catch(() => router.replace("/"));
   }, [router]);
 
+  const draftValue = (): Draft => ({
+    step,
+    sourceMode,
+    douyinInput,
+    douyinAnalysis,
+    douyinStart,
+    douyinClipDuration,
+    sourceItem: cloneItem(sourceItem),
+    douyinClips: douyinClips.map((item) => cloneItem(item)).filter(Boolean) as Draft["douyinClips"],
+    activeClipId,
+    products: products.map((item) => cloneItem(item)).filter(Boolean) as Draft["products"],
+    referenceImage: cloneItem(referenceImage),
+    referenceConfirmed,
+    usageAuthorized,
+    productInfo,
+    special,
+    modelOn,
+    modelInfo,
+    ratio,
+    duration,
+    resolution,
+  });
+
+  const draftHasContent = (draft: Partial<Draft>) =>
+    Boolean(
+      draft.douyinInput ||
+        draft.sourceItem ||
+        draft.douyinClips?.length ||
+        draft.products?.length ||
+        draft.referenceImage ||
+        draft.productInfo ||
+        draft.special ||
+        draft.modelInfo,
+    );
+
+  const applyDraft = (draft: Partial<Draft>) => {
+    if (draft.step) setStep(draft.step);
+    if (draft.sourceMode) setSourceMode(draft.sourceMode);
+    setVideoSource(
+      draft.sourceMode === "douyin"
+        ? "douyin"
+        : draft.sourceMode === "library"
+          ? "library"
+          : "local",
+    );
+    if (typeof draft.douyinInput === "string") setDouyinInput(draft.douyinInput);
+    if (draft.douyinAnalysis) setDouyinAnalysis(draft.douyinAnalysis);
+    if (typeof draft.douyinStart === "number") setDouyinStart(draft.douyinStart);
+    if (typeof draft.douyinClipDuration === "number")
+      setDouyinClipDuration(draft.douyinClipDuration);
+    setSourceItem(restoreItem(draft.sourceItem));
+    setClips((draft.douyinClips || []).map(restoreItem).filter(Boolean) as Item[]);
+    setActiveClipId(draft.activeClipId || null);
+    setProducts((draft.products || []).map(restoreItem).filter(Boolean) as Item[]);
+    setReferenceImage(restoreItem(draft.referenceImage));
+    setReferenceConfirmed(Boolean(draft.referenceConfirmed));
+    setUsageAuthorized(Boolean(draft.usageAuthorized));
+    setProductInfo(draft.productInfo || "");
+    setSpecial(draft.special || "");
+    setModelOn(Boolean(draft.modelOn));
+    setModelInfo(draft.modelInfo || "");
+    if (draft.ratio) setRatio(draft.ratio);
+    if (draft.duration) setDuration(draft.duration);
+    if (draft.resolution) setResolution(draft.resolution);
+    clearTaskState();
+  };
+
+  const refreshDrafts = async (restoreLatest = false) => {
+    setDraftsLoading(true);
+    try {
+      const response = await fetch("/api/workflow-drafts/?workflowKey=recreate-video", { cache: "no-store" });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error();
+      const drafts = (body?.drafts || []) as ServerDraft[];
+      setServerDrafts(drafts);
+      if (restoreLatest && !restoredLocalDraftRef.current && drafts[0]) {
+        restoringServerDraftRef.current = true;
+        setDraftId(drafts[0].id);
+        setDraftTitle(drafts[0].title);
+        applyDraft(drafts[0].payload);
+        window.setTimeout(() => {
+          restoringServerDraftRef.current = false;
+        }, 0);
+      }
+    } catch {
+      setDraftSyncState("error");
+    } finally {
+      setDraftsLoading(false);
+    }
+  };
+
   useEffect(() => {
     const stored = localStorage.getItem(draftStorageKey);
     if (!stored) return;
     try {
       const draft = JSON.parse(stored) as Partial<Draft>;
-      if (draft.step) setStep(draft.step);
-      if (draft.sourceMode) setSourceMode(draft.sourceMode);
-      setVideoSource(
-        draft.sourceMode === "douyin"
-          ? "douyin"
-          : draft.sourceMode === "library"
-            ? "library"
-            : "local",
-      );
-      if (draft.douyinInput) setDouyinInput(draft.douyinInput);
-      if (draft.douyinAnalysis) setDouyinAnalysis(draft.douyinAnalysis);
-      if (typeof draft.douyinStart === "number") setDouyinStart(draft.douyinStart);
-      if (typeof draft.douyinClipDuration === "number")
-        setDouyinClipDuration(draft.douyinClipDuration);
-      setSourceItem(restoreItem(draft.sourceItem));
-      setClips((draft.douyinClips || []).map(restoreItem).filter(Boolean) as Item[]);
-      setActiveClipId(draft.activeClipId || null);
-      setProducts((draft.products || []).map(restoreItem).filter(Boolean) as Item[]);
-      setReferenceImage(restoreItem(draft.referenceImage));
-      setReferenceConfirmed(Boolean(draft.referenceConfirmed));
-      setUsageAuthorized(Boolean(draft.usageAuthorized));
-      setProductInfo(draft.productInfo || "");
-      setSpecial(draft.special || "");
-      setModelOn(Boolean(draft.modelOn));
-      setModelInfo(draft.modelInfo || "");
-      if (draft.ratio) setRatio(draft.ratio);
-      if (draft.duration) setDuration(draft.duration);
-      if (draft.resolution) setResolution(draft.resolution);
+      restoredLocalDraftRef.current = draftHasContent(draft);
+      applyDraft(draft);
     } catch {
       localStorage.removeItem(draftStorageKey);
     }
   }, []);
+
+  useEffect(() => {
+    if (account) refreshDrafts(true);
+  }, [account]);
 
   const sourceSelection = useMemo(
     () => (activeClipId ? douyinClips.find((item) => item.assetId === activeClipId) : null) || sourceItem,
@@ -297,33 +382,41 @@ export function RecreateVideoPage() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const draft: Draft = {
-        step,
-        sourceMode,
-        douyinInput,
-        douyinAnalysis,
-        douyinStart,
-        douyinClipDuration,
-        sourceItem: cloneItem(sourceItem),
-        douyinClips: douyinClips.map((item) => cloneItem(item)).filter(Boolean) as Draft["douyinClips"],
-        activeClipId,
-        products: products.map((item) => cloneItem(item)).filter(Boolean) as Draft["products"],
-        referenceImage: cloneItem(referenceImage),
-        referenceConfirmed,
-        usageAuthorized,
-        productInfo,
-        special,
-        modelOn,
-        modelInfo,
-        ratio,
-        duration,
-        resolution,
-      };
+      if (phase === "succeeded") return;
+      const draft = draftValue();
       localStorage.setItem(draftStorageKey, JSON.stringify(draft));
-    }, 180);
+      if (!account || !draftHasContent(draft) || phase !== "idle" || restoringServerDraftRef.current)
+        return;
+      setDraftSyncState("saving");
+      fetch("/api/workflow-drafts/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: draftId,
+          workflowKey: "recreate-video",
+          title: draftTitle,
+          payload: draft,
+        }),
+      })
+        .then(async (response) => {
+          const body = await response.json().catch(() => null);
+          if (!response.ok || !body?.draft) throw new Error();
+          setDraftId(body.draft.id);
+          setDraftTitle(body.draft.title);
+          setDraftSyncState("saved");
+          setServerDrafts((current) => [
+            body.draft,
+            ...current.filter((item) => item.id !== body.draft.id),
+          ]);
+        })
+        .catch(() => setDraftSyncState("error"));
+    }, 900);
     return () => window.clearTimeout(timer);
   }, [
+    account,
     activeClipId,
+    draftId,
+    draftTitle,
     douyinClips,
     douyinAnalysis,
     douyinClipDuration,
@@ -403,32 +496,92 @@ export function RecreateVideoPage() {
     }
   };
 
-  const saveDraft = () => {
-    const draft: Draft = {
-      step,
-      sourceMode,
-      douyinInput,
-      douyinAnalysis,
-      douyinStart,
-      douyinClipDuration,
-      sourceItem: cloneItem(sourceItem),
-      douyinClips: douyinClips.map((item) => cloneItem(item)).filter(Boolean) as Draft["douyinClips"],
-      activeClipId,
-      products: products.map((item) => cloneItem(item)).filter(Boolean) as Draft["products"],
-      referenceImage: cloneItem(referenceImage),
-      referenceConfirmed,
-      usageAuthorized,
-      productInfo,
-      special,
-      modelOn,
-      modelInfo,
-      ratio,
-      duration,
-      resolution,
-    };
+  const saveDraft = async () => {
+    const draft = draftValue();
     localStorage.setItem(draftStorageKey, JSON.stringify(draft));
-    setNotice("草稿已保存");
+    if (!draftHasContent(draft)) {
+      setNotice("当前还没有可保存的草稿内容");
+      window.setTimeout(() => setNotice(""), 1800);
+      return;
+    }
+    try {
+      setDraftSyncState("saving");
+      const response = await fetch("/api/workflow-drafts/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: draftId,
+          workflowKey: "recreate-video",
+          title: draftTitle,
+          payload: draft,
+        }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok || !body?.draft) throw new Error();
+      setDraftId(body.draft.id);
+      setDraftTitle(body.draft.title);
+      setDraftSyncState("saved");
+      setServerDrafts((current) => [
+        body.draft,
+        ...current.filter((item) => item.id !== body.draft.id),
+      ]);
+      setNotice("草稿已保存到账户");
+    } catch {
+      setDraftSyncState("error");
+      setNotice("服务器草稿保存失败，已先保留到当前浏览器");
+    }
     window.setTimeout(() => setNotice(""), 1800);
+  };
+
+  const continueDraft = (draft: ServerDraft) => {
+    restoringServerDraftRef.current = true;
+    setDraftId(draft.id);
+    setDraftTitle(draft.title);
+    applyDraft(draft.payload);
+    setNotice("已恢复草稿，可继续生成");
+    window.setTimeout(() => {
+      restoringServerDraftRef.current = false;
+      setNotice("");
+    }, 800);
+  };
+
+  const deleteDraft = async (targetId: string) => {
+    try {
+      const response = await fetch(`/api/workflow-drafts/${targetId}/`, { method: "DELETE" });
+      if (!response.ok) throw new Error();
+      setServerDrafts((current) => current.filter((draft) => draft.id !== targetId));
+      if (draftId === targetId) startNewDraft();
+      setNotice("草稿已删除");
+    } catch {
+      setNotice("草稿删除失败，请稍后再试");
+    }
+    window.setTimeout(() => setNotice(""), 1800);
+  };
+
+  const startNewDraft = () => {
+    setDraftId(null);
+    setDraftTitle("复刻视频草稿");
+    setSourceItem(null);
+    setClips([]);
+    setProducts([]);
+    setReferenceImage(null);
+    setReferenceConfirmed(false);
+    setUsageAuthorized(false);
+    setProductInfo("");
+    setSpecial("");
+    setModelInfo("");
+    setModelOn(false);
+    setVideoSource("douyin");
+    setSourceMode("douyin");
+    setDouyinInput("");
+    setDouyinError("");
+    setDouyinAnalysis(null);
+    setDouyinStart(0);
+    setDouyinClipDuration(15);
+    setActiveClipId(null);
+    localStorage.removeItem(draftStorageKey);
+    clearTaskState();
+    setStep("source");
   };
 
   const selectAsset = (asset: Asset) => {
@@ -756,6 +909,7 @@ export function RecreateVideoPage() {
           "Idempotency-Key": crypto.randomUUID(),
         },
         body: JSON.stringify({
+          draftId,
           assetIds,
           prompt,
           aspectRatio: ratio,
@@ -771,7 +925,10 @@ export function RecreateVideoPage() {
         throw new Error(created.message || created.code || "创建任务失败");
       setPhase("generating");
       setStep("generate");
+      if (draftId) setServerDrafts((current) => current.filter((draft) => draft.id !== draftId));
       await poll(created.taskId);
+      localStorage.removeItem(draftStorageKey);
+      setDraftId(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "创建失败");
       setPhase("failed");
@@ -1611,28 +1768,7 @@ export function RecreateVideoPage() {
         <button
           className="secondary"
           type="button"
-          onClick={() => {
-            setSourceItem(null);
-            setClips([]);
-            setProducts([]);
-            setReferenceImage(null);
-            setReferenceConfirmed(false);
-            setUsageAuthorized(false);
-            setProductInfo("");
-            setSpecial("");
-            setModelInfo("");
-            setModelOn(false);
-            setVideoSource("douyin");
-            setSourceMode("douyin");
-            setDouyinInput("");
-            setDouyinError("");
-            setDouyinAnalysis(null);
-            setDouyinStart(0);
-            setDouyinClipDuration(15);
-            setActiveClipId(null);
-            clearTaskState();
-            setStep("source");
-          }}
+          onClick={startNewDraft}
         >
           重置
         </button>
@@ -1680,6 +1816,61 @@ export function RecreateVideoPage() {
             </div>
             <span>立即观看</span>
           </button>
+          <section className="recreate-draft-box">
+            <div className="recreate-draft-box-head">
+              <div>
+                <strong>账号草稿</strong>
+                <small>
+                  {draftSyncState === "saving"
+                    ? "正在自动保存"
+                    : draftSyncState === "saved"
+                      ? "已同步到账户"
+                      : draftSyncState === "error"
+                        ? "同步失败，本地已兜底"
+                        : "跨设备恢复"}
+                </small>
+              </div>
+              <button type="button" onClick={() => refreshDrafts(false)} disabled={draftsLoading}>
+                {draftsLoading ? "读取中" : "刷新"}
+              </button>
+            </div>
+            <label className="recreate-draft-title">
+              草稿标题
+              <input
+                value={draftTitle}
+                onChange={(event) => setDraftTitle(event.target.value)}
+                maxLength={80}
+                placeholder="给这次复刻起个名字"
+              />
+            </label>
+            <button type="button" className="recreate-new-draft" onClick={startNewDraft}>
+              新建空白草稿
+            </button>
+            <div className="recreate-draft-list">
+              {serverDrafts.length ? (
+                serverDrafts.map((draft) => (
+                  <article className={draft.id === draftId ? "active" : ""} key={draft.id}>
+                    <button type="button" onClick={() => continueDraft(draft)}>
+                      <strong>{draft.title}</strong>
+                      <small>
+                        最近编辑 {new Date(draft.updatedAt).toLocaleString("zh-CN", {
+                          month: "2-digit",
+                          day: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </small>
+                    </button>
+                    <button type="button" aria-label="删除草稿" onClick={() => deleteDraft(draft.id)}>
+                      <X size={13} />
+                    </button>
+                  </article>
+                ))
+              ) : (
+                <p>{draftsLoading ? "正在读取草稿…" : "暂无服务器草稿"}</p>
+              )}
+            </div>
+          </section>
           <div className="recreate-flow-summary">
             <strong>制作流程</strong>
             <span>{completedCount}/5</span>
