@@ -1658,7 +1658,7 @@ export function RecreateVideoPage() {
         <div className="recreate-flow-header-actions">
           <button type="button" onClick={saveDraft}>
             <Save size={16} />
-            保存
+            保存草稿
           </button>
           <Link href="/tasks">
             <Film size={16} />
