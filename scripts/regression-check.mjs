@@ -167,6 +167,31 @@ const checks = [
     'args.push("--cookies-from-browser"',
   ],
   [
+    "Douyin analyze creates temporary source cache",
+    "app/api/imports/douyin/route.ts",
+    "createSourceCache",
+  ],
+  [
+    "Douyin import can reuse temporary cache",
+    "app/api/imports/douyin/route.ts",
+    "importCachedDouyinVideo",
+  ],
+  [
+    "Douyin temporary caches expire through lifecycle",
+    "scripts/lifecycle-maintenance.mjs",
+    "cleanupExpiredDouyinCaches",
+  ],
+  [
+    "Recreate video previews cached Douyin source",
+    "app/components/recreate-video-page.tsx",
+    "原视频临时预览",
+  ],
+  [
+    "Recreate video shows multi-frame reference prompt",
+    "app/components/recreate-video-page.tsx",
+    "reference 参考提示词",
+  ],
+  [
     "Douyin search modal links become work links",
     "lib/douyin-import.ts",
     "modal_id",

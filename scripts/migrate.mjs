@@ -88,6 +88,26 @@ try {
       ON workflow_drafts (user_id, workflow_key, updated_at DESC) WHERE status = 'ACTIVE';
     CREATE INDEX IF NOT EXISTS workflow_drafts_task_idx ON workflow_drafts (task_id) WHERE task_id IS NOT NULL;
 
+    CREATE TABLE IF NOT EXISTS douyin_video_caches (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      source_url TEXT NOT NULL,
+      source_id TEXT,
+      title TEXT NOT NULL DEFAULT '抖音对标视频',
+      storage_key TEXT NOT NULL UNIQUE,
+      byte_size BIGINT NOT NULL CHECK (byte_size >= 0 AND byte_size <= 104857600),
+      duration_seconds NUMERIC NOT NULL CHECK (duration_seconds > 0),
+      status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'EXPIRED', 'DELETED')),
+      metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS douyin_video_caches_user_active_idx
+      ON douyin_video_caches (user_id, expires_at DESC) WHERE status = 'ACTIVE';
+    CREATE INDEX IF NOT EXISTS douyin_video_caches_expiry_idx
+      ON douyin_video_caches (expires_at) WHERE status = 'ACTIVE';
+
     CREATE TABLE IF NOT EXISTS assets (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       owner_id UUID NOT NULL REFERENCES users(id),

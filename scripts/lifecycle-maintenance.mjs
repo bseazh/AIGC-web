@@ -190,6 +190,24 @@ async function expireReviewWaits() {
   return { inputExpired, outputExpired };
 }
 
+async function cleanupExpiredDouyinCaches() {
+  const expired = await pool.query(
+    `SELECT id, storage_key FROM douyin_video_caches
+     WHERE status = 'ACTIVE' AND expires_at < NOW()
+     ORDER BY expires_at ASC LIMIT 100`,
+  );
+  let removed = 0;
+  for (const cache of expired.rows) {
+    await removeObject(cache.storage_key).catch(() => undefined);
+    const changed = await pool.query(
+      "UPDATE douyin_video_caches SET status = 'EXPIRED', updated_at = NOW() WHERE id = $1 AND status = 'ACTIVE'",
+      [cache.id],
+    );
+    if (changed.rowCount) removed += 1;
+  }
+  return { found: expired.rowCount, removed };
+}
+
 async function finalizeDeletedAccounts() {
   const found = await pool.query(
     `SELECT id FROM users WHERE status = 'DELETION_PENDING'
@@ -226,8 +244,9 @@ try {
   const contentReview = contentReviewEnabled ? { enabled: true, releasedInputs: 0, settledOutputs: 0 } : await bypassContentReview();
   const waitingTasks = await reconcileWaitingTasks();
   const reviewTimeouts = contentReviewEnabled ? await expireReviewWaits() : { inputExpired: 0, outputExpired: 0, skipped: true };
+  const douyinCaches = await cleanupExpiredDouyinCaches();
   const accountDeletions = await finalizeDeletedAccounts();
-  const summary = { event: "lifecycle_maintenance_complete", contentReview, waitingTasks, reviewTimeouts, accountDeletions };
+  const summary = { event: "lifecycle_maintenance_complete", contentReview, waitingTasks, reviewTimeouts, douyinCaches, accountDeletions };
   await pool.query("INSERT INTO operations_runs (operation, status, summary) VALUES ('LIFECYCLE_MAINTENANCE', 'SUCCEEDED', $1)", [JSON.stringify(summary)]);
   console.log(JSON.stringify(summary));
 } catch (error) {

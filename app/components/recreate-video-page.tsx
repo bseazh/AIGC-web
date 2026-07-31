@@ -54,6 +54,12 @@ type DouyinAnalysis = {
   durationSeconds: number;
   clipRequired: boolean;
   clipDurations?: number[];
+  cacheId?: string;
+  cachePreviewUrl?: string;
+  cacheByteSize?: number;
+  cacheExpiresAt?: string;
+  referencePrompt?: string;
+  keyframeSeconds?: number[];
 };
 type SourceKind = "video" | "product" | "scene";
 type WorkflowStep = "source" | "clip" | "product" | "reference" | "generate";
@@ -713,6 +719,12 @@ export function RecreateVideoPage() {
         durationSeconds: body.durationSeconds,
         clipRequired: body.clipRequired === true,
         clipDurations: body.clipDurations || [5, 10, 15],
+        cacheId: body.cacheId,
+        cachePreviewUrl: body.cachePreviewUrl,
+        cacheByteSize: body.cacheByteSize,
+        cacheExpiresAt: body.cacheExpiresAt,
+        referencePrompt: body.referencePrompt,
+        keyframeSeconds: body.keyframeSeconds,
       });
       setDouyinStart(0);
       setDouyinClipDuration(
@@ -743,6 +755,7 @@ export function RecreateVideoPage() {
         body: JSON.stringify({
           url: douyinInput,
           action: "import",
+          cacheId: douyinAnalysis.cacheId,
           ...(douyinAnalysis.clipRequired
             ? {
                 startSeconds: douyinStart,
@@ -1056,6 +1069,38 @@ export function RecreateVideoPage() {
                 </div>
                 <span>{douyinAnalysis.clipRequired ? "选择片段" : "完整视频"}</span>
               </header>
+              {douyinAnalysis.cachePreviewUrl && (
+                <div className="recreate-source-cache">
+                  <video src={douyinAnalysis.cachePreviewUrl} controls playsInline preload="metadata" />
+                  <div>
+                    <strong>原视频临时预览</strong>
+                    <small>
+                      已缓存到云端临时区
+                      {douyinAnalysis.cacheByteSize
+                        ? ` · ${formatBytes(douyinAnalysis.cacheByteSize)}`
+                        : ""}
+                    </small>
+                    <small>
+                      {douyinAnalysis.cacheExpiresAt
+                        ? `缓存将在 ${new Date(douyinAnalysis.cacheExpiresAt).toLocaleTimeString("zh-CN", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })} 后自动清理`
+                        : "缓存保留约 1 小时"}
+                    </small>
+                  </div>
+                </div>
+              )}
+              {douyinAnalysis.keyframeSeconds?.length ? (
+                <div className="recreate-reference-plan">
+                  <strong>多帧参考建议</strong>
+                  <small>
+                    建议二次查看这些关键帧：
+                    {douyinAnalysis.keyframeSeconds.map((second) => `${second.toFixed(1)}s`).join(" / ")}
+                  </small>
+                  {douyinAnalysis.referencePrompt && <p>{douyinAnalysis.referencePrompt}</p>}
+                </div>
+              ) : null}
               {douyinAnalysis.clipRequired ? (
                 <>
                   <div className="recreate-range">
@@ -1262,6 +1307,35 @@ export function RecreateVideoPage() {
             </div>
             <span>片段抽取</span>
           </header>
+          {douyinAnalysis.cachePreviewUrl && (
+            <div className="recreate-source-cache">
+              <video src={douyinAnalysis.cachePreviewUrl} controls playsInline preload="metadata" />
+              <div>
+                <strong>原视频缓存预览</strong>
+                <small>先浏览原片，再按下方时间轴截取 15 秒以内片段</small>
+                <small>
+                  {douyinAnalysis.cacheExpiresAt
+                    ? `缓存 1 小时有效，约 ${new Date(douyinAnalysis.cacheExpiresAt).toLocaleTimeString("zh-CN", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })} 自动清理`
+                    : "缓存 1 小时后自动清理"}
+                </small>
+              </div>
+            </div>
+          )}
+          {douyinAnalysis.referencePrompt && (
+            <div className="recreate-reference-plan">
+              <strong>reference 参考提示词</strong>
+              <small>
+                关键帧：
+                {(douyinAnalysis.keyframeSeconds || [])
+                  .map((second) => `${second.toFixed(1)}s`)
+                  .join(" / ") || "按片段均匀抽取"}
+              </small>
+              <p>{douyinAnalysis.referencePrompt}</p>
+            </div>
+          )}
           <div className="recreate-range">
             <span>开始时间</span>
             <strong>

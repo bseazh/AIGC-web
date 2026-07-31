@@ -317,56 +317,26 @@ export type ImportedDouyinVideo = {
   cleanup: () => Promise<void>;
 };
 
-export async function downloadDouyinVideo(
-  sourceUrl: string,
+async function importDouyinVideoFile(
+  sourceFilePath: string,
   metadata: DouyinVideoInfo,
   clip: DouyinClip,
+  directory: string,
 ): Promise<ImportedDouyinVideo> {
-  const directory = await mkdtemp(join(tmpdir(), "aigc-douyin-"));
   const cleanup = () => rm(directory, { recursive: true, force: true });
   try {
-    await execute(
-      ytDlpPath,
-      [
-        ...commonArgs(),
-        ...(clip.isFullVideo
-          ? ["--max-filesize", "100M"]
-          : [
-              "--download-sections",
-              `*${clip.startSeconds}-${clip.endSeconds}`,
-              "--force-keyframes-at-cuts",
-            ]),
-        "--format",
-        "b[ext=mp4]/b",
-        "--remux-video",
-        "mp4",
-        "--output",
-        join(directory, "source.%(ext)s"),
-        sourceUrl,
-      ],
-      { timeout: 90_000, maxBuffer: 4 * 1024 * 1024 },
-    );
-
-    const fileName = (await readdir(directory)).find((name) =>
-      name.endsWith(".mp4"),
-    );
-    if (!fileName)
-      throw new DouyinImportError(
-        "DOUYIN_DOWNLOAD_FORMAT",
-        "该作品无法转换为 MP4，请换一个链接重试",
-        422,
-      );
-    const downloadedPath = join(directory, fileName);
     const filePath = clip.isFullVideo
-      ? downloadedPath
+      ? sourceFilePath
       : join(directory, "reference-clipped.mp4");
     if (!clip.isFullVideo) {
       await execute(
         ffmpegPath,
         [
           "-y",
+          "-ss",
+          String(clip.startSeconds),
           "-i",
-          downloadedPath,
+          sourceFilePath,
           "-t",
           String(clip.durationSeconds),
           "-map",
@@ -438,6 +408,116 @@ export async function downloadDouyinVideo(
       byteSize: file.size,
       cleanup,
     };
+  } catch (error) {
+    await cleanup();
+    throw executionError(error);
+  }
+}
+
+export async function downloadDouyinSourceVideo(
+  sourceUrl: string,
+  metadata: DouyinVideoInfo,
+) {
+  const directory = await mkdtemp(join(tmpdir(), "aigc-douyin-source-"));
+  const cleanup = () => rm(directory, { recursive: true, force: true });
+  try {
+    await execute(
+      ytDlpPath,
+      [
+        ...commonArgs(),
+        "--max-filesize",
+        "100M",
+        "--format",
+        "b[ext=mp4]/b",
+        "--remux-video",
+        "mp4",
+        "--output",
+        join(directory, "source.%(ext)s"),
+        sourceUrl,
+      ],
+      { timeout: 120_000, maxBuffer: 4 * 1024 * 1024 },
+    );
+    const fileName = (await readdir(directory)).find((name) =>
+      name.endsWith(".mp4"),
+    );
+    if (!fileName)
+      throw new DouyinImportError(
+        "DOUYIN_DOWNLOAD_FORMAT",
+        "该作品无法转换为 MP4，请换一个链接重试",
+        422,
+      );
+    const filePath = join(directory, fileName);
+    const file = await stat(filePath);
+    if (file.size <= 0 || file.size > DOUYIN_MAX_BYTES) {
+      throw new DouyinImportError(
+        "DOUYIN_VIDEO_TOO_LARGE",
+        "原视频超过 100MB，无法临时缓存；请先在抖音截短后再导入",
+        422,
+      );
+    }
+    return {
+      filePath,
+      title: `${metadata.title}.mp4`.slice(0, 255),
+      sourceId: metadata.sourceId,
+      durationSeconds: metadata.durationSeconds,
+      byteSize: file.size,
+      cleanup,
+    };
+  } catch (error) {
+    await cleanup();
+    throw executionError(error);
+  }
+}
+
+export async function importCachedDouyinVideo(
+  cachedFilePath: string,
+  metadata: DouyinVideoInfo,
+  clip: DouyinClip,
+  directory: string,
+) {
+  return importDouyinVideoFile(cachedFilePath, metadata, clip, directory);
+}
+
+export async function downloadDouyinVideo(
+  sourceUrl: string,
+  metadata: DouyinVideoInfo,
+  clip: DouyinClip,
+): Promise<ImportedDouyinVideo> {
+  const directory = await mkdtemp(join(tmpdir(), "aigc-douyin-"));
+  const cleanup = () => rm(directory, { recursive: true, force: true });
+  try {
+    await execute(
+      ytDlpPath,
+      [
+        ...commonArgs(),
+        ...(clip.isFullVideo
+          ? ["--max-filesize", "100M"]
+          : [
+              "--download-sections",
+              `*${clip.startSeconds}-${clip.endSeconds}`,
+              "--force-keyframes-at-cuts",
+            ]),
+        "--format",
+        "b[ext=mp4]/b",
+        "--remux-video",
+        "mp4",
+        "--output",
+        join(directory, "source.%(ext)s"),
+        sourceUrl,
+      ],
+      { timeout: 90_000, maxBuffer: 4 * 1024 * 1024 },
+    );
+
+    const fileName = (await readdir(directory)).find((name) =>
+      name.endsWith(".mp4"),
+    );
+    if (!fileName)
+      throw new DouyinImportError(
+        "DOUYIN_DOWNLOAD_FORMAT",
+        "该作品无法转换为 MP4，请换一个链接重试",
+        422,
+      );
+    return await importDouyinVideoFile(join(directory, fileName), metadata, clip, directory);
   } catch (error) {
     await cleanup();
     throw executionError(error);

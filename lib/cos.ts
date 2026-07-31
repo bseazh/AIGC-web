@@ -1,5 +1,6 @@
 import COS from "cos-nodejs-sdk-v5";
 import { createReadStream } from "node:fs";
+import { writeFile } from "node:fs/promises";
 
 let client: COS | undefined;
 
@@ -71,6 +72,24 @@ export async function removeObject(Key: string) {
     getCosClient().deleteObject({ Bucket, Region, Key }, (error) =>
       error ? reject(error) : resolve(),
     );
+  });
+}
+
+export async function downloadObjectToFile(Key: string, filePath: string) {
+  const { Bucket, Region } = config();
+  return new Promise<void>((resolve, reject) => {
+    getCosClient().getObject({ Bucket, Region, Key }, async (error, data) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      try {
+        await writeFile(filePath, data.Body as Buffer);
+        resolve();
+      } catch (writeError) {
+        reject(writeError);
+      }
+    });
   });
 }
 

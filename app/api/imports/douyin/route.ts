@@ -1,10 +1,14 @@
 import { randomUUID } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { NextRequest, NextResponse } from "next/server";
 
 import { audit } from "@/lib/audit";
 import { contentReviewEnabled } from "@/lib/content-review";
 import {
   createSignedObjectUrl,
+  downloadObjectToFile,
   removeObject,
   uploadLocalObject,
 } from "@/lib/cos";
@@ -12,7 +16,9 @@ import { db } from "@/lib/db";
 import {
   DouyinImportError,
   downloadDouyinVideo,
+  downloadDouyinSourceVideo,
   inspectDouyinVideo,
+  importCachedDouyinVideo,
   normalizeDouyinUrl,
   resolveDouyinClip,
 } from "@/lib/douyin-import";
@@ -33,6 +39,68 @@ async function releaseLock(key: string, token: string) {
       token,
     )
     .catch(() => undefined);
+}
+
+function validUuid(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  );
+}
+
+function referencePrompt(title: string, durationSeconds: number) {
+  return [
+    `参考视频《${title}》，分析多帧关键画面，不复制原商品、人物、品牌和字幕。`,
+    "重点提取：开场钩子、商品出现方式、镜头景别、运镜速度、转场节奏、手部/人物互动、收尾 CTA 节奏。",
+    `按 ${Math.min(durationSeconds, 15).toFixed(1)} 秒以内的截取片段生成原创换品复刻视频，保留节奏结构但替换成用户商品和参考图。`,
+  ].join("\n");
+}
+
+function keyframeSeconds(durationSeconds: number) {
+  const safeDuration = Math.max(0, durationSeconds);
+  const points = [0.12, 0.32, 0.52, 0.72, 0.9].map((ratio) =>
+    Math.round(Math.max(0, safeDuration * ratio) * 10) / 10,
+  );
+  return [...new Set(points)].slice(0, 5);
+}
+
+async function createSourceCache(userId: string, sourceUrl: string, source: Awaited<ReturnType<typeof inspectDouyinVideo>>) {
+  const downloaded = await downloadDouyinSourceVideo(sourceUrl, source);
+  try {
+    const storageKey = `users/${userId}/temporary/douyin/${randomUUID()}.mp4`;
+    await uploadLocalObject(storageKey, downloaded.filePath, "video/mp4");
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    const inserted = await db.query<{ id: string; expires_at: string }>(
+      `INSERT INTO douyin_video_caches
+       (user_id, source_url, source_id, title, storage_key, byte_size, duration_seconds, metadata_json, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
+       RETURNING id, expires_at`,
+      [
+        userId,
+        sourceUrl,
+        source.sourceId,
+        source.title,
+        storageKey,
+        downloaded.byteSize,
+        source.durationSeconds,
+        JSON.stringify({
+          referencePrompt: referencePrompt(source.title, source.durationSeconds),
+          keyframeSeconds: keyframeSeconds(source.durationSeconds),
+          cachedAt: new Date().toISOString(),
+        }),
+        expiresAt,
+      ],
+    );
+    return {
+      id: inserted.rows[0].id,
+      storageKey,
+      byteSize: downloaded.byteSize,
+      expiresAt: inserted.rows[0].expires_at,
+      previewUrl: await createSignedObjectUrl(storageKey, "GET", 3600),
+    };
+  } finally {
+    await downloaded.cleanup();
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -80,11 +148,39 @@ export async function POST(request: NextRequest) {
   let uploadedKey = "";
   let persisted = false;
   try {
-    const source = await inspectDouyinVideo(sourceUrl);
+    const cacheId = validUuid(body?.cacheId) ? body.cacheId : null;
+    let cachedSource:
+      | {
+          id: string;
+          storage_key: string;
+          source_id: string | null;
+          title: string;
+          duration_seconds: string;
+          byte_size: string;
+        }
+      | undefined;
+    if (cacheId) {
+      const cacheResult = await db.query<NonNullable<typeof cachedSource>>(
+        `SELECT id, storage_key, source_id, title, duration_seconds, byte_size
+         FROM douyin_video_caches
+         WHERE id = $1 AND user_id = $2 AND status = 'ACTIVE' AND expires_at > NOW()`,
+        [cacheId, user.id],
+      );
+      cachedSource = cacheResult.rows[0];
+    }
+    const source = cachedSource
+      ? {
+          title: cachedSource.title,
+          sourceId: cachedSource.source_id,
+          durationSeconds: Number(cachedSource.duration_seconds),
+        }
+      : await inspectDouyinVideo(sourceUrl);
     if (body?.action === "analyze") {
+      const cache = await createSourceCache(user.id, sourceUrl, source);
       await audit(user.id, "DOUYIN_VIDEO_ANALYZED", request, undefined, {
         sourceId: source.sourceId,
         durationSeconds: source.durationSeconds,
+        cacheId: cache.id,
       });
       return NextResponse.json({
         status: "ANALYZED",
@@ -92,6 +188,12 @@ export async function POST(request: NextRequest) {
         durationSeconds: source.durationSeconds,
         clipRequired: source.durationSeconds > 15,
         clipDurations: [5, 10, 15],
+        cacheId: cache.id,
+        cachePreviewUrl: cache.previewUrl,
+        cacheByteSize: cache.byteSize,
+        cacheExpiresAt: cache.expiresAt,
+        referencePrompt: referencePrompt(source.title, source.durationSeconds),
+        keyframeSeconds: keyframeSeconds(source.durationSeconds),
       });
     }
     const clip = resolveDouyinClip(
@@ -99,7 +201,20 @@ export async function POST(request: NextRequest) {
       body?.startSeconds,
       body?.clipDurationSeconds,
     );
-    const imported = await downloadDouyinVideo(sourceUrl, source, clip);
+    let cacheDirectory = "";
+    const imported = cachedSource
+      ? await (async () => {
+          cacheDirectory = await mkdtemp(join(tmpdir(), "aigc-douyin-cache-"));
+          const cachedPath = join(cacheDirectory, "source.mp4");
+          try {
+            await downloadObjectToFile(cachedSource.storage_key, cachedPath);
+            return await importCachedDouyinVideo(cachedPath, source, clip, cacheDirectory);
+          } catch (error) {
+            await rm(cacheDirectory, { recursive: true, force: true }).catch(() => undefined);
+            throw error;
+          }
+        })()
+      : await downloadDouyinVideo(sourceUrl, source, clip);
     try {
       const storage = await storageSummary(user.id);
       if (storage.usedBytes + imported.byteSize > storage.quotaBytes) {

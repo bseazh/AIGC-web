@@ -571,6 +571,14 @@ a { color: inherit; text-decoration: none; }
 .recreate-selected-source strong, .recreate-reference-preview strong, .recreate-clip-editor header strong, .recreate-clip-collection header strong, .recreate-clip-name strong { color: #334961; }
 .recreate-selected-source small, .recreate-reference-preview small, .recreate-clip-editor header small, .recreate-clip-collection header small, .recreate-clip-name small, .recreate-clip-editor > p { color: #7b8da2; }
 .recreate-clip-editor header span, .recreate-clip-preview span, .recreate-clip-collection header button { color: #fff; background: #1aa6c6; }
+.recreate-source-cache { margin-top: 13px; padding: 10px; display: grid; grid-template-columns: minmax(180px,280px) minmax(0,1fr); gap: 12px; align-items: center; border: 1px solid #dce8f2; border-radius: 10px; background: #f7fbff; }
+.recreate-source-cache video { width: 100%; aspect-ratio: 9/16; max-height: 300px; display: block; object-fit: contain; border-radius: 8px; background: #e9f0f7; }
+.recreate-source-cache strong, .recreate-source-cache small { display: block; }
+.recreate-source-cache strong { color: #334961; font-size: 12px; }
+.recreate-source-cache small { margin-top: 5px; color: #73869c; font-size: 10px; line-height: 1.5; }
+.recreate-reference-plan { margin-top: 12px; padding: 11px; display: grid; gap: 6px; border: 1px solid #ccebf1; border-radius: 10px; background: #f0fbff; }
+.recreate-reference-plan strong { color: #16829c; font-size: 12px; }
+.recreate-reference-plan small, .recreate-reference-plan p { margin: 0; color: #5e758c; font-size: 10px; line-height: 1.65; white-space: pre-wrap; }
 .recreate-range > span, .recreate-length > span { color: #60748b; }
 .recreate-range > strong { color: #1689d8; }
 .recreate-range input { accent-color: #1aa6c6; }
