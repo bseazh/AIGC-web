@@ -192,6 +192,21 @@ const checks = [
     "reference 参考提示词",
   ],
   [
+    "Recreate video analysis extracts frames",
+    "app/api/workflows/recreate-video-analysis/route.ts",
+    "ffmpeg",
+  ],
+  [
+    "Recreate video analysis calls SophNet Chat",
+    "app/api/workflows/recreate-video-analysis/route.ts",
+    "chat/completions",
+  ],
+  [
+    "Expired Douyin cache cleanup removes frame images",
+    "scripts/lifecycle-maintenance.mjs",
+    "frameStorageKeys",
+  ],
+  [
     "Douyin search modal links become work links",
     "lib/douyin-import.ts",
     "modal_id",

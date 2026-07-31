@@ -192,13 +192,17 @@ async function expireReviewWaits() {
 
 async function cleanupExpiredDouyinCaches() {
   const expired = await pool.query(
-    `SELECT id, storage_key FROM douyin_video_caches
+    `SELECT id, storage_key, metadata_json FROM douyin_video_caches
      WHERE status = 'ACTIVE' AND expires_at < NOW()
      ORDER BY expires_at ASC LIMIT 100`,
   );
   let removed = 0;
   for (const cache of expired.rows) {
     await removeObject(cache.storage_key).catch(() => undefined);
+    const frameKeys = Array.isArray(cache.metadata_json?.frameStorageKeys)
+      ? cache.metadata_json.frameStorageKeys.filter((key) => typeof key === "string")
+      : [];
+    for (const key of frameKeys) await removeObject(key).catch(() => undefined);
     const changed = await pool.query(
       "UPDATE douyin_video_caches SET status = 'EXPIRED', updated_at = NOW() WHERE id = $1 AND status = 'ACTIVE'",
       [cache.id],

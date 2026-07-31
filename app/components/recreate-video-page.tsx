@@ -61,6 +61,25 @@ type DouyinAnalysis = {
   referencePrompt?: string;
   keyframeSeconds?: number[];
 };
+type RecreateFrameAnalysis = {
+  frames?: Array<{
+    time?: number;
+    scene?: string;
+    shotType?: string;
+    replaceableParts?: string[];
+    riskNotes?: string[];
+  }>;
+  replacementPlan?: Array<{
+    target?: string;
+    replaceable?: boolean;
+    strategy?: string;
+    promptInstruction?: string;
+  }>;
+  risks?: string[];
+  prompt?: string;
+  providerError?: string;
+  summary?: string;
+};
 type SourceKind = "video" | "product" | "scene";
 type WorkflowStep = "source" | "clip" | "product" | "reference" | "generate";
 type SourceMode = "douyin" | "upload" | "library";
@@ -201,6 +220,9 @@ export function RecreateVideoPage() {
   const [douyinBusy, setDouyinBusy] = useState<"analyzing" | "importing" | null>(
     null,
   );
+  const [frameAnalysisBusy, setFrameAnalysisBusy] = useState(false);
+  const [frameAnalysis, setFrameAnalysis] = useState<RecreateFrameAnalysis | null>(null);
+  const [frameAnalysisFrames, setFrameAnalysisFrames] = useState<Array<{ time: number; url: string }>>([]);
   const [douyinError, setDouyinError] = useState("");
   const [douyinAnalysis, setDouyinAnalysis] = useState<DouyinAnalysis | null>(
     null,
@@ -726,6 +748,8 @@ export function RecreateVideoPage() {
         referencePrompt: body.referencePrompt,
         keyframeSeconds: body.keyframeSeconds,
       });
+      setFrameAnalysis(null);
+      setFrameAnalysisFrames([]);
       setDouyinStart(0);
       setDouyinClipDuration(
         body.durationSeconds >= 15 ? 15 : body.durationSeconds >= 10 ? 10 : 5,
@@ -796,6 +820,49 @@ export function RecreateVideoPage() {
       );
     } finally {
       setDouyinBusy(null);
+    }
+  };
+
+  const analyzeReplaceableFrames = async () => {
+    if (!douyinAnalysis?.cacheId || frameAnalysisBusy) return;
+    setFrameAnalysisBusy(true);
+    setDouyinError("");
+    try {
+      const response = await fetch("/api/workflows/recreate-video-analysis/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cacheId: douyinAnalysis.cacheId,
+          replacementGoals: [
+            "替换商品",
+            modelOn ? "替换模特" : "",
+            "替换背景/场景参考",
+          ].filter(Boolean),
+        }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok)
+        throw new Error(body?.message || body?.code || "关键帧识别失败");
+      setFrameAnalysis(body.analysis || null);
+      setFrameAnalysisFrames(
+        (body.frames || []).map((frame: { time: number; url: string }) => ({
+          time: frame.time,
+          url: frame.url,
+        })),
+      );
+      if (body.analysis?.prompt) {
+        setSpecial((current) =>
+          current.trim()
+            ? `${current.trim()}\n\nAI关键帧识别提示词：\n${body.analysis.prompt}`
+            : body.analysis.prompt,
+        );
+      }
+      setNotice("AI 已识别关键帧，并写入视频特殊要求");
+      window.setTimeout(() => setNotice(""), 2200);
+    } catch (caught) {
+      setDouyinError(caught instanceof Error ? caught.message : "关键帧识别失败");
+    } finally {
+      setFrameAnalysisBusy(false);
     }
   };
 
@@ -1027,6 +1094,8 @@ export function RecreateVideoPage() {
                   setDouyinInput(event.target.value);
                   setDouyinError("");
                   setDouyinAnalysis(null);
+                  setFrameAnalysis(null);
+                  setFrameAnalysisFrames([]);
                 }}
                 placeholder="粘贴抖音分享链接或完整分享文案"
               />
@@ -1080,6 +1149,47 @@ export function RecreateVideoPage() {
                     {douyinAnalysis.referencePrompt && <p>{douyinAnalysis.referencePrompt}</p>}
                   </div>
                 ) : null}
+                {douyinAnalysis.cacheId && (
+                  <div className="recreate-frame-analysis">
+                    <button type="button" onClick={analyzeReplaceableFrames} disabled={frameAnalysisBusy}>
+                      {frameAnalysisBusy ? (
+                        <LoaderCircle className="generation-spinner" size={16} />
+                      ) : (
+                        <Sparkles size={16} />
+                      )}
+                      {frameAnalysisBusy ? "正在识别关键帧" : "AI识别可替换内容"}
+                    </button>
+                    {frameAnalysisFrames.length ? (
+                      <div className="recreate-frame-strip">
+                        {frameAnalysisFrames.map((frame) => (
+                          <figure key={`${frame.time}-${frame.url}`}>
+                            <img src={frame.url} alt={`${frame.time.toFixed(1)}秒关键帧`} />
+                            <figcaption>{frame.time.toFixed(1)}s</figcaption>
+                          </figure>
+                        ))}
+                      </div>
+                    ) : null}
+                    {frameAnalysis && (
+                      <div className="recreate-analysis-result">
+                        {frameAnalysis.summary && <p>{frameAnalysis.summary}</p>}
+                        {frameAnalysis.replacementPlan?.length ? (
+                          <ul>
+                            {frameAnalysis.replacementPlan.slice(0, 4).map((item, index) => (
+                              <li key={`${item.target || "替换项"}-${index}`}>
+                                <strong>{item.target || "可替换项"}</strong>
+                                <span>{item.strategy || item.promptInstruction || "建议作为结构参考重生成"}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        {frameAnalysis.prompt && (
+                          <textarea readOnly value={frameAnalysis.prompt} aria-label="AI生成复刻提示词" />
+                        )}
+                        {frameAnalysis.providerError && <small>{frameAnalysis.providerError}</small>}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {douyinAnalysis.clipRequired ? (
                   <>
                     <div className="recreate-range">
