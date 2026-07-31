@@ -522,6 +522,10 @@ export function RecreateVideoPage() {
     () => new Set(selectedKeyframes.map((frame) => frame.time.toFixed(1))),
     [selectedKeyframes],
   );
+  const selectableKeyframes = useMemo(() => keyframeCandidates.slice(0, 8), [keyframeCandidates]);
+  const allCandidateKeyframesSelected =
+    selectableKeyframes.length > 0 &&
+    selectableKeyframes.every((frame) => selectedKeyframeKeys.has(frame.time.toFixed(1)));
   const toggleKeyframe = (frame: KeyframeSelection) => {
     setSelectedKeyframes((current) => {
       const key = frame.time.toFixed(1);
@@ -531,6 +535,19 @@ export function RecreateVideoPage() {
         .sort((a, b) => a.time - b.time)
         .slice(0, 8);
     });
+    clearTaskState();
+  };
+  const toggleAllKeyframes = () => {
+    setSelectedKeyframes(
+      allCandidateKeyframesSelected
+        ? []
+        : selectableKeyframes
+            .map((frame, index) => ({
+              ...frame,
+              label: frame.label || `关键画面 ${index + 1}`,
+            }))
+            .sort((a, b) => a.time - b.time),
+    );
     clearTaskState();
   };
   const useDefaultKeyframes = () => {
@@ -1819,13 +1836,22 @@ export function RecreateVideoPage() {
                 {frameAnalysisBusy ? "AI识别中" : frameAnalysis ? "重新AI识别" : "AI识别可替换内容"}
               </button>
             ) : null}
-            <button type="button" onClick={useDefaultKeyframes}>
+            <button
+              type="button"
+              className="secondary"
+              onClick={toggleAllKeyframes}
+              disabled={!selectableKeyframes.length}
+            >
+              <Check size={14} />
+              {allCandidateKeyframesSelected ? "取消全选" : "全选画面"}
+            </button>
+            <button type="button" className="secondary" onClick={useDefaultKeyframes}>
               使用默认 4 帧
             </button>
           </div>
         </header>
         <div className="recreate-keyframe-grid">
-          {keyframeCandidates.map((frame, index) => {
+          {selectableKeyframes.map((frame, index) => {
             const selected = selectedKeyframeKeys.has(frame.time.toFixed(1));
             return (
               <button
