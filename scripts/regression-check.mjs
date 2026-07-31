@@ -122,6 +122,16 @@ const checks = [
     'fetch("/api/workflow-drafts/"',
   ],
   [
+    "Recreate video shows one current project",
+    "app/components/recreate-video-page.tsx",
+    "visibleDrafts = useMemo(() => serverDrafts.slice(0, 1)",
+  ],
+  [
+    "Workflow drafts archive duplicate active records",
+    "app/api/workflow-drafts/route.ts",
+    "archiveDuplicateDrafts",
+  ],
+  [
     "Workflow drafts persist to database",
     "scripts/migrate.mjs",
     "CREATE TABLE IF NOT EXISTS workflow_drafts",

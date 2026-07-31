@@ -243,12 +243,13 @@ export function RecreateVideoPage() {
   const [result, setResult] = useState<Result | null>(null);
   const [notice, setNotice] = useState("");
   const [draftId, setDraftId] = useState<string | null>(null);
-  const [draftTitle, setDraftTitle] = useState("复刻视频草稿");
+  const [draftTitle, setDraftTitle] = useState("复刻视频项目");
   const [serverDrafts, setServerDrafts] = useState<ServerDraft[]>([]);
   const [draftsLoading, setDraftsLoading] = useState(false);
   const [draftSyncState, setDraftSyncState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const restoredLocalDraftRef = useRef(false);
   const restoringServerDraftRef = useRef(false);
+  const visibleDrafts = useMemo(() => serverDrafts.slice(0, 1), [serverDrafts]);
 
   useEffect(() => {
     fetch("/api/auth/session/", { cache: "no-store" })
@@ -432,10 +433,7 @@ export function RecreateVideoPage() {
           setDraftId(body.draft.id);
           setDraftTitle(body.draft.title);
           setDraftSyncState("saved");
-          setServerDrafts((current) => [
-            body.draft,
-            ...current.filter((item) => item.id !== body.draft.id),
-          ]);
+          setServerDrafts([body.draft]);
         })
         .catch(() => setDraftSyncState("error"));
     }, 900);
@@ -528,7 +526,7 @@ export function RecreateVideoPage() {
     const draft = draftValue();
     localStorage.setItem(draftStorageKey, JSON.stringify(draft));
     if (!draftHasContent(draft)) {
-      setNotice("当前还没有可保存的草稿内容");
+      setNotice("当前还没有可保存的项目内容");
       window.setTimeout(() => setNotice(""), 1800);
       return;
     }
@@ -549,14 +547,11 @@ export function RecreateVideoPage() {
       setDraftId(body.draft.id);
       setDraftTitle(body.draft.title);
       setDraftSyncState("saved");
-      setServerDrafts((current) => [
-        body.draft,
-        ...current.filter((item) => item.id !== body.draft.id),
-      ]);
-      setNotice("草稿已保存到账户");
+      setServerDrafts([body.draft]);
+      setNotice("项目已保存到账户");
     } catch {
       setDraftSyncState("error");
-      setNotice("服务器草稿保存失败，已先保留到当前浏览器");
+      setNotice("服务器项目保存失败，已先保留到当前浏览器");
     }
     window.setTimeout(() => setNotice(""), 1800);
   };
@@ -566,7 +561,7 @@ export function RecreateVideoPage() {
     setDraftId(draft.id);
     setDraftTitle(draft.title);
     applyDraft(draft.payload);
-    setNotice("已恢复草稿，可继续生成");
+    setNotice("已恢复项目，可继续生成");
     window.setTimeout(() => {
       restoringServerDraftRef.current = false;
       setNotice("");
@@ -579,16 +574,16 @@ export function RecreateVideoPage() {
       if (!response.ok) throw new Error();
       setServerDrafts((current) => current.filter((draft) => draft.id !== targetId));
       if (draftId === targetId) startNewDraft();
-      setNotice("草稿已删除");
+      setNotice("项目已删除");
     } catch {
-      setNotice("草稿删除失败，请稍后再试");
+      setNotice("项目删除失败，请稍后再试");
     }
     window.setTimeout(() => setNotice(""), 1800);
   };
 
   const startNewDraft = () => {
     setDraftId(null);
-    setDraftTitle("复刻视频草稿");
+    setDraftTitle("复刻视频项目");
     setSourceItem(null);
     setClips([]);
     setProducts([]);
@@ -1988,7 +1983,7 @@ export function RecreateVideoPage() {
         <div className="recreate-flow-header-actions">
           <button type="button" onClick={saveDraft}>
             <Save size={16} />
-            保存草稿
+            保存项目
           </button>
           <Link href="/tasks">
             <Film size={16} />
@@ -2013,7 +2008,7 @@ export function RecreateVideoPage() {
           <section className="recreate-draft-box">
             <div className="recreate-draft-box-head">
               <div>
-                <strong>账号草稿</strong>
+                <strong>当前项目</strong>
                 <small>
                   {draftSyncState === "saving"
                     ? "正在自动保存"
@@ -2029,20 +2024,20 @@ export function RecreateVideoPage() {
               </button>
             </div>
             <label className="recreate-draft-title">
-              草稿标题
+              项目名称
               <input
                 value={draftTitle}
                 onChange={(event) => setDraftTitle(event.target.value)}
                 maxLength={80}
-                placeholder="给这次复刻起个名字"
+                placeholder="给这次复刻项目起个名字"
               />
             </label>
             <button type="button" className="recreate-new-draft" onClick={startNewDraft}>
-              新建空白草稿
+              重置当前项目
             </button>
             <div className="recreate-draft-list">
-              {serverDrafts.length ? (
-                serverDrafts.map((draft) => (
+              {visibleDrafts.length ? (
+                visibleDrafts.map((draft) => (
                   <article className={draft.id === draftId ? "active" : ""} key={draft.id}>
                     <button type="button" onClick={() => continueDraft(draft)}>
                       <strong>{draft.title}</strong>
@@ -2055,13 +2050,13 @@ export function RecreateVideoPage() {
                         })}
                       </small>
                     </button>
-                    <button type="button" aria-label="删除草稿" onClick={() => deleteDraft(draft.id)}>
+                    <button type="button" aria-label="删除项目" onClick={() => deleteDraft(draft.id)}>
                       <X size={13} />
                     </button>
                   </article>
                 ))
               ) : (
-                <p>{draftsLoading ? "正在读取草稿…" : "暂无服务器草稿"}</p>
+                <p>{draftsLoading ? "正在读取项目…" : "暂无服务器项目"}</p>
               )}
             </div>
           </section>
@@ -2085,7 +2080,7 @@ export function RecreateVideoPage() {
               <strong>{activeStep.number} / 5</strong>
               <small>{activeStep.title}</small>
             </div>
-            <span>当前步骤会自动保留草稿</span>
+            <span>当前步骤会自动保存到项目</span>
           </div>
           {step === "source" && sourcePanel}
           {step === "clip" && clipPanel}
