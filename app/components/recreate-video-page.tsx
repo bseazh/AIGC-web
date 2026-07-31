@@ -243,6 +243,7 @@ export function RecreateVideoPage() {
   const [douyinBusy, setDouyinBusy] = useState<"analyzing" | "importing" | null>(
     null,
   );
+  const [frameExtractionBusy, setFrameExtractionBusy] = useState(false);
   const [frameAnalysisBusy, setFrameAnalysisBusy] = useState(false);
   const [frameAnalysis, setFrameAnalysis] = useState<RecreateFrameAnalysis | null>(null);
   const [frameAnalysisFrames, setFrameAnalysisFrames] = useState<Array<{ time: number; url: string }>>([]);
@@ -294,7 +295,11 @@ export function RecreateVideoPage() {
     sourceItem: cloneItem(sourceItem),
     douyinClips: douyinClips.map((item) => cloneItem(item)).filter(Boolean) as Draft["douyinClips"],
     activeClipId,
-    selectedKeyframes,
+    selectedKeyframes: selectedKeyframes.map((frame) => ({
+      time: frame.time,
+      label: frame.label,
+      url: frame.url && !frame.url.startsWith("data:") ? frame.url : undefined,
+    })),
     products: products.map((item) => cloneItem(item)).filter(Boolean) as Draft["products"],
     referenceImage: cloneItem(referenceImage),
     referenceConfirmed,
@@ -671,6 +676,62 @@ export function RecreateVideoPage() {
       video.src = objectUrl;
     });
 
+  const extractFramesInBrowser = (videoUrl: string, durationSeconds?: number) =>
+    new Promise<KeyframeSelection[]>((resolve, reject) => {
+      const video = document.createElement("video");
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+      if (!context) {
+        reject(new Error("当前浏览器无法抽取视频画面"));
+        return;
+      }
+      video.crossOrigin = "anonymous";
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = "auto";
+      const cleanup = () => {
+        video.removeAttribute("src");
+        video.load();
+      };
+      video.onerror = () => {
+        cleanup();
+        reject(new Error("视频画面读取失败"));
+      };
+      video.onloadedmetadata = async () => {
+        const duration = Math.min(15, Math.max(3, durationSeconds || video.duration || 15));
+        const targets = defaultKeyframes(duration);
+        const frames: KeyframeSelection[] = [];
+        try {
+          for (const target of targets) {
+            await new Promise<void>((seekResolve, seekReject) => {
+              const timeout = window.setTimeout(() => {
+                video.onseeked = null;
+                seekReject(new Error("视频定位超时"));
+              }, 4000);
+              video.onseeked = () => {
+                window.clearTimeout(timeout);
+                seekResolve();
+              };
+              video.currentTime = Math.min(Math.max(0, target.time), Math.max(0, video.duration - 0.05));
+            });
+            canvas.width = video.videoWidth || 720;
+            canvas.height = video.videoHeight || 1280;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            frames.push({
+              ...target,
+              url: canvas.toDataURL("image/jpeg", 0.82),
+            });
+          }
+          cleanup();
+          resolve(frames);
+        } catch (error) {
+          cleanup();
+          reject(error);
+        }
+      };
+      video.src = videoUrl;
+    });
+
   const openLibrary = async (kind: SourceKind) => {
     setLibraryKind(kind);
     setAssetsLoading(true);
@@ -1012,6 +1073,11 @@ export function RecreateVideoPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cacheId: douyinAnalysis.cacheId,
+          startSeconds:
+            typeof sourceSelection?.clipStartSeconds === "number"
+              ? sourceSelection.clipStartSeconds
+              : douyinStart,
+          durationSeconds: Math.min(15, sourceSelection?.durationSeconds || douyinClipDuration),
           replacementGoals: [
             "替换商品",
             modelOn ? "替换模特" : "",
@@ -1054,6 +1120,67 @@ export function RecreateVideoPage() {
       setDouyinError(caught instanceof Error ? caught.message : "关键帧识别失败");
     } finally {
       setFrameAnalysisBusy(false);
+    }
+  };
+
+  const quickExtractKeyframes = async () => {
+    if (!sourceSelection || frameExtractionBusy) return;
+    setFrameExtractionBusy(true);
+    setDouyinError("");
+    setDouyinCacheExpired(false);
+    try {
+      if (sourceSelection.source === "douyin" && douyinAnalysis?.cacheId) {
+        const response = await fetch("/api/workflows/recreate-video-analysis/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cacheId: douyinAnalysis.cacheId,
+            mode: "frames",
+            startSeconds:
+              typeof sourceSelection.clipStartSeconds === "number"
+                ? sourceSelection.clipStartSeconds
+                : douyinStart,
+            durationSeconds: Math.min(15, sourceSelection.durationSeconds || douyinClipDuration),
+          }),
+        });
+        const body = await response.json().catch(() => null);
+        if (!response.ok) {
+          if (body?.code === "CACHE_EXPIRED" || response.status === 410) {
+            setDouyinCacheExpired(true);
+            setFrameAnalysis(null);
+            setFrameAnalysisFrames([]);
+          }
+          throw new Error(body?.message || body?.code || "快速抽帧失败");
+        }
+        const frames = (body.frames || []).map((frame: { time: number; url: string }, index: number) => ({
+          time: frame.time,
+          url: frame.url,
+          label: `关键画面 ${index + 1}`,
+        }));
+        setFrameAnalysisFrames(frames);
+        setSelectedKeyframes(frames.slice(0, 4));
+        setNotice("已快速抽取关键画面，可先选择画面；AI识别可稍后单独执行");
+      } else {
+        const frames = await extractFramesInBrowser(sourceSelection.preview, sourceSelection.durationSeconds);
+        setFrameAnalysisFrames(
+          frames
+            .filter((frame): frame is KeyframeSelection & { url: string } => Boolean(frame.url))
+            .map((frame) => ({ time: frame.time, url: frame.url })),
+        );
+        setSelectedKeyframes(frames.slice(0, 4));
+        setNotice("已在浏览器本地快速抽取关键画面");
+      }
+      window.setTimeout(() => setNotice(""), 2400);
+      clearTaskState();
+    } catch (caught) {
+      const fallbackFrames = defaultKeyframes(sourceSelection.durationSeconds);
+      setSelectedKeyframes(fallbackFrames);
+      setFrameAnalysisFrames([]);
+      setNotice("无法直接抽取截图，已先使用默认时间点；可继续操作或换一个视频");
+      setDouyinError(caught instanceof Error ? caught.message : "快速抽帧失败");
+      window.setTimeout(() => setNotice(""), 2600);
+    } finally {
+      setFrameExtractionBusy(false);
     }
   };
 
@@ -1626,6 +1753,14 @@ export function RecreateVideoPage() {
             </small>
           </div>
           <div>
+            <button type="button" onClick={quickExtractKeyframes} disabled={frameExtractionBusy}>
+              {frameExtractionBusy ? (
+                <LoaderCircle className="generation-spinner" size={14} />
+              ) : (
+                <Film size={14} />
+              )}
+              {frameExtractionBusy ? "正在快速抽帧" : "快速抽取关键画面"}
+            </button>
             {douyinAnalysis?.cacheId ? (
               <button type="button" onClick={analyzeReplaceableFrames} disabled={frameAnalysisBusy}>
                 {frameAnalysisBusy ? (
@@ -1633,7 +1768,7 @@ export function RecreateVideoPage() {
                 ) : (
                   <Sparkles size={14} />
                 )}
-                {frameAnalysisBusy ? "正在抽帧" : frameAnalysisFrames.length ? "重新抽帧识别" : "AI抽取关键画面"}
+                {frameAnalysisBusy ? "AI识别中" : frameAnalysis ? "重新AI识别" : "AI识别可替换内容"}
               </button>
             ) : null}
             <button type="button" onClick={useDefaultKeyframes}>

@@ -142,6 +142,16 @@ const checks = [
     "recreate-keyframe-picker",
   ],
   [
+    "Recreate video supports fast keyframe extraction without AI",
+    "app/components/recreate-video-page.tsx",
+    "快速抽取关键画面",
+  ],
+  [
+    "Recreate video frame endpoint can skip AI analysis",
+    "app/api/workflows/recreate-video-analysis/route.ts",
+    'body.mode === "frames"',
+  ],
+  [
     "Recreate video product step shows AI replacement guide",
     "app/components/recreate-video-page.tsx",
     "AI 建议替换清单",

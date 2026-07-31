@@ -38,6 +38,12 @@ function keyframeSeconds(durationSeconds: number) {
   return [...new Set(points)].slice(0, 5);
 }
 
+function numericRange(value: unknown, fallback: number, min: number, max: number) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
+}
+
 function analysisPrompt(options: Record<string, unknown>) {
   const replacementGoals = Array.isArray(options.replacementGoals)
     ? options.replacementGoals.filter((item) => typeof item === "string").join("、")
@@ -110,23 +116,32 @@ async function extractFrames(cache: {
   duration_seconds: string;
   metadata_json: Record<string, unknown>;
   user_id: string;
-}) {
+}, options: { startSeconds?: number; durationSeconds?: number } = {}) {
   const directory = await mkdtemp(join(tmpdir(), "aigc-recreate-analysis-"));
   const sourcePath = join(directory, "source.mp4");
   const uploadedKeys: string[] = [];
   try {
     await downloadObjectToFile(cache.storage_key, sourcePath);
-    const durationSeconds = Number(cache.duration_seconds);
+    const sourceDurationSeconds = Number(cache.duration_seconds);
+    const startSeconds = numericRange(options.startSeconds, 0, 0, Math.max(0, sourceDurationSeconds - 0.1));
+    const requestedDurationSeconds = numericRange(
+      options.durationSeconds,
+      Math.min(15, Math.max(3, sourceDurationSeconds - startSeconds)),
+      3,
+      15,
+    );
+    const durationSeconds = Math.min(requestedDurationSeconds, Math.max(0.3, sourceDurationSeconds - startSeconds));
     const seconds = keyframeSeconds(durationSeconds);
     const frames: Frame[] = [];
     for (const second of seconds) {
+      const sourceSecond = Math.round((startSeconds + second) * 10) / 10;
       const outputPath = join(directory, `frame-${String(second).replace(".", "-")}.jpg`);
       await execute(
         ffmpegPath,
         [
           "-y",
           "-ss",
-          String(second),
+          String(sourceSecond),
           "-i",
           sourcePath,
           "-frames:v",
@@ -141,7 +156,7 @@ async function extractFrames(cache: {
       await uploadLocalObject(storageKey, outputPath, "image/jpeg");
       uploadedKeys.push(storageKey);
       frames.push({
-        time: second,
+        time: sourceSecond,
         storageKey,
         url: await createSignedObjectUrl(storageKey, "GET", 3600),
       });
@@ -162,11 +177,13 @@ async function extractFrames(cache: {
             ...uploadedKeys,
           ],
           keyframeSeconds: seconds,
+          keyframeSourceStartSeconds: startSeconds,
+          keyframeSourceDurationSeconds: durationSeconds,
           frameExtractedAt: new Date().toISOString(),
         }),
       ],
     );
-    return { frames, durationSeconds };
+    return { frames, durationSeconds, startSeconds };
   } catch (error) {
     await Promise.all(uploadedKeys.map((key) => removeObject(key).catch(() => undefined)));
     throw error;
@@ -250,7 +267,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ code: "CACHE_EXPIRED", message: "对标视频缓存已过期，请重新获取视频" }, { status: 410 });
   }
   try {
-    const { frames, durationSeconds } = await extractFrames(cache);
+    const startSeconds = numericRange(body.startSeconds, 0, 0, Math.max(0, Number(cache.duration_seconds) - 0.1));
+    const requestedDurationSeconds = numericRange(body.durationSeconds, 15, 3, 15);
+    const { frames, durationSeconds } = await extractFrames(cache, {
+      startSeconds,
+      durationSeconds: requestedDurationSeconds,
+    });
+    if (body.mode === "frames") {
+      return NextResponse.json({
+        frames,
+        analysis: null,
+        providerConfigured: Boolean(process.env.SOPHNET_CHAT_API_KEY || process.env.SOPHNET_VISION_API_KEY || process.env.AI_API_KEY),
+      });
+    }
     const aiAnalysis = await callSophnetVision(frames, body).catch((error) => ({
       ...fallbackAnalysis(frames, durationSeconds),
       providerError: error instanceof Error ? error.message.slice(0, 300) : "SophNet Chat analysis failed",
