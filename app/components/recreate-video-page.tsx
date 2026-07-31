@@ -374,6 +374,39 @@ export function RecreateVideoPage() {
   const selectedClip = sourceSelection?.assetId
     ? douyinClips.find((item) => item.assetId === sourceSelection.assetId) || null
     : sourceSelection;
+  const replacementSlots = useMemo(() => {
+    const plan = (frameAnalysis?.replacementPlan || []).filter(
+      (item) => item.replaceable !== false && (item.target || item.strategy || item.promptInstruction),
+    );
+    if (plan.length) return plan.slice(0, 5);
+    return [
+      {
+        target: "商品主体",
+        replaceable: true,
+        strategy: "上传要替换进去的新商品图，系统会参考对标视频里的展示位置、景别和出镜节奏重生成。",
+        promptInstruction: "用用户上传的新商品替换对标视频中的主要售卖主体，保持新商品外观准确。",
+      },
+      {
+        target: "模特 / 手部 / 人物动作",
+        replaceable: true,
+        strategy: "如需要换模特，上传模特参考图或在后续填写模特信息；只参考原视频动作和站位，不复制原人脸。",
+        promptInstruction: "参考原视频人物动作、姿态和运镜，生成新的模特形象。",
+      },
+      {
+        target: "背景 / 场景氛围",
+        replaceable: true,
+        strategy: "需要换场景时上传场景参考图；保留镜头节奏，但生成原创背景。",
+        promptInstruction: "参考原视频构图和光线氛围，替换为用户指定场景。",
+      },
+    ];
+  }, [frameAnalysis]);
+  const slotUploadHint = (target?: string) => {
+    const normalized = target || "";
+    if (/模特|人物|手|人脸|动作/.test(normalized)) return "建议上传模特图，或下一步填写模特信息";
+    if (/背景|场景|环境|空间/.test(normalized)) return "建议上传场景参考图或氛围图";
+    if (/字幕|Logo|水印|品牌/.test(normalized)) return "不建议直接复刻；建议作为避让项处理";
+    return "建议上传商品图或主体参考图";
+  };
   const sourceReady = Boolean(sourceSelection);
   const clipReady = sourceReady && (sourceMode !== "douyin" || douyinClips.length > 0 || !douyinAnalysis?.clipRequired);
   const productReady = products.length > 0;
@@ -1647,8 +1680,68 @@ export function RecreateVideoPage() {
         <span>3 / 5</span>
       </header>
       <p className="recreate-panel-copy">
-        上传商品、模特或场景参考素材后，系统会把它们放到当前复刻链路里，作为最终任务的替换主体。
+        先看 AI 从对标视频里识别出的可替换对象，再逐项上传对应素材。系统会用这些素材重生成原创视频，而不是直接复制原视频画面。
       </p>
+      <section className="recreate-replacement-guide">
+        <header>
+          <div>
+            <strong>AI 建议替换清单</strong>
+            <small>
+              {frameAnalysis
+                ? "已根据关键帧识别出可替换对象"
+                : douyinAnalysis?.cacheId
+                  ? "建议先识别关键帧，让用户知道该换什么"
+                  : "可先按常见带货视频结构上传素材"}
+            </small>
+          </div>
+          {douyinAnalysis?.cacheId ? (
+            <button type="button" onClick={analyzeReplaceableFrames} disabled={frameAnalysisBusy}>
+              {frameAnalysisBusy ? (
+                <LoaderCircle className="generation-spinner" size={15} />
+              ) : (
+                <Sparkles size={15} />
+              )}
+              {frameAnalysisBusy ? "正在识别" : frameAnalysis ? "重新识别" : "AI识别可替换内容"}
+            </button>
+          ) : null}
+        </header>
+        {frameAnalysisFrames.length ? (
+          <div className="recreate-replacement-frames">
+            {frameAnalysisFrames.slice(0, 5).map((frame) => (
+              <figure key={`${frame.time}-${frame.url}`}>
+                <img src={frame.url} alt={`${frame.time.toFixed(1)}秒关键帧`} />
+                <figcaption>{frame.time.toFixed(1)}s</figcaption>
+              </figure>
+            ))}
+          </div>
+        ) : null}
+        <div className="recreate-replacement-slots">
+          {replacementSlots.map((slot, index) => (
+            <article key={`${slot.target || "替换项"}-${index}`}>
+              <span>{index + 1}</span>
+              <div>
+                <strong>{slot.target || "可替换对象"}</strong>
+                <p>{slot.strategy || slot.promptInstruction || "参考对标视频结构，用用户上传素材重生成。"}</p>
+                <small>{slotUploadHint(slot.target)}</small>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setLibraryKind(null);
+                  refs.product.current?.click();
+                }}
+              >
+                上传对应素材
+              </button>
+            </article>
+          ))}
+        </div>
+        {frameAnalysis?.risks?.length ? (
+          <p className="recreate-replacement-risk">
+            注意：{frameAnalysis.risks.slice(0, 2).join("；")}
+          </p>
+        ) : null}
+      </section>
       <div className="recreate-source-tabs three">
         <button
           type="button"

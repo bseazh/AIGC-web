@@ -132,6 +132,16 @@ const checks = [
     "goPreviousStep",
   ],
   [
+    "Recreate video product step shows AI replacement guide",
+    "app/components/recreate-video-page.tsx",
+    "AI 建议替换清单",
+  ],
+  [
+    "Recreate video product step exposes replacement upload slots",
+    "app/components/recreate-video-page.tsx",
+    "recreate-replacement-slots",
+  ],
+  [
     "Recreate video no longer forces forward navigation",
     "app/components/recreate-video-page.tsx",
     "workflowSteps.findIndex((item) => item.key === step) > unlockedIndex",
