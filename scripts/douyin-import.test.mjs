@@ -24,6 +24,19 @@ assert.throws(
     error instanceof DouyinImportError &&
     error.code === "UNSUPPORTED_VIDEO_URL",
 );
+assert.throws(
+  () =>
+    normalizeDouyinUrl(
+      "https://www.douyin.com/jingxuan/music/search/%E8%A5%BF%E7%93%9C?aid=308a4ee7",
+    ),
+  (error) =>
+    error instanceof DouyinImportError &&
+    error.code === "UNSUPPORTED_DOUYIN_PAGE",
+);
+assert.equal(
+  normalizeDouyinUrl("https://www.douyin.com/jingxuan/music/search/xigua?modal_id=7355043530256977192&type=general"),
+  "https://www.douyin.com/video/7355043530256977192",
+);
 assert.equal(validateDouyinDuration(DOUYIN_MAX_DURATION_SECONDS), 15);
 assert.throws(
   () => validateDouyinDuration(15.1),

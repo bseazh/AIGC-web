@@ -167,6 +167,16 @@ const checks = [
     'args.push("--cookies-from-browser"',
   ],
   [
+    "Douyin search modal links become work links",
+    "lib/douyin-import.ts",
+    "modal_id",
+  ],
+  [
+    "Douyin rejects non-work detail pages early",
+    "lib/douyin-import.ts",
+    "UNSUPPORTED_DOUYIN_PAGE",
+  ],
+  [
     "content rejection refund",
     "app/api/admin/reviews/[id]/route.ts",
     "CONTENT_REJECTED",

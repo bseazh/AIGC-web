@@ -10,6 +10,7 @@ export const DOUYIN_MAX_DURATION_SECONDS = 15;
 export const DOUYIN_MAX_SOURCE_DURATION_SECONDS = 30 * 60;
 export const DOUYIN_MAX_BYTES = 100 * 1024 * 1024;
 export const DOUYIN_CLIP_DURATIONS = [5, 10, 15] as const;
+const DOUYIN_INSPECT_TIMEOUT_MS = 60_000;
 
 const execute = promisify(execFile);
 const ytDlpPath =
@@ -69,6 +70,24 @@ export function normalizeDouyinUrl(input: unknown) {
     throw new DouyinImportError(
       "UNSUPPORTED_VIDEO_URL",
       "目前仅支持抖音分享链接",
+    );
+  }
+  const modalId = url.searchParams.get("modal_id");
+  if (modalId && /^\d{8,30}$/.test(modalId)) {
+    url = new URL(`https://www.douyin.com/video/${modalId}`);
+  }
+  const pathname = url.pathname.toLowerCase();
+  const supportedPath =
+    hostname === "v.douyin.com" ||
+    /\/video\/\d+/.test(pathname) ||
+    /\/note\/\d+/.test(pathname) ||
+    /\/share\/video\/\d+/.test(pathname) ||
+    /\/modal\/profile\/\d+/.test(pathname);
+  if (!supportedPath) {
+    throw new DouyinImportError(
+      "UNSUPPORTED_DOUYIN_PAGE",
+      "请打开具体抖音作品后复制分享链接；搜索页、音乐页和合集页暂不支持直接解析",
+      422,
     );
   }
   url.hash = "";
@@ -197,7 +216,7 @@ function commonArgs() {
     "--no-playlist",
     "--no-warnings",
     "--socket-timeout",
-    "10",
+    "20",
     "--retries",
     "1",
     "--fragment-retries",
@@ -268,7 +287,7 @@ export async function inspectDouyinVideo(
     const result = await execute(
       ytDlpPath,
       [...commonArgs(), "--dump-single-json", sourceUrl],
-      { timeout: 30_000, maxBuffer: 4 * 1024 * 1024 },
+      { timeout: DOUYIN_INSPECT_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 },
     );
     const metadata = JSON.parse(result.stdout.trim()) as {
       duration?: number;
