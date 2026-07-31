@@ -274,6 +274,7 @@ export function RecreateVideoPage() {
   const [draftSyncState, setDraftSyncState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const restoredLocalDraftRef = useRef(false);
   const restoringServerDraftRef = useRef(false);
+  const autoKeyframeSourceRef = useRef<string | null>(null);
   const visibleDrafts = useMemo(() => serverDrafts.slice(0, 1), [serverDrafts]);
 
   useEffect(() => {
@@ -1184,6 +1185,49 @@ export function RecreateVideoPage() {
     }
   };
 
+  useEffect(() => {
+    const sourceKey =
+      sourceSelection?.assetId || sourceSelection?.preview || sourceSelection?.name || "";
+    const hasOnlyTimePoints =
+      selectedKeyframes.length > 0 && selectedKeyframes.every((frame) => !frame.url);
+    if (
+      step !== "clip" ||
+      !sourceSelection ||
+      !sourceKey ||
+      frameExtractionBusy ||
+      frameAnalysisFrames.length ||
+      !hasOnlyTimePoints ||
+      autoKeyframeSourceRef.current === sourceKey
+    )
+      return;
+    autoKeyframeSourceRef.current = sourceKey;
+    const timer = window.setTimeout(() => {
+      void quickExtractKeyframes();
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [
+    step,
+    sourceSelection?.assetId,
+    sourceSelection?.preview,
+    sourceSelection?.name,
+    selectedKeyframes.length,
+    frameAnalysisFrames.length,
+    frameExtractionBusy,
+  ]);
+
+  const keyframeFallbackVisual = (label: string) =>
+    sourceSelection?.preview ? (
+      <span className="recreate-keyframe-video-fallback">
+        <video src={sourceSelection.preview} muted playsInline preload="metadata" />
+        <i>{label}</i>
+      </span>
+    ) : (
+      <span className="recreate-keyframe-placeholder">
+        <Film size={20} />
+        <small>{label}</small>
+      </span>
+    );
+
   const moveClip = (index: number, direction: -1 | 1) =>
     setClips((current) => {
       const target = index + direction;
@@ -1749,7 +1793,11 @@ export function RecreateVideoPage() {
             <strong>关键画面选择</strong>
             <small>
               已选 {selectedKeyframes.length}/8 · 至少 4 帧
-              {frameAnalysisFrames.length ? " · 已有 AI 截图" : " · 当前为时间点近似"}
+              {frameAnalysisFrames.length
+                ? " · 已有截图"
+                : frameExtractionBusy
+                  ? " · 正在快速抽帧"
+                  : " · 当前为时间点近似"}
             </small>
           </div>
           <div>
@@ -1789,10 +1837,7 @@ export function RecreateVideoPage() {
                 {frame.url ? (
                   <img src={frame.url} alt={`${frame.time.toFixed(1)}秒关键画面`} />
                 ) : (
-                  <span className="recreate-keyframe-placeholder">
-                    <Film size={20} />
-                    <small>时间点</small>
-                  </span>
+                  keyframeFallbackVisual("待抽帧")
                 )}
                 <strong>{frame.label || `关键画面 ${index + 1}`}</strong>
                 <small>{frame.time.toFixed(1)}s</small>
@@ -2080,9 +2125,7 @@ export function RecreateVideoPage() {
                 {frame.url ? (
                   <img src={frame.url} alt={`${frame.time.toFixed(1)}秒关键帧`} />
                 ) : (
-                  <span className="recreate-keyframe-placeholder compact">
-                    <Film size={17} />
-                  </span>
+                  keyframeFallbackVisual("待抽帧")
                 )}
                 <figcaption>{frame.time.toFixed(1)}s</figcaption>
               </figure>
@@ -2237,9 +2280,7 @@ export function RecreateVideoPage() {
               {frame.url ? (
                 <img src={frame.url} alt={`${frame.time.toFixed(1)}秒参考画面`} />
               ) : (
-                <span className="recreate-keyframe-placeholder compact">
-                  <Film size={17} />
-                </span>
+                keyframeFallbackVisual("待抽帧")
               )}
               <figcaption>{frame.time.toFixed(1)}s</figcaption>
             </figure>

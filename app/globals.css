@@ -500,10 +500,13 @@ a { color: inherit; text-decoration: none; }
 .recreate-keyframe-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 9px; }
 .recreate-keyframe-grid > button { min-width: 0; overflow: hidden; padding: 0; position: relative; border: 1px solid #dce8f2; border-radius: 10px; background: #fff; text-align: left; }
 .recreate-keyframe-grid > button.active { border-color: #18aeca; box-shadow: 0 0 0 2px rgba(24,174,202,.12); }
-.recreate-keyframe-grid img, .recreate-keyframe-placeholder { width: 100%; aspect-ratio: 9/16; display: grid; place-items: center; object-fit: cover; background: linear-gradient(145deg,#eef8ff,#f8fbff); color: #7b8da2; }
+.recreate-keyframe-grid img, .recreate-keyframe-placeholder, .recreate-keyframe-video-fallback { width: 100%; aspect-ratio: 9/16; display: grid; place-items: center; object-fit: cover; background: linear-gradient(145deg,#eef8ff,#f8fbff); color: #7b8da2; }
 .recreate-keyframe-placeholder { gap: 4px; align-content: center; }
 .recreate-keyframe-placeholder small { font-size: 9px; font-weight: 900; }
 .recreate-keyframe-placeholder.compact { min-height: 76px; aspect-ratio: 9/16; }
+.recreate-keyframe-video-fallback { position: relative; overflow: hidden; background: #eef3f8; }
+.recreate-keyframe-video-fallback video { width: 100%; height: 100%; display: block; object-fit: cover; }
+.recreate-keyframe-video-fallback i { position: absolute; inset: auto 7px 7px; min-height: 22px; display: grid; place-items: center; border-radius: 7px; color: #fff; background: rgba(22,47,74,.68); font-size: 9px; font-style: normal; font-weight: 900; backdrop-filter: blur(6px); }
 .recreate-keyframe-grid strong, .recreate-keyframe-grid small { display: block; padding: 0 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recreate-keyframe-grid strong { margin-top: 7px; color: #314b64; font-size: 10px; }
 .recreate-keyframe-grid small { margin: 3px 0 8px; color: #71859b; font-size: 9px; }
