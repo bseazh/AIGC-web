@@ -132,6 +132,16 @@ const checks = [
     "goPreviousStep",
   ],
   [
+    "Recreate video requires selected keyframes before replacement",
+    "app/components/recreate-video-page.tsx",
+    "selectedKeyframes.length >= 4",
+  ],
+  [
+    "Recreate video clip step exposes keyframe picker",
+    "app/components/recreate-video-page.tsx",
+    "recreate-keyframe-picker",
+  ],
+  [
     "Recreate video product step shows AI replacement guide",
     "app/components/recreate-video-page.tsx",
     "AI 建议替换清单",

@@ -71,9 +71,15 @@ type RecreateFrameAnalysis = {
   }>;
   replacementPlan?: Array<{
     target?: string;
+    slotType?: "product" | "person" | "scene" | "text" | "style" | string;
+    materialKind?: string;
     replaceable?: boolean;
+    priority?: number;
+    confidence?: number;
+    sourceFrameTimes?: number[];
     strategy?: string;
     promptInstruction?: string;
+    detectionNote?: string;
   }>;
   risks?: string[];
   prompt?: string;
@@ -83,6 +89,11 @@ type RecreateFrameAnalysis = {
 type SourceKind = "video" | "product" | "scene";
 type WorkflowStep = "source" | "clip" | "product" | "reference" | "generate";
 type SourceMode = "douyin" | "upload" | "library";
+type KeyframeSelection = {
+  time: number;
+  url?: string;
+  label?: string;
+};
 type Draft = {
   step: WorkflowStep;
   sourceMode: SourceMode;
@@ -115,6 +126,7 @@ type Draft = {
     >
   >;
   activeClipId: string | null;
+  selectedKeyframes: KeyframeSelection[];
   products: Array<Pick<Item, "preview" | "name" | "byteSize" | "assetId">>;
   referenceImage: Pick<Item, "preview" | "name" | "byteSize" | "assetId"> | null;
   referenceConfirmed: boolean;
@@ -192,6 +204,16 @@ function formatBytes(byteSize: number) {
   return `${(kb / 1024).toFixed(1)} MB`;
 }
 
+function defaultKeyframes(durationSeconds?: number, offsetSeconds = 0): KeyframeSelection[] {
+  const duration = Math.max(3, Number(durationSeconds) || 15);
+  const usableEnd = Math.max(0.3, duration - 0.2);
+  const ratios = [0.12, 0.36, 0.62, 0.86];
+  return ratios.map((ratio, index) => ({
+    time: Math.round((offsetSeconds + Math.min(usableEnd, Math.max(0, duration * ratio))) * 10) / 10,
+    label: `关键画面 ${index + 1}`,
+  }));
+}
+
 export function RecreateVideoPage() {
   const router = useRouter();
   const refs = {
@@ -212,6 +234,7 @@ export function RecreateVideoPage() {
   const [sourceItem, setSourceItem] = useState<Item | null>(null);
   const [douyinClips, setClips] = useState<Item[]>([]);
   const [activeClipId, setActiveClipId] = useState<string | null>(null);
+  const [selectedKeyframes, setSelectedKeyframes] = useState<KeyframeSelection[]>([]);
   const [products, setProducts] = useState<Item[]>([]);
   const [referenceImage, setReferenceImage] = useState<Item | null>(null);
   const [referenceConfirmed, setReferenceConfirmed] = useState(false);
@@ -224,6 +247,7 @@ export function RecreateVideoPage() {
   const [frameAnalysis, setFrameAnalysis] = useState<RecreateFrameAnalysis | null>(null);
   const [frameAnalysisFrames, setFrameAnalysisFrames] = useState<Array<{ time: number; url: string }>>([]);
   const [douyinError, setDouyinError] = useState("");
+  const [douyinCacheExpired, setDouyinCacheExpired] = useState(false);
   const [douyinAnalysis, setDouyinAnalysis] = useState<DouyinAnalysis | null>(
     null,
   );
@@ -270,6 +294,7 @@ export function RecreateVideoPage() {
     sourceItem: cloneItem(sourceItem),
     douyinClips: douyinClips.map((item) => cloneItem(item)).filter(Boolean) as Draft["douyinClips"],
     activeClipId,
+    selectedKeyframes,
     products: products.map((item) => cloneItem(item)).filter(Boolean) as Draft["products"],
     referenceImage: cloneItem(referenceImage),
     referenceConfirmed,
@@ -313,6 +338,15 @@ export function RecreateVideoPage() {
     setSourceItem(restoreItem(draft.sourceItem));
     setClips((draft.douyinClips || []).map(restoreItem).filter(Boolean) as Item[]);
     setActiveClipId(draft.activeClipId || null);
+    setSelectedKeyframes(
+      (draft.selectedKeyframes || [])
+        .filter((item) => typeof item?.time === "number")
+        .map((item) => ({
+          time: item.time,
+          url: typeof item.url === "string" ? item.url : undefined,
+          label: typeof item.label === "string" ? item.label : undefined,
+        })),
+    );
     setProducts((draft.products || []).map(restoreItem).filter(Boolean) as Item[]);
     setReferenceImage(restoreItem(draft.referenceImage));
     setReferenceConfirmed(Boolean(draft.referenceConfirmed));
@@ -378,37 +412,141 @@ export function RecreateVideoPage() {
     const plan = (frameAnalysis?.replacementPlan || []).filter(
       (item) => item.replaceable !== false && (item.target || item.strategy || item.promptInstruction),
     );
-    if (plan.length) return plan.slice(0, 5);
+    if (plan.length) {
+      return [...plan]
+        .sort((a, b) => {
+          const priorityA = Number.isFinite(a.priority) ? Number(a.priority) : 99;
+          const priorityB = Number.isFinite(b.priority) ? Number(b.priority) : 99;
+          if (priorityA !== priorityB) return priorityA - priorityB;
+          return (Number(b.confidence) || 0) - (Number(a.confidence) || 0);
+        })
+        .slice(0, 5);
+    }
     return [
       {
         target: "商品主体",
+        slotType: "product",
+        materialKind: "商品图或主体参考图",
         replaceable: true,
+        priority: 1,
+        confidence: 0.55,
         strategy: "上传要替换进去的新商品图，系统会参考对标视频里的展示位置、景别和出镜节奏重生成。",
         promptInstruction: "用用户上传的新商品替换对标视频中的主要售卖主体，保持新商品外观准确。",
+        detectionNote: "未识别关键帧时，先按常见带货视频结构给出近似槽位。",
       },
       {
         target: "模特 / 手部 / 人物动作",
+        slotType: "person",
+        materialKind: "模特参考图、手部参考图或人物设定",
         replaceable: true,
+        priority: 2,
+        confidence: 0.45,
         strategy: "如需要换模特，上传模特参考图或在后续填写模特信息；只参考原视频动作和站位，不复制原人脸。",
         promptInstruction: "参考原视频人物动作、姿态和运镜，生成新的模特形象。",
+        detectionNote: "未识别关键帧时，人物槽位为可选建议。",
       },
       {
         target: "背景 / 场景氛围",
+        slotType: "scene",
+        materialKind: "场景参考图或氛围图",
         replaceable: true,
+        priority: 3,
+        confidence: 0.4,
         strategy: "需要换场景时上传场景参考图；保留镜头节奏，但生成原创背景。",
         promptInstruction: "参考原视频构图和光线氛围，替换为用户指定场景。",
+        detectionNote: "未识别关键帧时，场景槽位为可选建议。",
       },
     ];
   }, [frameAnalysis]);
-  const slotUploadHint = (target?: string) => {
-    const normalized = target || "";
+  const slotTypeLabel = (slotType?: string) => {
+    if (slotType === "product") return "商品";
+    if (slotType === "person") return "人物";
+    if (slotType === "scene") return "场景";
+    if (slotType === "text") return "文案";
+    if (slotType === "style") return "风格";
+    return "近似";
+  };
+  const slotConfidenceLabel = (confidence?: number) => {
+    if (typeof confidence !== "number" || Number.isNaN(confidence)) return "AI近似";
+    if (confidence >= 0.75) return "高置信";
+    if (confidence >= 0.5) return "中置信";
+    return "低置信";
+  };
+  const slotUploadHint = (slot: { target?: string; slotType?: string; materialKind?: string }) => {
+    if (slot.materialKind) return `建议上传：${slot.materialKind}`;
+    if (slot.slotType === "person") return "建议上传模特图，或下一步填写模特信息";
+    if (slot.slotType === "scene") return "建议上传场景参考图或氛围图";
+    if (slot.slotType === "text") return "建议填写品牌、卖点、价格，不建议复刻原字幕";
+    if (slot.slotType === "style") return "通常无需上传，作为镜头节奏参考";
+    if (slot.slotType === "product") return "建议上传商品图或主体参考图";
+    const normalized = slot.target || "";
     if (/模特|人物|手|人脸|动作/.test(normalized)) return "建议上传模特图，或下一步填写模特信息";
     if (/背景|场景|环境|空间/.test(normalized)) return "建议上传场景参考图或氛围图";
     if (/字幕|Logo|水印|品牌/.test(normalized)) return "不建议直接复刻；建议作为避让项处理";
     return "建议上传商品图或主体参考图";
   };
+  const slotFramePreviews = (slot: { sourceFrameTimes?: number[] }) => {
+    const frames = frameAnalysisFrames.length ? frameAnalysisFrames : selectedKeyframes.filter((item) => item.url);
+    if (!frames.length) return [];
+    const times = (slot.sourceFrameTimes || [])
+      .map((time) => Number(time))
+      .filter((time) => Number.isFinite(time));
+    if (!times.length) return frames.slice(0, 2);
+    const matched = times
+      .map((time) =>
+        frames
+          .map((frame) => ({ ...frame, distance: Math.abs(frame.time - time) }))
+          .sort((a, b) => a.distance - b.distance)[0],
+      )
+      .filter(Boolean);
+    return Array.from(new Map(matched.map((frame) => [`${frame.time}-${frame.url}`, frame])).values()).slice(0, 3);
+  };
+  const keyframeCandidates = useMemo<KeyframeSelection[]>(() => {
+    if (frameAnalysisFrames.length) {
+      return frameAnalysisFrames.map((frame, index) => ({
+        time: frame.time,
+        url: frame.url,
+        label: `AI关键画面 ${index + 1}`,
+      }));
+    }
+    if (selectedKeyframes.length) return selectedKeyframes;
+    return defaultKeyframes(sourceSelection?.durationSeconds);
+  }, [frameAnalysisFrames, selectedKeyframes, sourceSelection?.durationSeconds]);
+  const selectedKeyframeKeys = useMemo(
+    () => new Set(selectedKeyframes.map((frame) => frame.time.toFixed(1))),
+    [selectedKeyframes],
+  );
+  const toggleKeyframe = (frame: KeyframeSelection) => {
+    setSelectedKeyframes((current) => {
+      const key = frame.time.toFixed(1);
+      if (current.some((item) => item.time.toFixed(1) === key))
+        return current.filter((item) => item.time.toFixed(1) !== key);
+      return [...current, frame]
+        .sort((a, b) => a.time - b.time)
+        .slice(0, 8);
+    });
+    clearTaskState();
+  };
+  const useDefaultKeyframes = () => {
+    setSelectedKeyframes(defaultKeyframes(sourceSelection?.durationSeconds));
+    clearTaskState();
+  };
+  const returnToSourceForExpiredCache = () => {
+    setDouyinCacheExpired(false);
+    setDouyinError("");
+    setFrameAnalysis(null);
+    setFrameAnalysisFrames([]);
+    setSelectedKeyframes([]);
+    setDouyinAnalysis(null);
+    setStep("source");
+    setNotice("对标视频缓存已清除，请重新获取视频");
+    window.setTimeout(() => setNotice(""), 2200);
+  };
   const sourceReady = Boolean(sourceSelection);
-  const clipReady = sourceReady && (sourceMode !== "douyin" || douyinClips.length > 0 || !douyinAnalysis?.clipRequired);
+  const clipReady =
+    sourceReady &&
+    selectedKeyframes.length >= 4 &&
+    (sourceMode !== "douyin" || douyinClips.length > 0 || !douyinAnalysis?.clipRequired);
   const productReady = products.length > 0;
   const referenceReady = Boolean(referenceImage && referenceConfirmed);
   const generateReady =
@@ -490,6 +628,7 @@ export function RecreateVideoPage() {
     referenceConfirmed,
     referenceImage,
     resolution,
+    selectedKeyframes,
     sourceItem,
     sourceMode,
     special,
@@ -631,6 +770,7 @@ export function RecreateVideoPage() {
     setDouyinInput("");
     setDouyinError("");
     setDouyinAnalysis(null);
+    setSelectedKeyframes([]);
     setDouyinStart(0);
     setDouyinClipDuration(15);
     setActiveClipId(null);
@@ -655,6 +795,7 @@ export function RecreateVideoPage() {
       setSourceItem(selected);
       setClips([selected]);
       setActiveClipId(selected.assetId || null);
+      setSelectedKeyframes(defaultKeyframes(selected.durationSeconds));
       setDouyinAnalysis(null);
       setDouyinInput("");
       clearTaskState();
@@ -716,6 +857,7 @@ export function RecreateVideoPage() {
       setSourceItem(selected);
       setClips([selected]);
       setActiveClipId(null);
+        setSelectedKeyframes(defaultKeyframes(durationSeconds));
         setDouyinAnalysis(null);
         setDouyinInput("");
         clearTaskState();
@@ -753,6 +895,7 @@ export function RecreateVideoPage() {
     if (!douyinInput.trim() || douyinBusy) return;
     setError("");
     setDouyinError("");
+    setDouyinCacheExpired(false);
     setDouyinBusy("analyzing");
     try {
       const response = await fetch("/api/imports/douyin/", {
@@ -777,6 +920,7 @@ export function RecreateVideoPage() {
       });
       setFrameAnalysis(null);
       setFrameAnalysisFrames([]);
+      setSelectedKeyframes([]);
       setDouyinStart(0);
       setDouyinClipDuration(
         body.durationSeconds >= 15 ? 15 : body.durationSeconds >= 10 ? 10 : 5,
@@ -798,6 +942,7 @@ export function RecreateVideoPage() {
     }
     setError("");
     setDouyinError("");
+    setDouyinCacheExpired(false);
     setDouyinBusy("importing");
     try {
       const response = await fetch("/api/imports/douyin/", {
@@ -837,6 +982,12 @@ export function RecreateVideoPage() {
           : [...current, importedClip].slice(0, 10),
       );
       setActiveClipId(importedClip.assetId || null);
+      setSelectedKeyframes(
+        defaultKeyframes(
+          body.durationSeconds,
+          typeof body.clipStartSeconds === "number" ? body.clipStartSeconds : 0,
+        ),
+      );
       clearTaskState();
       setStep("clip");
       setNotice("片段已保存到素材库");
@@ -854,6 +1005,7 @@ export function RecreateVideoPage() {
     if (!douyinAnalysis?.cacheId || frameAnalysisBusy) return;
     setFrameAnalysisBusy(true);
     setDouyinError("");
+    setDouyinCacheExpired(false);
     try {
       const response = await fetch("/api/workflows/recreate-video-analysis/", {
         method: "POST",
@@ -868,15 +1020,27 @@ export function RecreateVideoPage() {
         }),
       });
       const body = await response.json().catch(() => null);
-      if (!response.ok)
+      if (!response.ok) {
+        if (body?.code === "CACHE_EXPIRED" || response.status === 410) {
+          setDouyinCacheExpired(true);
+          setFrameAnalysis(null);
+          setFrameAnalysisFrames([]);
+        }
         throw new Error(body?.message || body?.code || "关键帧识别失败");
+      }
       setFrameAnalysis(body.analysis || null);
-      setFrameAnalysisFrames(
-        (body.frames || []).map((frame: { time: number; url: string }) => ({
+      const extractedFrames = (body.frames || []).map((frame: { time: number; url: string }) => ({
           time: frame.time,
           url: frame.url,
-        })),
-      );
+        }));
+      setFrameAnalysisFrames(extractedFrames);
+      if (!selectedKeyframes.length)
+        setSelectedKeyframes(
+          extractedFrames.slice(0, 4).map((frame: { time: number; url: string }, index: number) => ({
+            ...frame,
+            label: `AI关键画面 ${index + 1}`,
+          })),
+        );
       if (body.analysis?.prompt) {
         setSpecial((current) =>
           current.trim()
@@ -1001,6 +1165,9 @@ export function RecreateVideoPage() {
         ...(referenceImage ? [await upload(referenceImage)] : []),
       ];
       const prompt = [
+        selectedKeyframes.length
+          ? `已确认关键画面时间点：${selectedKeyframes.map((frame) => `${frame.time.toFixed(1)}s`).join("、")}。请以这些画面作为复刻参考节点，保持原视频镜头节奏但重生成原创内容。`
+          : "",
         `产品信息：${productInfo.trim()}`,
         `视频特殊要求：${special.trim()}`,
         modelOn && modelInfo.trim()
@@ -1414,9 +1581,15 @@ export function RecreateVideoPage() {
         </div>
       )}
       {douyinError && (
-        <p className="creator-error" role="alert">
-          {douyinError}
-        </p>
+        <div className="creator-error recreate-actionable-error" role="alert">
+          <span>{douyinError}</span>
+          {douyinCacheExpired ? (
+            <button type="button" onClick={returnToSourceForExpiredCache}>
+              <ArrowLeft size={14} />
+              返回第一步重新获取
+            </button>
+          ) : null}
+        </div>
       )}
       <div className="recreate-source-footer">
         <button
@@ -1441,8 +1614,68 @@ export function RecreateVideoPage() {
         <span>2 / 5</span>
       </header>
       <p className="recreate-panel-copy">
-        这里保留当前复刻用的片段，也可以继续截取其他片段，后面再带去智能混剪。
+        先锁定复刻要参考的关键画面。至少选择 4 帧，后续会围绕这些画面批量替换商品、人物或场景。
       </p>
+      <section className="recreate-keyframe-picker">
+        <header>
+          <div>
+            <strong>关键画面选择</strong>
+            <small>
+              已选 {selectedKeyframes.length}/8 · 至少 4 帧
+              {frameAnalysisFrames.length ? " · 已有 AI 截图" : " · 当前为时间点近似"}
+            </small>
+          </div>
+          <div>
+            {douyinAnalysis?.cacheId ? (
+              <button type="button" onClick={analyzeReplaceableFrames} disabled={frameAnalysisBusy}>
+                {frameAnalysisBusy ? (
+                  <LoaderCircle className="generation-spinner" size={14} />
+                ) : (
+                  <Sparkles size={14} />
+                )}
+                {frameAnalysisBusy ? "正在抽帧" : frameAnalysisFrames.length ? "重新抽帧识别" : "AI抽取关键画面"}
+              </button>
+            ) : null}
+            <button type="button" onClick={useDefaultKeyframes}>
+              使用默认 4 帧
+            </button>
+          </div>
+        </header>
+        <div className="recreate-keyframe-grid">
+          {keyframeCandidates.map((frame, index) => {
+            const selected = selectedKeyframeKeys.has(frame.time.toFixed(1));
+            return (
+              <button
+                type="button"
+                className={selected ? "active" : ""}
+                key={`${frame.time}-${frame.url || index}`}
+                onClick={() => toggleKeyframe(frame)}
+              >
+                {frame.url ? (
+                  <img src={frame.url} alt={`${frame.time.toFixed(1)}秒关键画面`} />
+                ) : (
+                  <span className="recreate-keyframe-placeholder">
+                    <Film size={20} />
+                    <small>时间点</small>
+                  </span>
+                )}
+                <strong>{frame.label || `关键画面 ${index + 1}`}</strong>
+                <small>{frame.time.toFixed(1)}s</small>
+                <em>{selected ? "已选择" : "点击选择"}</em>
+              </button>
+            );
+          })}
+        </div>
+        {selectedKeyframes.length < 4 ? (
+          <p className="recreate-keyframe-warning">
+            还需选择 {4 - selectedKeyframes.length} 帧，才能进入替换复刻素材。
+          </p>
+        ) : (
+          <p className="recreate-keyframe-ready">
+            已确认关键画面：{selectedKeyframes.map((frame) => `${frame.time.toFixed(1)}s`).join(" / ")}
+          </p>
+        )}
+      </section>
       {douyinAnalysis?.clipRequired && videoSource === "douyin" ? (
         <div className="recreate-clip-editor">
           <header>
@@ -1680,7 +1913,7 @@ export function RecreateVideoPage() {
         <span>3 / 5</span>
       </header>
       <p className="recreate-panel-copy">
-        先看 AI 从对标视频里识别出的可替换对象，再逐项上传对应素材。系统会用这些素材重生成原创视频，而不是直接复制原视频画面。
+        先看 AI 从关键帧里近似识别出的可替换对象，再逐项上传对应素材。物品较少时会优先识别主商品、人物、场景和字幕，系统会用这些素材重生成原创视频。
       </p>
       <section className="recreate-replacement-guide">
         <header>
@@ -1688,9 +1921,9 @@ export function RecreateVideoPage() {
             <strong>AI 建议替换清单</strong>
             <small>
               {frameAnalysis
-                ? "已根据关键帧识别出可替换对象"
+                ? "已根据关键帧生成少量近似替换槽位"
                 : douyinAnalysis?.cacheId
-                  ? "建议先识别关键帧，让用户知道该换什么"
+                  ? "建议先识别关键帧，让用户知道该换什么、该上传什么"
                   : "可先按常见带货视频结构上传素材"}
             </small>
           </div>
@@ -1705,36 +1938,62 @@ export function RecreateVideoPage() {
             </button>
           ) : null}
         </header>
-        {frameAnalysisFrames.length ? (
+        {(frameAnalysisFrames.length || selectedKeyframes.length) ? (
           <div className="recreate-replacement-frames">
-            {frameAnalysisFrames.slice(0, 5).map((frame) => (
-              <figure key={`${frame.time}-${frame.url}`}>
-                <img src={frame.url} alt={`${frame.time.toFixed(1)}秒关键帧`} />
+            {(frameAnalysisFrames.length ? frameAnalysisFrames : selectedKeyframes).slice(0, 5).map((frame, index) => (
+              <figure key={`${frame.time}-${frame.url || index}`}>
+                {frame.url ? (
+                  <img src={frame.url} alt={`${frame.time.toFixed(1)}秒关键帧`} />
+                ) : (
+                  <span className="recreate-keyframe-placeholder compact">
+                    <Film size={17} />
+                  </span>
+                )}
                 <figcaption>{frame.time.toFixed(1)}s</figcaption>
               </figure>
             ))}
           </div>
         ) : null}
         <div className="recreate-replacement-slots">
-          {replacementSlots.map((slot, index) => (
-            <article key={`${slot.target || "替换项"}-${index}`}>
-              <span>{index + 1}</span>
-              <div>
-                <strong>{slot.target || "可替换对象"}</strong>
-                <p>{slot.strategy || slot.promptInstruction || "参考对标视频结构，用用户上传素材重生成。"}</p>
-                <small>{slotUploadHint(slot.target)}</small>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setLibraryKind(null);
-                  refs.product.current?.click();
-                }}
-              >
-                上传对应素材
-              </button>
-            </article>
-          ))}
+          {replacementSlots.map((slot, index) => {
+            const previews = slotFramePreviews(slot);
+            return (
+              <article key={`${slot.target || "替换项"}-${index}`}>
+                <span>{index + 1}</span>
+                <div>
+                  <strong>{slot.target || "可替换对象"}</strong>
+                  <em className="recreate-replacement-slot-meta">
+                    {slotTypeLabel(slot.slotType)} · {slotConfidenceLabel(slot.confidence)}
+                    {slot.sourceFrameTimes?.length
+                      ? ` · 参考 ${slot.sourceFrameTimes.slice(0, 3).map((time) => `${Number(time).toFixed(1)}s`).join(" / ")}`
+                      : ""}
+                  </em>
+                  {previews.length ? (
+                    <div className="recreate-replacement-slot-frames" aria-label="替换物品参考截图">
+                      {previews.map((frame) => (
+                        <figure key={`${slot.target || "slot"}-${frame.time}-${frame.url}`}>
+                          <img src={frame.url} alt={`${slot.target || "可替换对象"}参考截图 ${frame.time.toFixed(1)}秒`} />
+                          <figcaption>{frame.time.toFixed(1)}s</figcaption>
+                        </figure>
+                      ))}
+                    </div>
+                  ) : null}
+                  <p>{slot.strategy || slot.promptInstruction || "参考对标视频结构，用用户上传素材重生成。"}</p>
+                  {slot.detectionNote ? <p className="recreate-replacement-slot-note">{slot.detectionNote}</p> : null}
+                  <small>{slotUploadHint(slot)}</small>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLibraryKind(null);
+                    refs.product.current?.click();
+                  }}
+                >
+                  上传对应素材
+                </button>
+              </article>
+            );
+          })}
         </div>
         {frameAnalysis?.risks?.length ? (
           <p className="recreate-replacement-risk">
@@ -1830,8 +2089,28 @@ export function RecreateVideoPage() {
         <span>4 / 5</span>
       </header>
       <p className="recreate-panel-copy">
-        选一张能代表最终复刻效果的图，确认后就进入生成阶段。
+        检查前面锁定的关键画面，并选择一张最终复刻参考图。后续可升级为批量生成参考图后逐张确认。
       </p>
+      <section className="recreate-reference-keyframes">
+        <header>
+          <strong>已锁定关键画面</strong>
+          <small>{selectedKeyframes.length} 帧会作为最终成片的镜头参考节点</small>
+        </header>
+        <div>
+          {selectedKeyframes.map((frame, index) => (
+            <figure key={`${frame.time}-${frame.url || index}`}>
+              {frame.url ? (
+                <img src={frame.url} alt={`${frame.time.toFixed(1)}秒参考画面`} />
+              ) : (
+                <span className="recreate-keyframe-placeholder compact">
+                  <Film size={17} />
+                </span>
+              )}
+              <figcaption>{frame.time.toFixed(1)}s</figcaption>
+            </figure>
+          ))}
+        </div>
+      </section>
       <div className="recreate-source-tabs">
         <button
           type="button"
@@ -2196,9 +2475,15 @@ export function RecreateVideoPage() {
           {step === "generate" && generatePanel}
           {notice && <p className="creator-success">{notice}</p>}
           {douyinError && step !== "source" && (
-            <p className="creator-error" role="alert">
-              {douyinError}
-            </p>
+            <div className="creator-error recreate-actionable-error" role="alert">
+              <span>{douyinError}</span>
+              {douyinCacheExpired ? (
+                <button type="button" onClick={returnToSourceForExpiredCache}>
+                  <ArrowLeft size={14} />
+                  返回第一步重新获取
+                </button>
+              ) : null}
+            </div>
           )}
         </section>
       </form>
