@@ -147,7 +147,7 @@ const workflowSteps: Array<{
 }> = [
   { key: "source", number: 1, title: "添加对标视频", subtitle: "抖音获取或本地上传" },
   { key: "clip", number: 2, title: "选择关键画面", subtitle: "拆分并锁定复刻片段" },
-  { key: "product", number: 3, title: "批量替换商品", subtitle: "选择商品图" },
+  { key: "product", number: 3, title: "替换复刻素材", subtitle: "商品、模特或场景参考" },
   { key: "reference", number: 4, title: "确认复刻参考图", subtitle: "确认最终参考图" },
   { key: "generate", number: 5, title: "生成复刻视频", subtitle: "开始任务输出" },
 ];
@@ -1614,7 +1614,7 @@ export function RecreateVideoPage() {
           onClick={() => setStep("product")}
           disabled={!clipReady}
         >
-          下一步：批量替换商品
+          下一步：替换复刻素材
         </button>
       </div>
     </section>
@@ -1648,12 +1648,12 @@ export function RecreateVideoPage() {
       <header className="recreate-panel-head">
         <div>
           <strong>当前步骤</strong>
-          <h2>批量替换商品</h2>
+          <h2>替换复刻素材</h2>
         </div>
         <span>3 / 5</span>
       </header>
       <p className="recreate-panel-copy">
-        选择商品图后，系统会把它们放到当前复刻链路里，作为最终任务的主体素材。
+        上传商品、模特或场景参考素材后，系统会把它们放到当前复刻链路里，作为最终任务的替换主体。
       </p>
       <div className="recreate-source-tabs three">
         <button
@@ -1687,8 +1687,8 @@ export function RecreateVideoPage() {
           <span>
             <ImagePlus size={27} />
           </span>
-          <strong>上传商品图片</strong>
-          <small>支持 JPG / PNG / WebP，单张不超过 10MB</small>
+          <strong>上传替换素材</strong>
+          <small>支持商品图、模特图或场景参考图，单张不超过 10MB</small>
           <small>已上传 {products.length}/5 个</small>
         </button>
       )}
@@ -1696,14 +1696,14 @@ export function RecreateVideoPage() {
         <div className="recreate-selected-images">
           {products.map((product, index) => (
             <article key={`${product.assetId || product.name}-${index}`}>
-              <img src={product.preview} alt="商品图片预览" />
+              <img src={product.preview} alt="替换素材预览" />
               <button
                 type="button"
                 onClick={() => {
                   removeProduct(index);
                   clearTaskState();
                 }}
-                aria-label="移除商品图"
+                aria-label="移除替换素材"
               >
                 <X size={14} />
               </button>
