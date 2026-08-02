@@ -437,7 +437,7 @@ export function RecreateVideoPage() {
   const materialReferences = useMemo(
     () =>
       products.map((product, index) => ({
-        label: product.name || materialLabel(index),
+        label: product.name.trim() || materialLabel(index),
         fallbackLabel: materialLabel(index),
         preview: product.preview,
       })),
@@ -1389,12 +1389,21 @@ export function RecreateVideoPage() {
     setProducts((current) =>
       current.map((item, itemIndex) =>
         itemIndex === index
-          ? { ...item, name: name.trim().slice(0, 18) || materialLabel(index) }
+          ? { ...item, name: name.slice(0, 18) }
           : item,
       ),
     );
     setPolishedPrompt(null);
     clearTaskState();
+  };
+  const normalizeProductName = (index: number) => {
+    setProducts((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index
+          ? { ...item, name: item.name.trim() || materialLabel(index) }
+          : item,
+      ),
+    );
   };
   const insertMaterialReference = (label: string) => {
     setProductInfo((current) => {
@@ -2294,15 +2303,17 @@ export function RecreateVideoPage() {
       {products.length > 0 && (
         <div className="recreate-selected-images">
           {products.map((product, index) => (
-            <article key={`${product.assetId || product.name}-${index}`}>
+            <article key={`${product.assetId || product.preview}-${index}`}>
               <img src={product.preview} alt="替换素材预览" />
               <label>
-                <small>{materialLabel(index)}</small>
+                <small>引用标签：@{product.name.trim() || materialLabel(index)}</small>
                 <input
-                  value={product.name || materialLabel(index)}
+                  value={product.name}
                   onChange={(event) => renameProduct(index, event.target.value)}
+                  onBlur={() => normalizeProductName(index)}
                   maxLength={18}
                   aria-label={`重命名${materialLabel(index)}`}
+                  placeholder={materialLabel(index)}
                 />
               </label>
               <button
