@@ -54,6 +54,8 @@ type Result = {
   outputs: Array<{ assetId: string; url: string }>;
   taskId?: string;
 };
+type PreviewMedia = { url: string; name: string; mimeType: string };
+type FaceMaskRegion = { x: number; y: number; width: number; height: number; confidence?: number; view?: string };
 type DouyinAnalysis = {
   title: string;
   durationSeconds: number;
@@ -200,6 +202,17 @@ function restoreItem(raw: unknown): Item | null {
     name: item.name,
     byteSize: item.byteSize,
     assetId: typeof item.assetId === "string" ? item.assetId : undefined,
+    materialKind:
+      item.materialKind === "person" ||
+      item.materialKind === "product" ||
+      item.materialKind === "scene" ||
+      item.materialKind === "text" ||
+      item.materialKind === "unknown"
+        ? item.materialKind
+        : undefined,
+    materialSummary: typeof item.materialSummary === "string" ? item.materialSummary : undefined,
+    materialConfidence: typeof item.materialConfidence === "number" ? item.materialConfidence : undefined,
+    materialSuggestedAction: typeof item.materialSuggestedAction === "string" ? item.materialSuggestedAction : undefined,
     durationSeconds:
       typeof item.durationSeconds === "number" ? item.durationSeconds : undefined,
     source: item.source === "douyin" ? "douyin" : undefined,
@@ -280,6 +293,7 @@ export function RecreateVideoPage() {
   const [materialMentionQuery, setMaterialMentionQuery] = useState("");
   const [materialAnalysisBusyIndex, setMaterialAnalysisBusyIndex] = useState<number | null>(null);
   const [privacyViewBusyIndex, setPrivacyViewBusyIndex] = useState<number | null>(null);
+  const [faceMaskBusyIndex, setFaceMaskBusyIndex] = useState<number | null>(null);
   const [modelOn, setModelOn] = useState(false);
   const [modelInfo, setModelInfo] = useState("");
   const [ratio, setRatio] = useState("9:16");
@@ -290,6 +304,7 @@ export function RecreateVideoPage() {
   >("idle");
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
+  const [previewMedia, setPreviewMedia] = useState<PreviewMedia | null>(null);
   const [notice, setNotice] = useState("");
   const [draftId, setDraftId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("复刻视频项目");
@@ -434,6 +449,15 @@ export function RecreateVideoPage() {
     if (account) refreshDrafts(true);
   }, [account]);
 
+  useEffect(() => {
+    if (!previewMedia) return;
+    const listener = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPreviewMedia(null);
+    };
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, [previewMedia]);
+
   const sourceSelection = useMemo(
     () => (activeClipId ? douyinClips.find((item) => item.assetId === activeClipId) : null) || sourceItem,
     [activeClipId, douyinClips, sourceItem],
@@ -461,6 +485,16 @@ export function RecreateVideoPage() {
     if (kind === "text") return "文字/Logo";
     return "未识别";
   };
+  const previewImageButton = (url: string, name: string, className = "recreate-preview-image-button") => (
+    <button
+      type="button"
+      className={className}
+      onClick={() => setPreviewMedia({ url, name, mimeType: "image/*" })}
+      aria-label={`放大预览${name}`}
+    >
+      <img src={url} alt={name} />
+    </button>
+  );
   const mentionMaterials = useMemo(() => {
     const query = materialMentionQuery.trim().replace(/^@/, "");
     if (!query) return materialReferences;
@@ -1531,6 +1565,16 @@ export function RecreateVideoPage() {
     return presign.assetId as string;
   };
 
+  const resolveAssetPreviewUrl = async (assetId: string, fallbackUrl: string) => {
+    const response = await fetch("/api/assets/?kind=ALL", { cache: "no-store" }).catch(() => null);
+    if (!response?.ok) return fallbackUrl;
+    const body = await response.json().catch(() => null);
+    const asset = Array.isArray(body?.assets)
+      ? body.assets.find((item: Asset) => item.id === assetId)
+      : null;
+    return typeof asset?.url === "string" ? asset.url : fallbackUrl;
+  };
+
   const loadImageForCanvas = async (url: string) => {
     const image = new Image();
     image.decoding = "async";
@@ -1626,6 +1670,145 @@ export function RecreateVideoPage() {
       ? `十二宫格参考图：第${collageImageIndex}张参考图是一张由已选关键画面拼接而成的十二宫格参考板，请结合这张图理解镜头顺序、主体位置、景别变化、动作走势和画面氛围；它只用于结构参考，不得复制原人物脸、原商品、原品牌、Logo、水印或原字幕。`
       : "十二宫格参考图：当前只有关键画面时间点，未能提交拼接图；请主要参考对标视频的镜头节奏和已确认时间点。";
 
+  const analyzeFaceMaskRegions = async (assetId?: string) => {
+    if (!assetId) return [];
+    const response = await fetch("/api/workflows/recreate-face-mask-analysis/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assetId }),
+    }).catch(() => null);
+    if (!response?.ok) return [];
+    const body = await response.json().catch(() => null);
+    return Array.isArray(body?.faceRegions)
+      ? body.faceRegions
+          .map((region: Partial<FaceMaskRegion>) => ({
+            x: Number(region.x),
+            y: Number(region.y),
+            width: Number(region.width),
+            height: Number(region.height),
+            confidence: Number(region.confidence) || 0.5,
+            view: typeof region.view === "string" ? region.view : "",
+          }))
+          .filter((region: FaceMaskRegion) =>
+            [region.x, region.y, region.width, region.height].every(Number.isFinite) &&
+            region.width > 0 &&
+            region.height > 0,
+          )
+          .slice(0, 24)
+      : [];
+  };
+
+  const drawFaceMask = (
+    context: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    variant: number,
+  ) => {
+    const paddingX = width * 0.18;
+    const paddingY = height * 0.16;
+    const maskX = Math.max(0, x - paddingX);
+    const maskY = Math.max(0, y - paddingY);
+    const maskWidth = width + paddingX * 2;
+    const maskHeight = height + paddingY * 2;
+    if (variant % 4 === 0) {
+      context.fillStyle = "rgba(12, 18, 28, 0.78)";
+      context.fillRect(maskX, maskY + maskHeight * 0.32, maskWidth, maskHeight * 0.32);
+      context.fillStyle = "rgba(238, 242, 247, 0.4)";
+      context.fillRect(maskX, maskY, maskWidth, maskHeight);
+      return;
+    }
+    if (variant % 4 === 1) {
+      context.fillStyle = "rgba(238, 242, 247, 0.72)";
+      context.fillRect(maskX, maskY, maskWidth, maskHeight);
+      context.strokeStyle = "rgba(12, 18, 28, 0.36)";
+      context.lineWidth = Math.max(1, maskWidth / 34);
+      for (let offset = -maskHeight; offset < maskWidth; offset += Math.max(8, maskWidth / 7)) {
+        context.beginPath();
+        context.moveTo(maskX + offset, maskY + maskHeight);
+        context.lineTo(maskX + offset + maskHeight, maskY);
+        context.stroke();
+      }
+      return;
+    }
+    if (variant % 4 === 2) {
+      const block = Math.max(6, Math.min(maskWidth, maskHeight) / 5);
+      for (let yy = maskY; yy < maskY + maskHeight; yy += block) {
+        for (let xx = maskX; xx < maskX + maskWidth; xx += block) {
+          const tone = 185 + ((Math.floor(xx / block) + Math.floor(yy / block)) % 3) * 18;
+          context.fillStyle = `rgba(${tone}, ${tone + 4}, ${Math.min(255, tone + 12)}, 0.86)`;
+          context.fillRect(xx, yy, block + 1, block + 1);
+        }
+      }
+      return;
+    }
+    context.fillStyle = "rgba(255, 255, 255, 0.58)";
+    context.fillRect(maskX, maskY, maskWidth, maskHeight);
+    context.strokeStyle = "rgba(10, 18, 30, 0.5)";
+    context.lineWidth = Math.max(2, maskWidth / 28);
+    context.strokeRect(maskX, maskY, maskWidth, maskHeight);
+    context.fillStyle = "rgba(10, 18, 30, 0.18)";
+    context.fillRect(maskX, maskY + maskHeight * 0.42, maskWidth, maskHeight * 0.16);
+  };
+
+  const fallbackFaceRegions = (width: number, height: number) => {
+    const landscape = width >= height;
+    const columns = landscape ? 4 : 2;
+    const rows = landscape ? 2 : 4;
+    const regions: FaceMaskRegion[] = [];
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        const cellX = column / columns;
+        const cellY = row / rows;
+        regions.push({
+          x: cellX + 0.32 / columns,
+          y: cellY + 0.13 / rows,
+          width: 0.36 / columns,
+          height: 0.22 / rows,
+          confidence: 0.2,
+          view: "fallback",
+        });
+      }
+    }
+    return regions;
+  };
+
+  const createFaceMaskedReferenceAsset = async (source: { url: string; name?: string; assetId?: string }) => {
+    const image = await loadImageForCanvas(source.url);
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("脸部遮盖处理失败");
+    context.drawImage(image, 0, 0);
+    const detectedRegions = await analyzeFaceMaskRegions(source.assetId);
+    const regions = detectedRegions.length ? detectedRegions : fallbackFaceRegions(canvas.width, canvas.height);
+    regions.forEach((region: FaceMaskRegion, index: number) =>
+      drawFaceMask(
+        context,
+        region.x * canvas.width,
+        region.y * canvas.height,
+        region.width * canvas.width,
+        region.height * canvas.height,
+        index,
+      ),
+    );
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+    if (!blob) throw new Error("脸部遮盖图导出失败");
+    const file = new File([blob], "privacy-masked-multiview.jpg", { type: "image/jpeg" });
+    const preview = URL.createObjectURL(file);
+    const assetId = await upload({
+      file,
+      preview,
+      name: source.name || "虚拟模特参考",
+      byteSize: file.size,
+    });
+    const url = await resolveAssetPreviewUrl(assetId, preview);
+    if (url !== preview) URL.revokeObjectURL(preview);
+    return { assetId, url, byteSize: file.size };
+  };
+
   const prepareReferenceVideoAsset = async (item: Item) => {
     if (item.assetId) return item.assetId;
     if (item.source === "douyin" && douyinAnalysis?.cacheId) {
@@ -1700,6 +1883,38 @@ export function RecreateVideoPage() {
     throw new Error("多视图参考仍在生成中，请稍后在任务中心查看");
   };
 
+  const strengthenFaceMask = async (index: number) => {
+    const source = products[index];
+    if (!source || faceMaskBusyIndex !== null) return;
+    setError("");
+    setFaceMaskBusyIndex(index);
+    try {
+      const sourceAssetId = source.assetId || await upload(source);
+      const masked = await createFaceMaskedReferenceAsset({ url: source.preview, name: source.name || "虚拟模特参考", assetId: sourceAssetId });
+      setProducts((current) =>
+        current.map((item, itemIndex) => {
+          if (itemIndex !== index) return item;
+          if (item.preview.startsWith("blob:")) URL.revokeObjectURL(item.preview);
+          return {
+            ...item,
+            assetId: masked.assetId,
+            preview: masked.url,
+            byteSize: masked.byteSize,
+            materialKind: "person",
+            materialSummary: "已强化脸部遮盖，可作为人物 reference 提交",
+          };
+        }),
+      );
+      setNotice("已强化脸部遮盖");
+      window.setTimeout(() => setNotice(""), 2200);
+      clearTaskState();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "脸部遮盖强化失败");
+    } finally {
+      setFaceMaskBusyIndex(null);
+    }
+  };
+
   const createPrivacyMultiView = async (index: number) => {
     const source = products[index];
     if (!source || privacyViewBusyIndex !== null) return;
@@ -1753,17 +1968,20 @@ export function RecreateVideoPage() {
       if (!response.ok) throw new Error(created?.message || "多视图参考任务创建失败");
       setNotice(isPerson ? "正在生成隐私化多角度参考图" : "正在生成素材多视图参考图");
       const output = await pollPrivacyViewTask(created.taskId);
+      const finalOutput = isPerson
+        ? await createFaceMaskedReferenceAsset({ url: output.url, name: outputName, assetId: output.assetId })
+        : { assetId: output.assetId, url: output.url, byteSize: 0 };
       setProducts((current) =>
         current.map((item, itemIndex) => {
           if (itemIndex !== index) return item;
           if (item.file) URL.revokeObjectURL(item.preview);
           return {
-            assetId: output.assetId,
-            preview: output.url,
+            assetId: finalOutput.assetId,
+            preview: finalOutput.url,
             name: outputName,
-            byteSize: 0,
+            byteSize: finalOutput.byteSize,
             materialKind: isPerson ? "person" : kind,
-            materialSummary: isPerson ? "已生成隐私化人物多角度参考" : "已生成素材多视图参考",
+            materialSummary: isPerson ? "已生成隐私化人物多角度参考，并强化脸部遮盖" : "已生成素材多视图参考",
             materialConfidence: source.materialConfidence,
           };
         }),
@@ -2423,7 +2641,7 @@ export function RecreateVideoPage() {
             {(frameAnalysisFrames.length ? frameAnalysisFrames : selectedKeyframes).slice(0, 12).map((frame, index) => (
               <figure key={`${frame.time}-${frame.url || index}`}>
                 {frame.url ? (
-                  <img src={frame.url} alt={`${frame.time.toFixed(1)}秒关键帧`} />
+                  previewImageButton(frame.url, `${frame.time.toFixed(1)}秒关键帧`)
                 ) : (
                   keyframeFallbackVisual("待抽帧")
                 )}
@@ -2568,7 +2786,7 @@ export function RecreateVideoPage() {
         </header>
         {portraitCandidate ? (
           <div className="recreate-portrait-reference-body">
-            <img src={portraitCandidate.preview} alt="待处理素材预览" />
+            {previewImageButton(portraitCandidate.preview, portraitCandidate.name || "待处理素材预览")}
             <div>
               <strong>{privacyReference ? "@虚拟模特参考" : `当前候选：@${portraitCandidate.name.trim() || materialLabel(portraitCandidateIndex)}`}</strong>
               <p>
@@ -2610,6 +2828,21 @@ export function RecreateVideoPage() {
                       ? "生成商品/素材多视图"
                       : "生成通用多视图参考"}
               </button>
+              {portraitCandidate.materialKind === "person" ? (
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => strengthenFaceMask(portraitCandidateIndex)}
+                  disabled={faceMaskBusyIndex !== null || privacyViewBusyIndex !== null || materialAnalysisBusyIndex !== null}
+                >
+                  {faceMaskBusyIndex === portraitCandidateIndex ? (
+                    <LoaderCircle className="generation-spinner" size={14} />
+                  ) : (
+                    <Sparkles size={14} />
+                  )}
+                  {faceMaskBusyIndex === portraitCandidateIndex ? "正在强化遮盖" : "强化脸部遮盖"}
+                </button>
+              ) : null}
               </div>
             </div>
           </div>
@@ -2624,7 +2857,7 @@ export function RecreateVideoPage() {
         <div className="recreate-selected-images">
           {products.map((product, index) => (
             <article key={`${product.assetId || product.preview}-${index}`}>
-              <img src={product.preview} alt="替换素材预览" />
+              {previewImageButton(product.preview, product.name || `素材 ${index + 1}`)}
               <label>
                 <small>引用标签：@{product.name.trim() || materialLabel(index)}</small>
                 {product.materialKind ? <small>识别：{materialKindLabel(product.materialKind)}</small> : null}
@@ -2653,6 +2886,21 @@ export function RecreateVideoPage() {
                       ? "人物多视图"
                       : "素材多视图"}
                 </button>
+                {product.materialKind === "person" ? (
+                  <button
+                    type="button"
+                    className="privacy-view"
+                    onClick={() => strengthenFaceMask(index)}
+                    disabled={faceMaskBusyIndex !== null || privacyViewBusyIndex !== null || materialAnalysisBusyIndex !== null}
+                  >
+                    {faceMaskBusyIndex === index ? (
+                      <LoaderCircle className="generation-spinner" size={12} />
+                    ) : (
+                      <Sparkles size={12} />
+                    )}
+                    {faceMaskBusyIndex === index ? "遮盖中" : "强化遮盖"}
+                  </button>
+                ) : null}
               </label>
               <button
                 type="button"
@@ -2711,7 +2959,7 @@ export function RecreateVideoPage() {
           {selectedKeyframes.map((frame, index) => (
             <figure key={`${frame.time}-${frame.url || index}`}>
               {frame.url ? (
-                <img src={frame.url} alt={`${frame.time.toFixed(1)}秒参考画面`} />
+                previewImageButton(frame.url, `${frame.time.toFixed(1)}秒参考画面`)
               ) : (
                 keyframeFallbackVisual("待抽帧")
               )}
@@ -2763,7 +3011,7 @@ export function RecreateVideoPage() {
         <div className="recreate-selected-images">
           {products.map((product, index) => (
             <article key={`${product.assetId || product.name}-confirm-${index}`}>
-              <img src={product.preview} alt="素材池预览" />
+              {previewImageButton(product.preview, product.name || `素材 ${index + 1}`)}
               <span>{index + 1}</span>
             </article>
           ))}
@@ -3116,6 +3364,34 @@ export function RecreateVideoPage() {
           )}
         </section>
       </form>
+      {previewMedia ? (
+        <div
+          className="asset-preview-backdrop"
+          role="presentation"
+          onMouseDown={(event) => event.target === event.currentTarget && setPreviewMedia(null)}
+        >
+          <section className="asset-preview-modal" role="dialog" aria-modal="true" aria-label={`预览${previewMedia.name}`}>
+            <button
+              className="asset-preview-close"
+              type="button"
+              aria-label="关闭预览"
+              title="关闭"
+              onClick={() => setPreviewMedia(null)}
+            >
+              <X size={21} />
+            </button>
+            <div className="asset-preview-stage">
+              <img src={previewMedia.url} alt={previewMedia.name} />
+            </div>
+            <footer>
+              <div>
+                <strong>{previewMedia.name}</strong>
+                <small>复刻素材预览</small>
+              </div>
+            </footer>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }

@@ -192,6 +192,36 @@ const checks = [
     "生成商品/素材多视图",
   ],
   [
+    "Recreate video material images open a zoom preview",
+    "app/components/recreate-video-page.tsx",
+    "setPreviewMedia({ url, name, mimeType: \"image/*\" })",
+  ],
+  [
+    "Recreate video supports deterministic face mask strengthening",
+    "app/components/recreate-video-page.tsx",
+    "强化脸部遮盖",
+  ],
+  [
+    "Recreate video face mask strengthening overlays a grid",
+    "app/components/recreate-video-page.tsx",
+    "privacy-masked-multiview.jpg",
+  ],
+  [
+    "Recreate video face mask strengthening uses detected face regions first",
+    "app/components/recreate-video-page.tsx",
+    "analyzeFaceMaskRegions(source.assetId)",
+  ],
+  [
+    "Recreate video face mask analysis endpoint calls SophNet",
+    "app/api/workflows/recreate-face-mask-analysis/route.ts",
+    "recreate_face_mask_analysis",
+  ],
+  [
+    "Recreate video face mask analysis returns normalized face regions",
+    "app/api/workflows/recreate-face-mask-analysis/route.ts",
+    "faceRegions",
+  ],
+  [
     "Recreate video material analysis endpoint calls SophNet",
     "app/api/workflows/recreate-material-analysis/route.ts",
     "recreate_material_analysis",
