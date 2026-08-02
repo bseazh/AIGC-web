@@ -162,9 +162,19 @@ const checks = [
     "AI润色口令",
   ],
   [
+    "Recreate video material tags can be referenced in commands",
+    "app/components/recreate-video-page.tsx",
+    "recreate-material-tags",
+  ],
+  [
     "Recreate video prompt polish endpoint uses SophNet",
     "app/api/workflows/recreate-video-analysis/route.ts",
     'body.mode === "polish"',
+  ],
+  [
+    "Recreate video prompt polish receives material labels",
+    "app/api/workflows/recreate-video-analysis/route.ts",
+    "materialLabels",
   ],
   [
     "Recreate video no longer forces forward navigation",

@@ -225,6 +225,9 @@ function defaultKeyframes(durationSeconds?: number, offsetSeconds = 0): Keyframe
   }));
 }
 
+const chineseNumbers = ["一", "二", "三", "四", "五", "六", "七", "八"];
+const materialLabel = (index: number) => `图片${chineseNumbers[index] || index + 1}`;
+
 export function RecreateVideoPage() {
   const router = useRouter();
   const refs = {
@@ -429,6 +432,15 @@ export function RecreateVideoPage() {
   const selectedClip = sourceSelection?.assetId
     ? douyinClips.find((item) => item.assetId === sourceSelection.assetId) || null
     : sourceSelection;
+  const materialReferences = useMemo(
+    () =>
+      products.map((product, index) => ({
+        label: product.name || materialLabel(index),
+        fallbackLabel: materialLabel(index),
+        preview: product.preview,
+      })),
+    [products],
+  );
   const replacementSlots = useMemo(() => {
     const plan = (frameAnalysis?.replacementPlan || []).filter(
       (item) => item.replaceable !== false && (item.target || item.strategy || item.promptInstruction),
@@ -895,17 +907,19 @@ export function RecreateVideoPage() {
       clearTaskState();
       setStep("clip");
     } else if (libraryKind === "product") {
-      const selected: Item = {
-        assetId: asset.id,
-        preview: asset.url,
-        name: asset.originalName,
-        byteSize: asset.byteSize,
-      };
       setProducts((current) =>
         current.some((item) => item.assetId === asset.id)
           ? current.filter((item) => item.assetId !== asset.id)
-          : current.length < 5
-            ? [...current, selected]
+          : current.length < 8
+            ? [
+                ...current,
+                {
+                  assetId: asset.id,
+                  preview: asset.url,
+                  name: materialLabel(current.length),
+                  byteSize: asset.byteSize,
+                },
+              ]
             : current,
       );
       clearTaskState();
@@ -979,7 +993,9 @@ export function RecreateVideoPage() {
         setReferenceConfirmed(false);
         setStep("reference");
       } else {
-        setProducts((current) => [...current, ...valid].slice(0, 8));
+        setProducts((current) =>
+          [...current, ...valid.map((item, index) => ({ ...item, name: materialLabel(current.length + index) }))].slice(0, 8),
+        );
       }
       clearTaskState();
     }
@@ -1182,7 +1198,7 @@ export function RecreateVideoPage() {
         ? `用户复刻口令：${productInfo.trim()}`
         : "用户未填写具体口令，请使用上传素材做通配替换。",
       products.length
-        ? `用户已上传 ${products.length} 个素材，能匹配到人物、服装、商品、背景或字幕的素材优先使用，匹配不上的素材不要强行使用。`
+        ? `用户已上传 ${products.length} 个素材：${materialReferences.map((item) => item.label).join("、")}。这些标签可在复刻口令中直接引用；能匹配到人物、服装、商品、背景或字幕的素材优先使用，匹配不上的素材不要强行使用。`
         : "用户暂未上传素材，可按复刻口令生成原创画面。",
       "生成原创短视频，不复制原人物脸、原商品、原品牌、Logo、水印或原字幕。",
     ].join("\n");
@@ -1212,6 +1228,7 @@ export function RecreateVideoPage() {
           cacheId: douyinAnalysis.cacheId,
           userCommand: productInfo,
           materialCount: products.length,
+          materialLabels: materialReferences.map((item) => item.label),
         }),
       });
       const body = await response.json().catch(() => null);
@@ -1361,6 +1378,25 @@ export function RecreateVideoPage() {
       if (item?.file) URL.revokeObjectURL(item.preview);
       return current.filter((_, itemIndex) => itemIndex !== index);
     });
+  const renameProduct = (index: number, name: string) => {
+    setProducts((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index
+          ? { ...item, name: name.trim().slice(0, 18) || materialLabel(index) }
+          : item,
+      ),
+    );
+    setPolishedPrompt(null);
+    clearTaskState();
+  };
+  const insertMaterialReference = (label: string) => {
+    setProductInfo((current) => {
+      const suffix = current.trim() ? ` ${label}` : label;
+      return `${current}${suffix}`.slice(0, 800);
+    });
+    setPolishedPrompt(null);
+    clearTaskState();
+  };
 
   const upload = async (item: Item) => {
     if (item.assetId) return item.assetId;
@@ -1490,7 +1526,7 @@ export function RecreateVideoPage() {
           ? `已确认关键画面时间点：${selectedKeyframes.map((frame) => `${frame.time.toFixed(1)}s`).join("、")}。请以这些画面作为复刻参考节点，保持原视频镜头节奏但重生成原创内容。`
           : "",
         products.length
-          ? `素材池：用户上传了 ${products.length} 个通配素材；请自动识别素材类型，能匹配到人物、服装、商品、背景、Logo 或字幕的素材优先使用，匹配不上的素材不要强行使用。`
+          ? `素材池：用户上传了 ${products.length} 个通配素材，按输入顺序分别标记为：${materialReferences.map((item, index) => `${item.label}=第${index + 1}张参考图`).join("；")}。请自动识别素材类型，能匹配到人物、服装、商品、背景、Logo 或字幕的素材优先使用；如果用户口令明确引用某个图片标签，请优先按该引用执行；匹配不上的素材不要强行使用。`
           : "素材池：用户未上传素材，请按复刻口令生成原创内容。",
         productInfo.trim() ? `用户复刻口令：${productInfo.trim()}` : "",
         polishedPrompt?.finalPrompt ? `AI润色复刻方案：\n${polishedPrompt.finalPrompt}` : "",
@@ -2137,6 +2173,21 @@ export function RecreateVideoPage() {
             {frameAnalysisBusy ? "正在润色" : "AI润色口令"}
           </button>
         </header>
+        {materialReferences.length ? (
+          <div className="recreate-material-tags" aria-label="素材标签">
+            {materialReferences.map((material, index) => (
+              <button
+                type="button"
+                key={`${material.label}-${index}`}
+                onClick={() => insertMaterialReference(material.label)}
+              >
+                <span>{material.label}</span>
+                <img src={material.preview} alt={`${material.label}预览`} />
+              </button>
+            ))}
+            <small>点击标签可插入口令；鼠标悬停可预览图片。</small>
+          </div>
+        ) : null}
         <textarea
           value={productInfo}
           onChange={(event) => {
@@ -2145,7 +2196,7 @@ export function RecreateVideoPage() {
             clearTaskState();
           }}
           maxLength={800}
-          placeholder="例如：动作和镜头节奏参考原视频，把人物服装换成我上传的黑色连衣裙，背景保持干净明亮，字幕改成夏季显瘦穿搭。"
+          placeholder="例如：动作和镜头节奏参考原视频，把人物服装替换为图片一，背景参考图片二，字幕改成夏季显瘦穿搭。"
         />
         {polishedPrompt?.finalPrompt ? (
           <div className="recreate-polished-prompt">
@@ -2203,6 +2254,15 @@ export function RecreateVideoPage() {
           {products.map((product, index) => (
             <article key={`${product.assetId || product.name}-${index}`}>
               <img src={product.preview} alt="替换素材预览" />
+              <label>
+                <small>{materialLabel(index)}</small>
+                <input
+                  value={product.name || materialLabel(index)}
+                  onChange={(event) => renameProduct(index, event.target.value)}
+                  maxLength={18}
+                  aria-label={`重命名${materialLabel(index)}`}
+                />
+              </label>
               <button
                 type="button"
                 onClick={() => {
@@ -2280,6 +2340,16 @@ export function RecreateVideoPage() {
           <span>素材：{products.length ? `${products.length} 个素材自动通配` : "未上传素材，按口令生成"}</span>
           <span>避开：水印 / 原字幕 / 原品牌</span>
         </div>
+        {materialReferences.length ? (
+          <div className="recreate-material-tags" aria-label="最终素材标签">
+            {materialReferences.map((material, index) => (
+              <button type="button" key={`${material.label}-confirm-${index}`}>
+                <span>{material.label}</span>
+                <img src={material.preview} alt={`${material.label}预览`} />
+              </button>
+            ))}
+          </div>
+        ) : null}
         <textarea
           readOnly
           value={
@@ -2289,8 +2359,11 @@ export function RecreateVideoPage() {
               productInfo.trim()
                 ? `复刻口令：${productInfo.trim()}`
                 : "按上传素材做通配替换；能匹配到人物、服装、商品、背景或字幕的素材优先使用。",
+              materialReferences.length
+                ? `素材标签：${materialReferences.map((item, index) => `${item.label}=第${index + 1}张参考图`).join("；")}。`
+                : "",
               "匹配不上的素材不要强行使用。生成原创短视频，不复制原人物脸、原商品、原品牌、Logo、水印或原字幕。",
-            ].join("\n")
+            ].filter(Boolean).join("\n")
           }
           aria-label="最终复刻生成方案"
         />

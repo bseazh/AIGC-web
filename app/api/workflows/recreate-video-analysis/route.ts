@@ -258,6 +258,9 @@ async function callSophnetPromptPolish(cache: {
   if (!apiKey) return null;
   const userCommand = typeof options.userCommand === "string" ? options.userCommand.trim() : "";
   const materialCount = Number(options.materialCount) || 0;
+  const materialLabels = Array.isArray(options.materialLabels)
+    ? options.materialLabels.filter((item) => typeof item === "string").slice(0, 8)
+    : [];
   const frameAnalysis = cache.metadata_json?.frameAnalysis || null;
   const text = [
     "你是电商短视频复刻工作台的提示词导演。请把用户口语化复刻要求整理成视频生成模型可执行的中文方案，输出严格 JSON，不要 Markdown。",
@@ -266,9 +269,11 @@ async function callSophnetPromptPolish(cache: {
     "preserve、replace、materialUse、avoid 均为中文字符串数组。",
     "finalPrompt 是给视频生成模型的完整中文提示词。",
     "原则：保留对标视频的镜头节奏、构图、动作走势、光线氛围；用用户上传素材和复刻口令做通配替换；匹配不上的素材不要强行使用。",
+    "如果用户口令中出现“图片一、图片二、素材A、主图”等素材标签，请在 finalPrompt 中保留这些标签，并明确它替换的对象。",
     "禁止要求复制原视频人物脸、原商品、原品牌、Logo、水印或原字幕。",
     `用户复刻口令：${userCommand || "用户未填写；请生成一个默认通配复刻方案。"}`,
     `用户上传素材数量：${materialCount}`,
+    `用户素材标签：${materialLabels.join("、") || "未提供标签"}`,
     `关键帧视觉分析：${JSON.stringify(frameAnalysis).slice(0, 5000)}`,
   ].join("\n");
   const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
@@ -287,7 +292,7 @@ async function callSophnetPromptPolish(cache: {
     `INSERT INTO provider_call_logs (provider, operation, request_json, response_status, response_json, error_code, provider_request_id)
      VALUES ('sophnet-chat', 'recreate_video_prompt_polish', $1::jsonb, $2, $3::jsonb, $4, $5)`,
     [
-      JSON.stringify({ model, materialCount, hasFrameAnalysis: Boolean(frameAnalysis), userCommandLength: userCommand.length }),
+      JSON.stringify({ model, materialCount, materialLabels, hasFrameAnalysis: Boolean(frameAnalysis), userCommandLength: userCommand.length }),
       response.status,
       JSON.stringify(payload || {}),
       response.ok ? null : "SOPHNET_CHAT_HTTP_ERROR",
