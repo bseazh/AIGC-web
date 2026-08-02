@@ -297,6 +297,7 @@ export function RecreateVideoPage() {
   const [modelOn, setModelOn] = useState(false);
   const [modelInfo, setModelInfo] = useState("");
   const [mp4OnlyTest, setMp4OnlyTest] = useState(false);
+  const [compliantReferenceVideo, setCompliantReferenceVideo] = useState(true);
   const [ratio, setRatio] = useState("9:16");
   const [duration, setDuration] = useState("15");
   const [resolution, setResolution] = useState("720p");
@@ -1850,6 +1851,21 @@ export function RecreateVideoPage() {
     return upload(item);
   };
 
+  const prepareCompliantReferenceVideoAsset = async (assetId: string) => {
+    if (!compliantReferenceVideo || mp4OnlyTest) return assetId;
+    setNotice("正在生成轻量合规参考视频");
+    const response = await fetch("/api/workflows/recreate-video-sanitize/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assetId }),
+    });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(body?.message || "合规参考视频生成失败");
+    setNotice("已生成轻量合规参考视频，将用于提交给视频模型");
+    window.setTimeout(() => setNotice(""), 2600);
+    return body.assetId as string;
+  };
+
   const poll = async (taskId: string) => {
     const deadline = Date.now() + 15 * 60 * 1000;
     while (Date.now() < deadline) {
@@ -2020,7 +2036,8 @@ export function RecreateVideoPage() {
     setResult(null);
     setPhase("uploading");
     try {
-      const referenceVideoAssetId = await prepareReferenceVideoAsset(selectedClip || sourceItem!);
+      const sourceReferenceVideoAssetId = await prepareReferenceVideoAsset(selectedClip || sourceItem!);
+      const referenceVideoAssetId = await prepareCompliantReferenceVideoAsset(sourceReferenceVideoAssetId);
       const productAssetIds = mp4OnlyTest ? [] : await Promise.all(products.map(upload));
       const keyframeCollageAssetId = mp4OnlyTest ? null : await prepareKeyframeCollageReference();
       const confirmedReferenceAssetId = !mp4OnlyTest && referenceImage ? await upload(referenceImage) : null;
@@ -2036,7 +2053,9 @@ export function RecreateVideoPage() {
       const prompt = [
         mp4OnlyTest
           ? "当前为仅 MP4 对标视频测试模式：本次只提交对标视频，不提交十二宫格参考图、素材池图片或额外参考图，用于验证 Ark 是否接受该 MP4 reference_video。"
-          : "",
+          : compliantReferenceVideo
+            ? "对标视频已先转换为轻量合规结构参考视频：去除原音频、降低清晰度、模糊真人细节并叠加网格，仅用于参考镜头节奏、运镜、构图和动作轮廓。"
+            : "当前直接提交原始对标视频作为 reference_video。",
         selectedKeyframes.length
           ? `已确认关键画面时间点：${selectedKeyframes.map((frame) => `${frame.time.toFixed(1)}s`).join("、")}。请以这些画面作为复刻参考节点，保持原视频镜头节奏但重生成原创内容。`
           : "",
@@ -3130,6 +3149,26 @@ export function RecreateVideoPage() {
           只提交对标 MP4 给 Ark，不提交十二宫格、素材池和多视图图。用于排查当前报错是否由 MP4 本身触发。
         </p>
       ) : null}
+      <label className="recreate-toggle">
+        轻量合规参考视频
+        <input
+          type="checkbox"
+          checked={compliantReferenceVideo}
+          onChange={(event) => {
+            setCompliantReferenceVideo(event.target.checked);
+            clearTaskState();
+          }}
+          disabled={mp4OnlyTest}
+        />
+        <i />
+      </label>
+      <p className="recreate-test-note">
+        {compliantReferenceVideo && !mp4OnlyTest
+          ? "提交前会先生成低清、模糊、去音频、带网格的结构参考视频，尽量保留动作节奏并降低真人可识别度。"
+          : mp4OnlyTest
+            ? "MP4 测试模式会跳过合规处理，用于验证原视频是否被 Ark 接受。"
+            : "当前会直接提交原始对标视频，含真人时可能被 Ark 拒绝。"}
+      </p>
       <label className="recreate-toggle">
         自定义模特信息
         <input
