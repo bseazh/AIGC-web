@@ -444,6 +444,10 @@ export function RecreateVideoPage() {
       })),
     [products],
   );
+  const privacyReferenceIndex = products.findIndex((product) => product.name.trim() === "虚拟模特参考");
+  const privacyReference = privacyReferenceIndex >= 0 ? products[privacyReferenceIndex] : null;
+  const portraitCandidateIndex = products.length ? Math.max(privacyReferenceIndex, 0) : -1;
+  const portraitCandidate = portraitCandidateIndex >= 0 ? products[portraitCandidateIndex] : null;
   const mentionMaterials = useMemo(() => {
     const query = materialMentionQuery.trim().replace(/^@/, "");
     if (!query) return materialReferences;
@@ -2478,6 +2482,50 @@ export function RecreateVideoPage() {
           <small>已上传 {products.length}/8 个</small>
         </button>
       )}
+      <section className={`recreate-portrait-reference ${privacyReference ? "ready" : ""}`}>
+        <header>
+          <div>
+            <strong>真人参考处理</strong>
+            <small>如果素材里有人像，先生成多角度遮挡参考图，再用于后续复刻。</small>
+          </div>
+          <span>{privacyReference ? "已生成" : products.length ? "建议处理" : "待上传"}</span>
+        </header>
+        {portraitCandidate ? (
+          <div className="recreate-portrait-reference-body">
+            <img src={portraitCandidate.preview} alt={privacyReference ? "虚拟模特参考预览" : "待处理真人素材预览"} />
+            <div>
+              <strong>{privacyReference ? "@虚拟模特参考" : `当前候选：@${portraitCandidate.name.trim() || materialLabel(portraitCandidateIndex)}`}</strong>
+              <p>
+                {privacyReference
+                  ? "这张图已经替换原真人素材，会作为人物 reference 提交给模型。"
+                  : "系统会生成一张多角度参考板，并对所有脸部做网格、柔化或局部遮挡，减少真实人脸直接进入生成链路。"}
+              </p>
+              <button
+                type="button"
+                className="privacy-view"
+                onClick={() => createPrivacyMultiView(portraitCandidateIndex)}
+                disabled={privacyViewBusyIndex !== null}
+              >
+                {privacyViewBusyIndex === portraitCandidateIndex ? (
+                  <LoaderCircle className="generation-spinner" size={14} />
+                ) : (
+                  <Sparkles size={14} />
+                )}
+                {privacyViewBusyIndex === portraitCandidateIndex
+                  ? "正在生成多角度参考"
+                  : privacyReference
+                    ? "重新生成多角度参考"
+                    : "生成多角度遮挡参考"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button type="button" className="recreate-portrait-empty" onClick={() => refs.product.current?.click()}>
+            <ImagePlus size={18} />
+            先上传真人/模特图片
+          </button>
+        )}
+      </section>
       {products.length > 0 && (
         <div className="recreate-selected-images">
           {products.map((product, index) => (

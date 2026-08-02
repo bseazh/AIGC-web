@@ -177,6 +177,16 @@ const checks = [
     "转多角度参考",
   ],
   [
+    "Recreate video exposes a clear portrait reference processing module",
+    "app/components/recreate-video-page.tsx",
+    "真人参考处理",
+  ],
+  [
+    "Recreate video portrait module generates masked multi-view references",
+    "app/components/recreate-video-page.tsx",
+    "生成多角度遮挡参考",
+  ],
+  [
     "Recreate video privacy multi-view prompt masks face identity",
     "app/components/recreate-video-page.tsx",
     "所有出现脸部的位置都必须做隐私化处理",
