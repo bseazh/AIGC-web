@@ -725,7 +725,9 @@ a { color: inherit; text-decoration: none; }
 .recreate-portrait-reference-body div { display: grid; gap: 7px; }
 .recreate-portrait-reference-body div > strong { color: #18354f; font-size: 13px; }
 .recreate-portrait-reference-body p { margin: 0; color: #60758a; font-size: 11px; line-height: 1.55; }
-.recreate-portrait-reference button.privacy-view, .recreate-portrait-empty { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #a9ddea; border-radius: 9px; color: #147f98; background: #edfbff; font-size: 12px; font-weight: 900; }
+.recreate-portrait-actions { display: flex !important; flex-wrap: wrap; gap: 8px; }
+.recreate-portrait-reference button.privacy-view, .recreate-portrait-reference button.secondary, .recreate-portrait-empty { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #a9ddea; border-radius: 9px; color: #147f98; background: #edfbff; font-size: 12px; font-weight: 900; }
+.recreate-portrait-reference button.secondary { border-color: #d7e3ee; color: #60758a; background: #fff; }
 .recreate-portrait-reference button.privacy-view { justify-self: start; padding: 0 13px; }
 .recreate-portrait-reference button.privacy-view:disabled { cursor: not-allowed; opacity: .58; }
 .recreate-portrait-empty { width: 100%; margin-top: 12px; background: #fff; color: #60758a; border-color: #dce7f0; }

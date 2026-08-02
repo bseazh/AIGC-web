@@ -35,7 +35,12 @@ type Item = {
   source?: "douyin";
   clipStartSeconds?: number;
   clipEndSeconds?: number;
+  materialKind?: MaterialKind;
+  materialSummary?: string;
+  materialConfidence?: number;
+  materialSuggestedAction?: string;
 };
+type MaterialKind = "person" | "product" | "scene" | "text" | "unknown";
 type Asset = {
   id: string;
   mimeType: string;
@@ -136,7 +141,7 @@ type Draft = {
   >;
   activeClipId: string | null;
   selectedKeyframes: KeyframeSelection[];
-  products: Array<Pick<Item, "preview" | "name" | "byteSize" | "assetId">>;
+  products: Array<Pick<Item, "preview" | "name" | "byteSize" | "assetId" | "materialKind" | "materialSummary" | "materialConfidence" | "materialSuggestedAction">>;
   referenceImage: Pick<Item, "preview" | "name" | "byteSize" | "assetId"> | null;
   referenceConfirmed: boolean;
   usageAuthorized: boolean;
@@ -273,6 +278,7 @@ export function RecreateVideoPage() {
   const [polishedPrompt, setPolishedPrompt] = useState<PolishedRecreatePrompt | null>(null);
   const [materialMentionOpen, setMaterialMentionOpen] = useState(false);
   const [materialMentionQuery, setMaterialMentionQuery] = useState("");
+  const [materialAnalysisBusyIndex, setMaterialAnalysisBusyIndex] = useState<number | null>(null);
   const [privacyViewBusyIndex, setPrivacyViewBusyIndex] = useState<number | null>(null);
   const [modelOn, setModelOn] = useState(false);
   const [modelInfo, setModelInfo] = useState("");
@@ -448,6 +454,13 @@ export function RecreateVideoPage() {
   const privacyReference = privacyReferenceIndex >= 0 ? products[privacyReferenceIndex] : null;
   const portraitCandidateIndex = products.length ? Math.max(privacyReferenceIndex, 0) : -1;
   const portraitCandidate = portraitCandidateIndex >= 0 ? products[portraitCandidateIndex] : null;
+  const materialKindLabel = (kind?: MaterialKind) => {
+    if (kind === "person") return "人物/真人";
+    if (kind === "product") return "商品/物体";
+    if (kind === "scene") return "场景/背景";
+    if (kind === "text") return "文字/Logo";
+    return "未识别";
+  };
   const mentionMaterials = useMemo(() => {
     const query = materialMentionQuery.trim().replace(/^@/, "");
     if (!query) return materialReferences;
@@ -1410,6 +1423,46 @@ export function RecreateVideoPage() {
       ),
     );
   };
+  const analyzeMaterial = async (index: number) => {
+    const source = products[index];
+    if (!source || materialAnalysisBusyIndex !== null) return;
+    setError("");
+    setMaterialAnalysisBusyIndex(index);
+    try {
+      const assetId = await upload(source);
+      setProducts((current) =>
+        current.map((item, itemIndex) => (itemIndex === index ? { ...item, assetId } : item)),
+      );
+      const response = await fetch("/api/workflows/recreate-material-analysis/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assetId }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.message || "素材识别失败");
+      const kind = ["person", "product", "scene", "text", "unknown"].includes(body?.kind) ? body.kind as MaterialKind : "unknown";
+      setProducts((current) =>
+        current.map((item, itemIndex) =>
+          itemIndex === index
+            ? {
+                ...item,
+                assetId,
+                materialKind: kind,
+                materialSummary: typeof body?.summary === "string" ? body.summary : "",
+                materialConfidence: Number(body?.confidence) || 0,
+                materialSuggestedAction: typeof body?.suggestedAction === "string" ? body.suggestedAction : "",
+              }
+            : item,
+        ),
+      );
+      setNotice(`已识别为：${materialKindLabel(kind)}`);
+      window.setTimeout(() => setNotice(""), 2200);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "素材识别失败");
+    } finally {
+      setMaterialAnalysisBusyIndex(null);
+    }
+  };
   const insertMaterialReference = (label: string) => {
     setProductInfo((current) => {
       const beforeCursor = current;
@@ -1654,14 +1707,34 @@ export function RecreateVideoPage() {
     setPrivacyViewBusyIndex(index);
     try {
       const assetId = await upload(source);
-      const prompt = [
-        "基于输入人像参考图，生成一张隐私化虚拟模特多角度参考图。",
-        "画面是一张干净的多视图参考板，包含正面、左45度、右45度、左侧身、右侧身、背面、上半身服装细节、局部姿态细节。",
-        "保留服装款式、颜色、材质、发型轮廓、身形比例、姿态气质和整体穿搭氛围。",
-        "所有出现脸部的位置都必须做隐私化处理：弱化真实五官，不保留可识别真人身份；不同视图综合使用半透明网格、柔化、额头/眼周遮挡、鼻梁/中庭遮挡、下半脸遮挡等方式。",
-        "不要复制原人物脸部身份，不要生成清晰真实人脸；重点输出可用于原创视频生成的虚拟模特参考。",
-        "浅灰或白色背景，参考图清晰整洁，适合作为后续 @虚拟模特参考 使用。",
-      ].join("\n");
+      const kind = source.materialKind || "unknown";
+      const label = source.name.trim() || materialLabel(index);
+      const isPerson = kind === "person" || label.includes("模特") || label.includes("人物") || label.includes("真人");
+      const outputName = isPerson
+        ? "虚拟模特参考"
+        : kind === "scene"
+          ? "场景多视图参考"
+          : kind === "text"
+            ? "文字标识参考"
+            : "商品多视图参考";
+      const prompt = isPerson
+        ? [
+            "基于输入人像参考图，生成一张隐私化虚拟模特多角度参考图。",
+            "画面是一张干净的多视图参考板，包含正面、左45度、右45度、左侧身、右侧身、背面、上半身服装细节、局部姿态细节。",
+            "保留服装款式、颜色、材质、发型轮廓、身形比例、姿态气质和整体穿搭氛围。",
+            "所有出现脸部的位置都必须做隐私化处理：弱化真实五官，不保留可识别真人身份；不同视图综合使用半透明网格、柔化、额头/眼周遮挡、鼻梁/中庭遮挡、下半脸遮挡等方式。",
+            "不要复制原人物脸部身份，不要生成清晰真实人脸；重点输出可用于原创视频生成的虚拟模特参考。",
+            "浅灰或白色背景，参考图清晰整洁，适合作为后续 @虚拟模特参考 使用。",
+          ].join("\n")
+        : [
+            "基于输入素材图，生成一张电商复刻可用的多视图参考图。",
+            "画面是一张干净的参考板，包含主体正面、左45度、右45度、侧面、背面/反面、顶部或底部、材质细节、使用场景或比例关系。",
+            "如果是商品或服装静物，必须保留主体轮廓、颜色、材质、结构、Logo位置和关键卖点，不要凭空改变品类。",
+            "如果是场景图，输出不同角度的空间/氛围参考，保留光线、色调、背景层次和可复刻的场景元素。",
+            "如果是文字或Logo参考，只保留版式位置和视觉风格，不生成侵权品牌或不可控乱码。",
+            "不需要做人脸遮挡；若画面中意外出现真人脸，也必须弱化或遮挡，不保留可识别真实身份。",
+            `输出适合作为后续 @${outputName} 使用，浅灰或白色背景，清晰整洁。`,
+          ].join("\n");
       const response = await fetch("/api/tasks/scene/", {
         method: "POST",
         headers: {
@@ -1678,7 +1751,7 @@ export function RecreateVideoPage() {
       });
       const created = await response.json().catch(() => null);
       if (!response.ok) throw new Error(created?.message || "多视图参考任务创建失败");
-      setNotice("正在生成隐私化多角度参考图");
+      setNotice(isPerson ? "正在生成隐私化多角度参考图" : "正在生成素材多视图参考图");
       const output = await pollPrivacyViewTask(created.taskId);
       setProducts((current) =>
         current.map((item, itemIndex) => {
@@ -1687,22 +1760,25 @@ export function RecreateVideoPage() {
           return {
             assetId: output.assetId,
             preview: output.url,
-            name: "虚拟模特参考",
+            name: outputName,
             byteSize: 0,
+            materialKind: isPerson ? "person" : kind,
+            materialSummary: isPerson ? "已生成隐私化人物多角度参考" : "已生成素材多视图参考",
+            materialConfidence: source.materialConfidence,
           };
         }),
       );
       setProductInfo((current) =>
-        current.includes("@虚拟模特参考")
+        current.includes(`@${outputName}`)
           ? current
-          : `${current.trim() ? `${current.trim()} ` : ""}人物形象参考 @虚拟模特参考，保留服装、身形和姿态气质，不复制真实人脸身份。`.slice(0, 800),
+          : `${current.trim() ? `${current.trim()} ` : ""}${isPerson ? "人物形象" : "素材主体"}参考 @${outputName}，${isPerson ? "保留服装、身形和姿态气质，不复制真实人脸身份。" : "保留主体结构、颜色、材质和关键细节。"}`.slice(0, 800),
       );
       setPolishedPrompt(null);
       clearTaskState();
-      setNotice("已生成 @虚拟模特参考，并替换原真人素材");
+      setNotice(`已生成 @${outputName}，并替换原素材`);
       window.setTimeout(() => setNotice(""), 2600);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "隐私化多视图参考生成失败");
+      setError(caught instanceof Error ? caught.message : "多视图参考生成失败");
     } finally {
       setPrivacyViewBusyIndex(null);
     }
@@ -2482,29 +2558,44 @@ export function RecreateVideoPage() {
           <small>已上传 {products.length}/8 个</small>
         </button>
       )}
-      <section className={`recreate-portrait-reference ${privacyReference ? "ready" : ""}`}>
+      <section className={`recreate-portrait-reference ${portraitCandidate?.materialKind ? "ready" : ""}`}>
         <header>
           <div>
-            <strong>真人参考处理</strong>
-            <small>如果素材里有人像，先生成多角度遮挡参考图，再用于后续复刻。</small>
+            <strong>素材智能处理</strong>
+            <small>先识别素材类型：真人走隐私化遮挡多视图，商品/场景走普通多视图参考。</small>
           </div>
-          <span>{privacyReference ? "已生成" : products.length ? "建议处理" : "待上传"}</span>
+          <span>{portraitCandidate?.materialKind ? materialKindLabel(portraitCandidate.materialKind) : products.length ? "待识别" : "待上传"}</span>
         </header>
         {portraitCandidate ? (
           <div className="recreate-portrait-reference-body">
-            <img src={portraitCandidate.preview} alt={privacyReference ? "虚拟模特参考预览" : "待处理真人素材预览"} />
+            <img src={portraitCandidate.preview} alt="待处理素材预览" />
             <div>
               <strong>{privacyReference ? "@虚拟模特参考" : `当前候选：@${portraitCandidate.name.trim() || materialLabel(portraitCandidateIndex)}`}</strong>
               <p>
-                {privacyReference
+                {portraitCandidate.materialSummary ||
+                (privacyReference
                   ? "这张图已经替换原真人素材，会作为人物 reference 提交给模型。"
-                  : "系统会生成一张多角度参考板，并对所有脸部做网格、柔化或局部遮挡，减少真实人脸直接进入生成链路。"}
+                  : "先识别它是人物、商品、场景还是文字素材，再生成更适合复刻的多视图 reference。")}
               </p>
+              <div className="recreate-portrait-actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => analyzeMaterial(portraitCandidateIndex)}
+                  disabled={materialAnalysisBusyIndex !== null || privacyViewBusyIndex !== null}
+                >
+                  {materialAnalysisBusyIndex === portraitCandidateIndex ? (
+                    <LoaderCircle className="generation-spinner" size={14} />
+                  ) : (
+                    <Sparkles size={14} />
+                  )}
+                  {materialAnalysisBusyIndex === portraitCandidateIndex ? "正在识别素材" : "智能识别素材"}
+                </button>
               <button
                 type="button"
                 className="privacy-view"
                 onClick={() => createPrivacyMultiView(portraitCandidateIndex)}
-                disabled={privacyViewBusyIndex !== null}
+                disabled={privacyViewBusyIndex !== null || materialAnalysisBusyIndex !== null}
               >
                 {privacyViewBusyIndex === portraitCandidateIndex ? (
                   <LoaderCircle className="generation-spinner" size={14} />
@@ -2512,11 +2603,14 @@ export function RecreateVideoPage() {
                   <Sparkles size={14} />
                 )}
                 {privacyViewBusyIndex === portraitCandidateIndex
-                  ? "正在生成多角度参考"
-                  : privacyReference
-                    ? "重新生成多角度参考"
-                    : "生成多角度遮挡参考"}
+                  ? "正在生成多视图参考"
+                  : portraitCandidate.materialKind === "person"
+                    ? "生成隐私化人物多视图"
+                    : portraitCandidate.materialKind && portraitCandidate.materialKind !== "unknown"
+                      ? "生成商品/素材多视图"
+                      : "生成通用多视图参考"}
               </button>
+              </div>
             </div>
           </div>
         ) : (
@@ -2533,6 +2627,7 @@ export function RecreateVideoPage() {
               <img src={product.preview} alt="替换素材预览" />
               <label>
                 <small>引用标签：@{product.name.trim() || materialLabel(index)}</small>
+                {product.materialKind ? <small>识别：{materialKindLabel(product.materialKind)}</small> : null}
                 <input
                   value={product.name}
                   onChange={(event) => renameProduct(index, event.target.value)}
@@ -2545,14 +2640,18 @@ export function RecreateVideoPage() {
                   type="button"
                   className="privacy-view"
                   onClick={() => createPrivacyMultiView(index)}
-                  disabled={privacyViewBusyIndex !== null}
+                  disabled={privacyViewBusyIndex !== null || materialAnalysisBusyIndex !== null}
                 >
                   {privacyViewBusyIndex === index ? (
                     <LoaderCircle className="generation-spinner" size={12} />
                   ) : (
                     <Sparkles size={12} />
                   )}
-                  {privacyViewBusyIndex === index ? "生成中" : "转多角度参考"}
+                  {privacyViewBusyIndex === index
+                    ? "生成中"
+                    : product.materialKind === "person"
+                      ? "人物多视图"
+                      : "素材多视图"}
                 </button>
               </label>
               <button

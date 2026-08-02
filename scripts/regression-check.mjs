@@ -174,17 +174,27 @@ const checks = [
   [
     "Recreate video can convert portraits to privacy multi-view references",
     "app/components/recreate-video-page.tsx",
-    "转多角度参考",
+    "生成隐私化人物多视图",
   ],
   [
-    "Recreate video exposes a clear portrait reference processing module",
+    "Recreate video exposes a clear material processing module",
     "app/components/recreate-video-page.tsx",
-    "真人参考处理",
+    "素材智能处理",
   ],
   [
-    "Recreate video portrait module generates masked multi-view references",
+    "Recreate video material module identifies uploaded assets",
     "app/components/recreate-video-page.tsx",
-    "生成多角度遮挡参考",
+    "智能识别素材",
+  ],
+  [
+    "Recreate video material module supports product multi-view references",
+    "app/components/recreate-video-page.tsx",
+    "生成商品/素材多视图",
+  ],
+  [
+    "Recreate video material analysis endpoint calls SophNet",
+    "app/api/workflows/recreate-material-analysis/route.ts",
+    "recreate_material_analysis",
   ],
   [
     "Recreate video privacy multi-view prompt masks face identity",
