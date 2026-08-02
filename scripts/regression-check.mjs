@@ -182,6 +182,21 @@ const checks = [
     "所有出现脸部的位置都必须做隐私化处理",
   ],
   [
+    "Recreate video submits keyframe collage as a reference image",
+    "app/components/recreate-video-page.tsx",
+    "createKeyframeCollageAsset",
+  ],
+  [
+    "Recreate video prompt identifies the submitted keyframe collage",
+    "app/components/recreate-video-page.tsx",
+    "第${collageImageIndex}张参考图是一张由已选关键画面拼接而成的十二宫格参考板",
+  ],
+  [
+    "Recreate video task allows one system keyframe collage image",
+    "app/api/tasks/recreate-video/route.ts",
+    "系统会额外提交一张十二宫格参考图",
+  ],
+  [
     "Recreate video prompt polish endpoint uses SophNet",
     "app/api/workflows/recreate-video-analysis/route.ts",
     'body.mode === "polish"',

@@ -1474,6 +1474,101 @@ export function RecreateVideoPage() {
     return presign.assetId as string;
   };
 
+  const loadImageForCanvas = async (url: string) => {
+    const image = new Image();
+    image.decoding = "async";
+    image.crossOrigin = "anonymous";
+    const objectUrl = await fetch(url)
+      .then((response) => {
+        if (!response.ok) throw new Error("关键帧图片读取失败");
+        return response.blob();
+      })
+      .then((blob) => URL.createObjectURL(blob))
+      .catch(() => url);
+    return await new Promise<HTMLImageElement>((resolve, reject) => {
+      image.onload = () => {
+        if (objectUrl.startsWith("blob:")) URL.revokeObjectURL(objectUrl);
+        resolve(image);
+      };
+      image.onerror = () => {
+        if (objectUrl.startsWith("blob:")) URL.revokeObjectURL(objectUrl);
+        reject(new Error("关键帧图片加载失败"));
+      };
+      image.src = objectUrl;
+    });
+  };
+
+  const createKeyframeCollageAsset = async () => {
+    const frames = selectedKeyframes.filter((frame): frame is KeyframeSelection & { url: string } => Boolean(frame.url)).slice(0, 12);
+    if (frames.length < 4) return null;
+    const columns = frames.length <= 8 ? 4 : 4;
+    const rows = Math.ceil(frames.length / columns);
+    const cellWidth = 360;
+    const cellHeight = 640;
+    const labelHeight = 42;
+    const gap = 8;
+    const padding = 16;
+    const width = columns * cellWidth + (columns - 1) * gap + padding * 2;
+    const height = rows * (cellHeight + labelHeight) + (rows - 1) * gap + padding * 2;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("十二宫格参考图生成失败");
+    context.fillStyle = "#f8fafc";
+    context.fillRect(0, 0, width, height);
+    context.font = "24px sans-serif";
+    context.textBaseline = "middle";
+    context.textAlign = "left";
+    for (const [index, frame] of frames.entries()) {
+      const image = await loadImageForCanvas(frame.url);
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const x = padding + column * (cellWidth + gap);
+      const y = padding + row * (cellHeight + labelHeight + gap);
+      const scale = Math.max(cellWidth / image.naturalWidth, cellHeight / image.naturalHeight);
+      const drawWidth = image.naturalWidth * scale;
+      const drawHeight = image.naturalHeight * scale;
+      const drawX = x + (cellWidth - drawWidth) / 2;
+      const drawY = y + (cellHeight - drawHeight) / 2;
+      context.save();
+      context.beginPath();
+      context.roundRect(x, y, cellWidth, cellHeight, 18);
+      context.clip();
+      context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+      context.restore();
+      context.fillStyle = "rgba(15, 23, 42, 0.86)";
+      context.fillRect(x, y + cellHeight - labelHeight, cellWidth, labelHeight);
+      context.fillStyle = "#ffffff";
+      context.fillText(`画面 ${index + 1} · ${frame.time.toFixed(1)}s`, x + 14, y + cellHeight - labelHeight / 2);
+    }
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+    if (!blob) throw new Error("十二宫格参考图导出失败");
+    const file = new File([blob], "recreate-keyframe-collage.jpg", { type: "image/jpeg" });
+    const preview = URL.createObjectURL(file);
+    try {
+      return await upload({
+        file,
+        preview,
+        name: "十二宫格参考图",
+        byteSize: file.size,
+      });
+    } finally {
+      URL.revokeObjectURL(preview);
+    }
+  };
+
+  const prepareKeyframeCollageReference = async () => {
+    const hasVisualKeyframes = selectedKeyframes.some((frame) => frame.url);
+    if (!hasVisualKeyframes) return null;
+    return createKeyframeCollageAsset();
+  };
+
+  const keyframeCollagePrompt = (collageImageIndex: number | null) =>
+    collageImageIndex
+      ? `十二宫格参考图：第${collageImageIndex}张参考图是一张由已选关键画面拼接而成的十二宫格参考板，请结合这张图理解镜头顺序、主体位置、景别变化、动作走势和画面氛围；它只用于结构参考，不得复制原人物脸、原商品、原品牌、Logo、水印或原字幕。`
+      : "十二宫格参考图：当前只有关键画面时间点，未能提交拼接图；请主要参考对标视频的镜头节奏和已确认时间点。";
+
   const prepareReferenceVideoAsset = async (item: Item) => {
     if (item.assetId) return item.assetId;
     if (item.source === "douyin" && douyinAnalysis?.cacheId) {
@@ -1626,15 +1721,22 @@ export function RecreateVideoPage() {
     setResult(null);
     setPhase("uploading");
     try {
+      const productAssetIds = await Promise.all(products.map(upload));
+      const keyframeCollageAssetId = await prepareKeyframeCollageReference();
+      const referenceVideoAssetId = await prepareReferenceVideoAsset(selectedClip || sourceItem!);
+      const confirmedReferenceAssetId = referenceImage ? await upload(referenceImage) : null;
       const assetIds = [
-        ...(await Promise.all(products.map(upload))),
-        await prepareReferenceVideoAsset(selectedClip || sourceItem!),
-        ...(referenceImage ? [await upload(referenceImage)] : []),
+        ...productAssetIds,
+        ...(keyframeCollageAssetId ? [keyframeCollageAssetId] : []),
+        referenceVideoAssetId,
+        ...(confirmedReferenceAssetId ? [confirmedReferenceAssetId] : []),
       ];
+      const collageImageIndex = keyframeCollageAssetId ? products.length + 1 : null;
       const prompt = [
         selectedKeyframes.length
           ? `已确认关键画面时间点：${selectedKeyframes.map((frame) => `${frame.time.toFixed(1)}s`).join("、")}。请以这些画面作为复刻参考节点，保持原视频镜头节奏但重生成原创内容。`
           : "",
+        keyframeCollagePrompt(collageImageIndex),
         products.length
           ? `素材池：用户上传了 ${products.length} 个通配素材，按输入顺序分别标记为：${materialReferences.map((item, index) => `${item.label}=第${index + 1}张参考图`).join("；")}。请自动识别素材类型，能匹配到人物、服装、商品、背景、Logo 或字幕的素材优先使用；如果用户口令明确引用某个图片标签，请优先按该引用执行；匹配不上的素材不要强行使用。`
           : "素材池：用户未上传素材，请按复刻口令生成原创内容。",

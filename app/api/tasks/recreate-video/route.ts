@@ -15,10 +15,10 @@ export async function POST(request: NextRequest) {
         (asset) => asset.mime_type === "video/mp4",
       );
       if (videoIndex < 0) return "复刻带货视频必须提供 MP4 对标视频";
-      if (assets.filter((asset) => asset.mime_type.startsWith("image/")).length > 8)
-        return "素材池最多可添加八张图片";
+      if (assets.filter((asset) => asset.mime_type.startsWith("image/")).length > 9)
+        return "素材池最多可添加八张图片，系统会额外提交一张十二宫格参考图";
       if (
-        assets.length > 9 ||
+        assets.length > 10 ||
         assets.some(
           (asset) =>
             !asset.mime_type.startsWith("image/") &&
