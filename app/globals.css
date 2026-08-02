@@ -711,6 +711,8 @@ a { color: inherit; text-decoration: none; }
 .recreate-clip-collection article.active { border-color: #88d5df; background: #f1fcff; }
 .recreate-clip-actions button { border: 1px solid #dbe5ef; color: #60748a; background: #fff; }
 .recreate-selected-images article { border: 1px solid #dce6f0; background: #f2f6fa; }
+.recreate-selected-images label button.privacy-view { width: 100%; min-height: 30px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid #cfe8f2; border-radius: 7px; color: #16829c; background: #effcff; font-size: 10px; font-weight: 900; }
+.recreate-selected-images label button.privacy-view:disabled { cursor: not-allowed; opacity: .58; }
 .recreate-consent, .recreate-toggle, .recreate-meta-grid label { color: #5d7087; }
 .recreate-toggle i { background: #dce7f2; }
 .recreate-toggle input:checked + i { background: #1aa6c6; }

@@ -273,6 +273,7 @@ export function RecreateVideoPage() {
   const [polishedPrompt, setPolishedPrompt] = useState<PolishedRecreatePrompt | null>(null);
   const [materialMentionOpen, setMaterialMentionOpen] = useState(false);
   const [materialMentionQuery, setMaterialMentionQuery] = useState("");
+  const [privacyViewBusyIndex, setPrivacyViewBusyIndex] = useState<number | null>(null);
   const [modelOn, setModelOn] = useState(false);
   const [modelInfo, setModelInfo] = useState("");
   const [ratio, setRatio] = useState("9:16");
@@ -1533,6 +1534,81 @@ export function RecreateVideoPage() {
     throw new Error("视频仍在生成中，请稍后在任务中心查看");
   };
 
+  const pollPrivacyViewTask = async (taskId: string) => {
+    const deadline = Date.now() + 10 * 60 * 1000;
+    while (Date.now() < deadline) {
+      const response = await fetch(`/api/tasks/${taskId}/`, { cache: "no-store" });
+      const task = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(task?.message || "多视图任务查询失败");
+      if (task.status === "SUCCEEDED" && task.outputs?.[0]) return task.outputs[0] as { assetId: string; url: string; name?: string };
+      if (task.status === "FAILED" || task.status === "CANCELED")
+        throw new Error(task.errorCode || "多视图参考生成失败");
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+    throw new Error("多视图参考仍在生成中，请稍后在任务中心查看");
+  };
+
+  const createPrivacyMultiView = async (index: number) => {
+    const source = products[index];
+    if (!source || privacyViewBusyIndex !== null) return;
+    setError("");
+    setPrivacyViewBusyIndex(index);
+    try {
+      const assetId = await upload(source);
+      const prompt = [
+        "基于输入人像参考图，生成一张隐私化虚拟模特多角度参考图。",
+        "画面是一张干净的多视图参考板，包含正面、左45度、右45度、左侧身、右侧身、背面、上半身服装细节、局部姿态细节。",
+        "保留服装款式、颜色、材质、发型轮廓、身形比例、姿态气质和整体穿搭氛围。",
+        "所有出现脸部的位置都必须做隐私化处理：弱化真实五官，不保留可识别真人身份；不同视图综合使用半透明网格、柔化、额头/眼周遮挡、鼻梁/中庭遮挡、下半脸遮挡等方式。",
+        "不要复制原人物脸部身份，不要生成清晰真实人脸；重点输出可用于原创视频生成的虚拟模特参考。",
+        "浅灰或白色背景，参考图清晰整洁，适合作为后续 @虚拟模特参考 使用。",
+      ].join("\n");
+      const response = await fetch("/api/tasks/scene/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": crypto.randomUUID(),
+        },
+        body: JSON.stringify({
+          assetId,
+          aspectRatio: "1:1",
+          scene: "自然居家",
+          style: "清新自然",
+          prompt,
+        }),
+      });
+      const created = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(created?.message || "多视图参考任务创建失败");
+      setNotice("正在生成隐私化多角度参考图");
+      const output = await pollPrivacyViewTask(created.taskId);
+      setProducts((current) =>
+        current.map((item, itemIndex) => {
+          if (itemIndex !== index) return item;
+          if (item.file) URL.revokeObjectURL(item.preview);
+          return {
+            assetId: output.assetId,
+            preview: output.url,
+            name: "虚拟模特参考",
+            byteSize: 0,
+          };
+        }),
+      );
+      setProductInfo((current) =>
+        current.includes("@虚拟模特参考")
+          ? current
+          : `${current.trim() ? `${current.trim()} ` : ""}人物形象参考 @虚拟模特参考，保留服装、身形和姿态气质，不复制真实人脸身份。`.slice(0, 800),
+      );
+      setPolishedPrompt(null);
+      clearTaskState();
+      setNotice("已生成 @虚拟模特参考，并替换原真人素材");
+      window.setTimeout(() => setNotice(""), 2600);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "隐私化多视图参考生成失败");
+    } finally {
+      setPrivacyViewBusyIndex(null);
+    }
+  };
+
   const goToVideoMix = () => {
     const assetIds = douyinClips
       .map((item) => item.assetId)
@@ -2315,6 +2391,19 @@ export function RecreateVideoPage() {
                   aria-label={`重命名${materialLabel(index)}`}
                   placeholder={materialLabel(index)}
                 />
+                <button
+                  type="button"
+                  className="privacy-view"
+                  onClick={() => createPrivacyMultiView(index)}
+                  disabled={privacyViewBusyIndex !== null}
+                >
+                  {privacyViewBusyIndex === index ? (
+                    <LoaderCircle className="generation-spinner" size={12} />
+                  ) : (
+                    <Sparkles size={12} />
+                  )}
+                  {privacyViewBusyIndex === index ? "生成中" : "转多角度参考"}
+                </button>
               </label>
               <button
                 type="button"

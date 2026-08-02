@@ -172,6 +172,16 @@ const checks = [
     "recreate-mention-menu",
   ],
   [
+    "Recreate video can convert portraits to privacy multi-view references",
+    "app/components/recreate-video-page.tsx",
+    "转多角度参考",
+  ],
+  [
+    "Recreate video privacy multi-view prompt masks face identity",
+    "app/components/recreate-video-page.tsx",
+    "所有出现脸部的位置都必须做隐私化处理",
+  ],
+  [
     "Recreate video prompt polish endpoint uses SophNet",
     "app/api/workflows/recreate-video-analysis/route.ts",
     'body.mode === "polish"',
