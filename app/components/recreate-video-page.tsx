@@ -1923,7 +1923,7 @@ export function RecreateVideoPage() {
             </button>
           </div>
         </header>
-        <div className="recreate-keyframe-grid">
+        <div className="recreate-keyframe-grid recreate-frame-collage">
           {selectableKeyframes.map((frame, index) => {
             const selected = selectedKeyframeKeys.has(frame.time.toFixed(1));
             return (
@@ -2127,7 +2127,7 @@ export function RecreateVideoPage() {
           ) : null}
         </header>
         {(frameAnalysisFrames.length || selectedKeyframes.length) ? (
-          <div className="recreate-replacement-frames">
+          <div className="recreate-replacement-frames recreate-frame-collage compact">
             {(frameAnalysisFrames.length ? frameAnalysisFrames : selectedKeyframes).slice(0, 12).map((frame, index) => (
               <figure key={`${frame.time}-${frame.url || index}`}>
                 {frame.url ? (
@@ -2302,7 +2302,7 @@ export function RecreateVideoPage() {
   const referencePanel = (
     <section className="recreate-panel">
       <header className="recreate-panel-head">
-        <div>
+        <div className="recreate-frame-collage">
           <strong>当前步骤</strong>
           <h2>确认生成方案</h2>
         </div>
