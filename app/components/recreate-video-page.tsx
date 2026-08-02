@@ -296,6 +296,7 @@ export function RecreateVideoPage() {
   const [faceMaskBusyIndex, setFaceMaskBusyIndex] = useState<number | null>(null);
   const [modelOn, setModelOn] = useState(false);
   const [modelInfo, setModelInfo] = useState("");
+  const [mp4OnlyTest, setMp4OnlyTest] = useState(false);
   const [ratio, setRatio] = useState("9:16");
   const [duration, setDuration] = useState("15");
   const [resolution, setResolution] = useState("720p");
@@ -655,7 +656,7 @@ export function RecreateVideoPage() {
   const clipReady =
     sourceReady &&
     selectedKeyframes.length >= 4;
-  const productReady = products.length > 0 || Boolean(productInfo.trim()) || Boolean(polishedPrompt?.finalPrompt);
+  const productReady = mp4OnlyTest || products.length > 0 || Boolean(productInfo.trim()) || Boolean(polishedPrompt?.finalPrompt);
   const referenceReady = referenceConfirmed;
   const generateReady =
     sourceReady && clipReady && productReady && referenceReady && usageAuthorized;
@@ -2019,25 +2020,32 @@ export function RecreateVideoPage() {
     setResult(null);
     setPhase("uploading");
     try {
-      const productAssetIds = await Promise.all(products.map(upload));
-      const keyframeCollageAssetId = await prepareKeyframeCollageReference();
       const referenceVideoAssetId = await prepareReferenceVideoAsset(selectedClip || sourceItem!);
-      const confirmedReferenceAssetId = referenceImage ? await upload(referenceImage) : null;
-      const assetIds = [
-        ...productAssetIds,
-        ...(keyframeCollageAssetId ? [keyframeCollageAssetId] : []),
-        referenceVideoAssetId,
-        ...(confirmedReferenceAssetId ? [confirmedReferenceAssetId] : []),
-      ];
-      const collageImageIndex = keyframeCollageAssetId ? products.length + 1 : null;
+      const productAssetIds = mp4OnlyTest ? [] : await Promise.all(products.map(upload));
+      const keyframeCollageAssetId = mp4OnlyTest ? null : await prepareKeyframeCollageReference();
+      const confirmedReferenceAssetId = !mp4OnlyTest && referenceImage ? await upload(referenceImage) : null;
+      const assetIds = mp4OnlyTest
+        ? [referenceVideoAssetId]
+        : [
+            ...productAssetIds,
+            ...(keyframeCollageAssetId ? [keyframeCollageAssetId] : []),
+            referenceVideoAssetId,
+            ...(confirmedReferenceAssetId ? [confirmedReferenceAssetId] : []),
+          ];
+      const collageImageIndex = !mp4OnlyTest && keyframeCollageAssetId ? products.length + 1 : null;
       const prompt = [
+        mp4OnlyTest
+          ? "当前为仅 MP4 对标视频测试模式：本次只提交对标视频，不提交十二宫格参考图、素材池图片或额外参考图，用于验证 Ark 是否接受该 MP4 reference_video。"
+          : "",
         selectedKeyframes.length
           ? `已确认关键画面时间点：${selectedKeyframes.map((frame) => `${frame.time.toFixed(1)}s`).join("、")}。请以这些画面作为复刻参考节点，保持原视频镜头节奏但重生成原创内容。`
           : "",
-        keyframeCollagePrompt(collageImageIndex),
-        products.length
+        mp4OnlyTest ? "" : keyframeCollagePrompt(collageImageIndex),
+        !mp4OnlyTest && products.length
           ? `素材池：用户上传了 ${products.length} 个通配素材，按输入顺序分别标记为：${materialReferences.map((item, index) => `${item.label}=第${index + 1}张参考图`).join("；")}。请自动识别素材类型，能匹配到人物、服装、商品、背景、Logo 或字幕的素材优先使用；如果用户口令明确引用某个图片标签，请优先按该引用执行；匹配不上的素材不要强行使用。`
-          : "素材池：用户未上传素材，请按复刻口令生成原创内容。",
+          : mp4OnlyTest
+            ? ""
+            : "素材池：用户未上传素材，请按复刻口令生成原创内容。",
         productInfo.trim() ? `用户复刻口令：${productInfo.trim()}` : "",
         polishedPrompt?.finalPrompt ? `AI润色复刻方案：\n${polishedPrompt.finalPrompt}` : "",
         `补充要求：${special.trim()}`,
@@ -3105,6 +3113,23 @@ export function RecreateVideoPage() {
         />
         我确认拥有对标视频、素材池及复刻口令中相关内容的合法使用授权
       </label>
+      <label className="recreate-toggle">
+        仅 MP4 测试模式
+        <input
+          type="checkbox"
+          checked={mp4OnlyTest}
+          onChange={(event) => {
+            setMp4OnlyTest(event.target.checked);
+            clearTaskState();
+          }}
+        />
+        <i />
+      </label>
+      {mp4OnlyTest ? (
+        <p className="recreate-test-note">
+          只提交对标 MP4 给 Ark，不提交十二宫格、素材池和多视图图。用于排查当前报错是否由 MP4 本身触发。
+        </p>
+      ) : null}
       <label className="recreate-toggle">
         自定义模特信息
         <input

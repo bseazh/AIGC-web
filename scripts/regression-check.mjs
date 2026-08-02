@@ -197,6 +197,16 @@ const checks = [
     "setPreviewMedia({ url, name, mimeType: \"image/*\" })",
   ],
   [
+    "Recreate video can submit MP4-only diagnostic tasks",
+    "app/components/recreate-video-page.tsx",
+    "仅 MP4 测试模式",
+  ],
+  [
+    "Recreate video MP4-only mode skips keyframe collage submission",
+    "app/components/recreate-video-page.tsx",
+    "mp4OnlyTest ? null : await prepareKeyframeCollageReference()",
+  ],
+  [
     "Recreate video supports deterministic face mask strengthening",
     "app/components/recreate-video-page.tsx",
     "强化脸部遮盖",
