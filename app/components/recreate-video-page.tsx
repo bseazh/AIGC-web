@@ -86,6 +86,15 @@ type RecreateFrameAnalysis = {
   providerError?: string;
   summary?: string;
 };
+type PolishedRecreatePrompt = {
+  summary?: string;
+  preserve?: string[];
+  replace?: string[];
+  materialUse?: string[];
+  avoid?: string[];
+  finalPrompt?: string;
+  providerError?: string;
+};
 type SourceKind = "video" | "product" | "scene";
 type WorkflowStep = "source" | "clip" | "product" | "reference" | "generate";
 type SourceMode = "douyin" | "upload" | "library";
@@ -133,6 +142,7 @@ type Draft = {
   usageAuthorized: boolean;
   productInfo: string;
   special: string;
+  polishedPrompt: PolishedRecreatePrompt | null;
   modelOn: boolean;
   modelInfo: string;
   ratio: string;
@@ -158,9 +168,9 @@ const workflowSteps: Array<{
   subtitle: string;
 }> = [
   { key: "source", number: 1, title: "添加对标视频", subtitle: "抖音获取或本地上传" },
-  { key: "clip", number: 2, title: "选择关键画面", subtitle: "拆分并锁定复刻片段" },
-  { key: "product", number: 3, title: "替换复刻素材", subtitle: "商品、模特或场景参考" },
-  { key: "reference", number: 4, title: "确认复刻参考图", subtitle: "确认最终参考图" },
+  { key: "clip", number: 2, title: "十二宫格抽帧", subtitle: "锁定复刻节奏与画面" },
+  { key: "product", number: 3, title: "复刻口令与素材", subtitle: "一句话说明怎么替换" },
+  { key: "reference", number: 4, title: "确认生成方案", subtitle: "确认 AI 润色后的方案" },
   { key: "generate", number: 5, title: "生成复刻视频", subtitle: "开始任务输出" },
 ];
 
@@ -207,7 +217,8 @@ function formatBytes(byteSize: number) {
 function defaultKeyframes(durationSeconds?: number, offsetSeconds = 0): KeyframeSelection[] {
   const duration = Math.max(3, Number(durationSeconds) || 15);
   const usableEnd = Math.max(0.3, duration - 0.2);
-  const ratios = [0.12, 0.36, 0.62, 0.86];
+  const frameCount = duration >= 12 ? 12 : duration >= 8 ? 9 : 8;
+  const ratios = Array.from({ length: frameCount }, (_, index) => (index + 0.5) / frameCount);
   return ratios.map((ratio, index) => ({
     time: Math.round((offsetSeconds + Math.min(usableEnd, Math.max(0, duration * ratio))) * 10) / 10,
     label: `关键画面 ${index + 1}`,
@@ -256,6 +267,7 @@ export function RecreateVideoPage() {
   const [douyinClipDuration, setDouyinClipDuration] = useState(15);
   const [productInfo, setProductInfo] = useState("");
   const [special, setSpecial] = useState("");
+  const [polishedPrompt, setPolishedPrompt] = useState<PolishedRecreatePrompt | null>(null);
   const [modelOn, setModelOn] = useState(false);
   const [modelInfo, setModelInfo] = useState("");
   const [ratio, setRatio] = useState("9:16");
@@ -307,6 +319,7 @@ export function RecreateVideoPage() {
     usageAuthorized,
     productInfo,
     special,
+    polishedPrompt,
     modelOn,
     modelInfo,
     ratio,
@@ -323,6 +336,7 @@ export function RecreateVideoPage() {
         draft.referenceImage ||
         draft.productInfo ||
         draft.special ||
+        draft.polishedPrompt ||
         draft.modelInfo,
     );
 
@@ -359,6 +373,7 @@ export function RecreateVideoPage() {
     setUsageAuthorized(Boolean(draft.usageAuthorized));
     setProductInfo(draft.productInfo || "");
     setSpecial(draft.special || "");
+    setPolishedPrompt(draft.polishedPrompt || null);
     setModelOn(Boolean(draft.modelOn));
     setModelInfo(draft.modelInfo || "");
     if (draft.ratio) setRatio(draft.ratio);
@@ -522,7 +537,7 @@ export function RecreateVideoPage() {
     () => new Set(selectedKeyframes.map((frame) => frame.time.toFixed(1))),
     [selectedKeyframes],
   );
-  const selectableKeyframes = useMemo(() => keyframeCandidates.slice(0, 8), [keyframeCandidates]);
+  const selectableKeyframes = useMemo(() => keyframeCandidates.slice(0, 12), [keyframeCandidates]);
   const allCandidateKeyframesSelected =
     selectableKeyframes.length > 0 &&
     selectableKeyframes.every((frame) => selectedKeyframeKeys.has(frame.time.toFixed(1)));
@@ -533,7 +548,7 @@ export function RecreateVideoPage() {
         return current.filter((item) => item.time.toFixed(1) !== key);
       return [...current, frame]
         .sort((a, b) => a.time - b.time)
-        .slice(0, 8);
+        .slice(0, 12);
     });
     clearTaskState();
   };
@@ -570,8 +585,8 @@ export function RecreateVideoPage() {
     sourceReady &&
     selectedKeyframes.length >= 4 &&
     (sourceMode !== "douyin" || douyinClips.length > 0 || !douyinAnalysis?.clipRequired);
-  const productReady = products.length > 0;
-  const referenceReady = Boolean(referenceImage && referenceConfirmed);
+  const productReady = products.length > 0 || Boolean(productInfo.trim()) || Boolean(polishedPrompt?.finalPrompt);
+  const referenceReady = referenceConfirmed;
   const generateReady =
     sourceReady && clipReady && productReady && referenceReady && usageAuthorized;
   const completedCount = [sourceReady, clipReady, productReady, referenceReady, phase === "succeeded"].filter(
@@ -647,6 +662,7 @@ export function RecreateVideoPage() {
     phase,
     productInfo,
     products,
+    polishedPrompt,
     ratio,
     referenceConfirmed,
     referenceImage,
@@ -964,7 +980,7 @@ export function RecreateVideoPage() {
         setReferenceConfirmed(false);
         setStep("reference");
       } else {
-        setProducts((current) => [...current, ...valid].slice(0, 5));
+        setProducts((current) => [...current, ...valid].slice(0, 8));
       }
       clearTaskState();
     }
@@ -1120,22 +1136,85 @@ export function RecreateVideoPage() {
       setFrameAnalysisFrames(extractedFrames);
       if (!selectedKeyframes.length)
         setSelectedKeyframes(
-          extractedFrames.slice(0, 4).map((frame: { time: number; url: string }, index: number) => ({
+          extractedFrames.slice(0, 12).map((frame: { time: number; url: string }, index: number) => ({
             ...frame,
             label: `AI关键画面 ${index + 1}`,
           })),
         );
       if (body.analysis?.prompt) {
-        setSpecial((current) =>
-          current.trim()
-            ? `${current.trim()}\n\nAI关键帧识别提示词：\n${body.analysis.prompt}`
-            : body.analysis.prompt,
-        );
+        setPolishedPrompt((current) => current || {
+          summary: body.analysis?.summary || "已根据关键帧生成基础复刻方案",
+          preserve: ["镜头节奏", "构图", "动作走势", "光线氛围"],
+          replace: ["按复刻口令和上传素材做通配替换"],
+          materialUse: ["能匹配上的素材优先使用，匹配不上的素材不强行使用"],
+          avoid: ["原人物脸", "原商品", "原品牌", "Logo", "水印", "原字幕"],
+          finalPrompt: body.analysis.prompt,
+        });
       }
-      setNotice("AI 已识别关键帧，并写入视频特殊要求");
+      setNotice("AI 已识别关键帧，并生成基础复刻方案");
       window.setTimeout(() => setNotice(""), 2200);
     } catch (caught) {
       setDouyinError(caught instanceof Error ? caught.message : "关键帧识别失败");
+    } finally {
+      setFrameAnalysisBusy(false);
+    }
+  };
+
+  const polishRecreateCommand = async () => {
+    if (frameAnalysisBusy) return;
+    const fallbackPrompt = [
+      "参考对标视频的十二宫格关键画面，保留镜头节奏、构图、动作走势和光线氛围。",
+      productInfo.trim()
+        ? `用户复刻口令：${productInfo.trim()}`
+        : "用户未填写具体口令，请使用上传素材做通配替换。",
+      products.length
+        ? `用户已上传 ${products.length} 个素材，能匹配到人物、服装、商品、背景或字幕的素材优先使用，匹配不上的素材不要强行使用。`
+        : "用户暂未上传素材，可按复刻口令生成原创画面。",
+      "生成原创短视频，不复制原人物脸、原商品、原品牌、Logo、水印或原字幕。",
+    ].join("\n");
+    if (!douyinAnalysis?.cacheId) {
+      setPolishedPrompt({
+        summary: "已整理成本地基础复刻方案",
+        preserve: ["镜头节奏", "构图", "动作走势", "光线氛围"],
+        replace: [productInfo.trim() || "按上传素材做通配替换"],
+        materialUse: [products.length ? "优先使用能匹配上的上传素材" : "未上传素材时按口令生成"],
+        avoid: ["原人物脸", "原商品", "原品牌", "Logo", "水印", "原字幕"],
+        finalPrompt: fallbackPrompt,
+      });
+      setNotice("已整理复刻口令；抖音缓存视频可使用 AI 深度润色");
+      window.setTimeout(() => setNotice(""), 2200);
+      clearTaskState();
+      return;
+    }
+    setFrameAnalysisBusy(true);
+    setDouyinError("");
+    setDouyinCacheExpired(false);
+    try {
+      const response = await fetch("/api/workflows/recreate-video-analysis/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "polish",
+          cacheId: douyinAnalysis.cacheId,
+          userCommand: productInfo,
+          materialCount: products.length,
+        }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        if (body?.code === "CACHE_EXPIRED" || response.status === 410) {
+          setDouyinCacheExpired(true);
+          setFrameAnalysis(null);
+          setFrameAnalysisFrames([]);
+        }
+        throw new Error(body?.message || body?.code || "复刻口令润色失败");
+      }
+      setPolishedPrompt(body.polished || null);
+      setNotice("AI 已润色复刻口令，生成方案可确认");
+      window.setTimeout(() => setNotice(""), 2200);
+      clearTaskState();
+    } catch (caught) {
+      setDouyinError(caught instanceof Error ? caught.message : "复刻口令润色失败");
     } finally {
       setFrameAnalysisBusy(false);
     }
@@ -1176,8 +1255,8 @@ export function RecreateVideoPage() {
           label: `关键画面 ${index + 1}`,
         }));
         setFrameAnalysisFrames(frames);
-        setSelectedKeyframes(frames.slice(0, 4));
-        setNotice("已快速抽取关键画面，可先选择画面；AI识别可稍后单独执行");
+        setSelectedKeyframes(frames.slice(0, 12));
+        setNotice("已快速抽取十二宫格关键画面；可继续写复刻口令");
       } else {
         const frames = await extractFramesInBrowser(sourceSelection.preview, sourceSelection.durationSeconds);
         setFrameAnalysisFrames(
@@ -1185,8 +1264,8 @@ export function RecreateVideoPage() {
             .filter((frame): frame is KeyframeSelection & { url: string } => Boolean(frame.url))
             .map((frame) => ({ time: frame.time, url: frame.url })),
         );
-        setSelectedKeyframes(frames.slice(0, 4));
-        setNotice("已在浏览器本地快速抽取关键画面");
+        setSelectedKeyframes(frames.slice(0, 12));
+        setNotice("已在浏览器本地快速抽取十二宫格关键画面");
       }
       window.setTimeout(() => setNotice(""), 2400);
       clearTaskState();
@@ -1356,8 +1435,12 @@ export function RecreateVideoPage() {
         selectedKeyframes.length
           ? `已确认关键画面时间点：${selectedKeyframes.map((frame) => `${frame.time.toFixed(1)}s`).join("、")}。请以这些画面作为复刻参考节点，保持原视频镜头节奏但重生成原创内容。`
           : "",
-        `产品信息：${productInfo.trim()}`,
-        `视频特殊要求：${special.trim()}`,
+        products.length
+          ? `素材池：用户上传了 ${products.length} 个通配素材；请自动识别素材类型，能匹配到人物、服装、商品、背景、Logo 或字幕的素材优先使用，匹配不上的素材不要强行使用。`
+          : "素材池：用户未上传素材，请按复刻口令生成原创内容。",
+        productInfo.trim() ? `用户复刻口令：${productInfo.trim()}` : "",
+        polishedPrompt?.finalPrompt ? `AI润色复刻方案：\n${polishedPrompt.finalPrompt}` : "",
+        `补充要求：${special.trim()}`,
         modelOn && modelInfo.trim()
           ? `自定义模特信息：${modelInfo.trim()}`
           : "",
@@ -1539,7 +1622,7 @@ export function RecreateVideoPage() {
                       ) : (
                         <Sparkles size={16} />
                       )}
-                      {frameAnalysisBusy ? "正在识别关键帧" : "AI识别可替换内容"}
+                      {frameAnalysisBusy ? "正在理解画面" : "AI理解画面"}
                     </button>
                     {frameAnalysisFrames.length ? (
                       <div className="recreate-frame-strip">
@@ -1802,14 +1885,14 @@ export function RecreateVideoPage() {
         <span>2 / 5</span>
       </header>
       <p className="recreate-panel-copy">
-        先锁定复刻要参考的关键画面。至少选择 4 帧，后续会围绕这些画面批量替换商品、人物或场景。
+        先把片段抽成十二宫格。至少保留 4 帧，后续会参考这些画面的节奏、构图和动作走势，再结合复刻口令做通配替换。
       </p>
       <section className="recreate-keyframe-picker">
         <header>
           <div>
             <strong>关键画面选择</strong>
             <small>
-              已选 {selectedKeyframes.length}/8 · 至少 4 帧
+              已选 {selectedKeyframes.length}/12 · 至少 4 帧
               {frameAnalysisFrames.length
                 ? " · 已有截图"
                 : frameExtractionBusy
@@ -1833,7 +1916,7 @@ export function RecreateVideoPage() {
                 ) : (
                   <Sparkles size={14} />
                 )}
-                {frameAnalysisBusy ? "AI识别中" : frameAnalysis ? "重新AI识别" : "AI识别可替换内容"}
+                {frameAnalysisBusy ? "AI理解中" : frameAnalysis ? "重新理解画面" : "AI理解画面"}
               </button>
             ) : null}
             <button
@@ -1846,7 +1929,7 @@ export function RecreateVideoPage() {
               {allCandidateKeyframesSelected ? "取消全选" : "全选画面"}
             </button>
             <button type="button" className="secondary" onClick={useDefaultKeyframes}>
-              使用默认 4 帧
+              使用默认十二宫格
             </button>
           </div>
         </header>
@@ -1874,7 +1957,7 @@ export function RecreateVideoPage() {
         </div>
         {selectedKeyframes.length < 4 ? (
           <p className="recreate-keyframe-warning">
-            还需选择 {4 - selectedKeyframes.length} 帧，才能进入替换复刻素材。
+            还需选择 {4 - selectedKeyframes.length} 帧，才能进入复刻口令与素材。
           </p>
         ) : (
           <p className="recreate-keyframe-ready">
@@ -2080,7 +2163,7 @@ export function RecreateVideoPage() {
           onClick={() => setStep("product")}
           disabled={!clipReady}
         >
-          下一步：替换复刻素材
+          下一步：复刻口令与素材
         </button>
       </div>
     </section>
@@ -2114,23 +2197,23 @@ export function RecreateVideoPage() {
       <header className="recreate-panel-head">
         <div>
           <strong>当前步骤</strong>
-          <h2>替换复刻素材</h2>
+          <h2>复刻口令与素材</h2>
         </div>
         <span>3 / 5</span>
       </header>
       <p className="recreate-panel-copy">
-        先看 AI 从关键帧里近似识别出的可替换对象，再逐项上传对应素材。物品较少时会优先识别主商品、人物、场景和字幕，系统会用这些素材重生成原创视频。
+        不用逐个指定“换哪一块”。先看十二宫格参考画面，再写一句复刻口令并上传素材池；系统会自动把能匹配上的人物、服装、商品、背景或字幕写进生成方案，匹配不上的素材不强行使用。
       </p>
       <section className="recreate-replacement-guide">
         <header>
           <div>
-            <strong>AI 建议替换清单</strong>
+            <strong>十二宫格画面理解</strong>
             <small>
               {frameAnalysis
-                ? "已根据关键帧生成少量近似替换槽位"
+                ? "已根据关键帧识别人物、场景、动作和可替换元素"
                 : douyinAnalysis?.cacheId
-                  ? "建议先识别关键帧，让用户知道该换什么、该上传什么"
-                  : "可先按常见带货视频结构上传素材"}
+                  ? "可先让 AI 理解画面，再润色复刻口令"
+                  : "本地视频可先使用十二宫格作为视觉参考"}
             </small>
           </div>
           {douyinAnalysis?.cacheId ? (
@@ -2140,13 +2223,13 @@ export function RecreateVideoPage() {
               ) : (
                 <Sparkles size={15} />
               )}
-              {frameAnalysisBusy ? "正在识别" : frameAnalysis ? "重新识别" : "AI识别可替换内容"}
+              {frameAnalysisBusy ? "正在处理" : frameAnalysis ? "重新理解画面" : "AI理解画面"}
             </button>
           ) : null}
         </header>
         {(frameAnalysisFrames.length || selectedKeyframes.length) ? (
           <div className="recreate-replacement-frames">
-            {(frameAnalysisFrames.length ? frameAnalysisFrames : selectedKeyframes).slice(0, 5).map((frame, index) => (
+            {(frameAnalysisFrames.length ? frameAnalysisFrames : selectedKeyframes).slice(0, 12).map((frame, index) => (
               <figure key={`${frame.time}-${frame.url || index}`}>
                 {frame.url ? (
                   <img src={frame.url} alt={`${frame.time.toFixed(1)}秒关键帧`} />
@@ -2158,51 +2241,61 @@ export function RecreateVideoPage() {
             ))}
           </div>
         ) : null}
-        <div className="recreate-replacement-slots">
-          {replacementSlots.map((slot, index) => {
-            const previews = slotFramePreviews(slot);
-            return (
-              <article key={`${slot.target || "替换项"}-${index}`}>
-                <span>{index + 1}</span>
-                <div>
-                  <strong>{slot.target || "可替换对象"}</strong>
-                  <em className="recreate-replacement-slot-meta">
-                    {slotTypeLabel(slot.slotType)} · {slotConfidenceLabel(slot.confidence)}
-                    {slot.sourceFrameTimes?.length
-                      ? ` · 参考 ${slot.sourceFrameTimes.slice(0, 3).map((time) => `${Number(time).toFixed(1)}s`).join(" / ")}`
-                      : ""}
-                  </em>
-                  {previews.length ? (
-                    <div className="recreate-replacement-slot-frames" aria-label="替换物品参考截图">
-                      {previews.map((frame) => (
-                        <figure key={`${slot.target || "slot"}-${frame.time}-${frame.url}`}>
-                          <img src={frame.url} alt={`${slot.target || "可替换对象"}参考截图 ${frame.time.toFixed(1)}秒`} />
-                          <figcaption>{frame.time.toFixed(1)}s</figcaption>
-                        </figure>
-                      ))}
-                    </div>
-                  ) : null}
-                  <p>{slot.strategy || slot.promptInstruction || "参考对标视频结构，用用户上传素材重生成。"}</p>
-                  {slot.detectionNote ? <p className="recreate-replacement-slot-note">{slot.detectionNote}</p> : null}
-                  <small>{slotUploadHint(slot)}</small>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLibraryKind(null);
-                    refs.product.current?.click();
-                  }}
-                >
-                  上传对应素材
-                </button>
-              </article>
-            );
-          })}
-        </div>
+        {frameAnalysis ? (
+          <div className="recreate-command-insight">
+            {frameAnalysis.summary ? <p>{frameAnalysis.summary}</p> : null}
+            <div>
+              {replacementSlots.slice(0, 5).map((slot, index) => (
+                <span key={`${slot.target || "元素"}-${index}`}>
+                  {slotTypeLabel(slot.slotType)}：{slot.target || slot.strategy || "可通配替换"}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {frameAnalysis?.risks?.length ? (
           <p className="recreate-replacement-risk">
             注意：{frameAnalysis.risks.slice(0, 2).join("；")}
           </p>
+        ) : null}
+      </section>
+      <section className="recreate-command-card">
+        <header>
+          <div>
+            <strong>写一句复刻口令</strong>
+            <small>你可以说得很随意，AI 会帮你润色成生成提示词。</small>
+          </div>
+          <button type="button" onClick={polishRecreateCommand} disabled={frameAnalysisBusy}>
+            {frameAnalysisBusy ? (
+              <LoaderCircle className="generation-spinner" size={15} />
+            ) : (
+              <Sparkles size={15} />
+            )}
+            {frameAnalysisBusy ? "正在润色" : "AI润色口令"}
+          </button>
+        </header>
+        <textarea
+          value={productInfo}
+          onChange={(event) => {
+            setProductInfo(event.target.value);
+            setPolishedPrompt(null);
+            clearTaskState();
+          }}
+          maxLength={800}
+          placeholder="例如：动作和镜头节奏参考原视频，把人物服装换成我上传的黑色连衣裙，背景保持干净明亮，字幕改成夏季显瘦穿搭。"
+        />
+        {polishedPrompt?.finalPrompt ? (
+          <div className="recreate-polished-prompt">
+            <strong>AI 已整理成生成方案</strong>
+            {polishedPrompt.summary ? <p>{polishedPrompt.summary}</p> : null}
+            <div>
+              {(polishedPrompt.preserve || []).slice(0, 4).map((item) => <span key={`保留-${item}`}>保留：{item}</span>)}
+              {(polishedPrompt.replace || []).slice(0, 4).map((item) => <span key={`替换-${item}`}>替换：{item}</span>)}
+              {(polishedPrompt.avoid || []).slice(0, 4).map((item) => <span key={`避开-${item}`}>避开：{item}</span>)}
+            </div>
+            <textarea readOnly value={polishedPrompt.finalPrompt} aria-label="AI润色后的复刻提示词" />
+            {polishedPrompt.providerError ? <small>{polishedPrompt.providerError}</small> : null}
+          </div>
         ) : null}
       </section>
       <div className="recreate-source-tabs three">
@@ -2237,9 +2330,9 @@ export function RecreateVideoPage() {
           <span>
             <ImagePlus size={27} />
           </span>
-          <strong>上传替换素材</strong>
-          <small>支持商品图、模特图或场景参考图，单张不超过 10MB</small>
-          <small>已上传 {products.length}/5 个</small>
+          <strong>上传素材池</strong>
+          <small>支持人物、服装、商品、背景、Logo 或文案参考图，AI 会自动通配使用</small>
+          <small>已上传 {products.length}/8 个</small>
         </button>
       )}
       {products.length > 0 && (
@@ -2269,7 +2362,7 @@ export function RecreateVideoPage() {
           onClick={() => setStep("reference")}
           disabled={!productReady}
         >
-          下一步：确认复刻参考图
+          下一步：确认生成方案
         </button>
       </div>
       <input
@@ -2288,17 +2381,17 @@ export function RecreateVideoPage() {
       <header className="recreate-panel-head">
         <div>
           <strong>当前步骤</strong>
-          <h2>确认复刻参考图</h2>
+          <h2>确认生成方案</h2>
         </div>
         <span>4 / 5</span>
       </header>
       <p className="recreate-panel-copy">
-        检查前面锁定的关键画面，并选择一张最终复刻参考图。后续可升级为批量生成参考图后逐张确认。
+        最后确认系统会怎么复刻：十二宫格作为镜头参考，素材池作为通配替换来源，复刻口令会被整理成最终生成提示词。
       </p>
       <section className="recreate-reference-keyframes">
         <header>
-          <strong>已锁定关键画面</strong>
-          <small>{selectedKeyframes.length} 帧会作为最终成片的镜头参考节点</small>
+          <strong>十二宫格参考画面</strong>
+          <small>{selectedKeyframes.length} 帧会作为最终成片的镜头节奏和构图参考</small>
         </header>
         <div>
           {selectedKeyframes.map((frame, index) => (
@@ -2313,55 +2406,46 @@ export function RecreateVideoPage() {
           ))}
         </div>
       </section>
-      <div className="recreate-source-tabs">
-        <button
-          type="button"
-          className="active"
-          onClick={() => refs.scene.current?.click()}
-        >
-          <Upload size={16} />
-          上传参考图
-        </button>
-        <button
-          type="button"
-          onClick={() => openLibrary("scene")}
-          className={libraryKind === "scene" ? "active" : ""}
-        >
-          <FolderOpen size={16} />
-          资产库
-        </button>
-      </div>
-      {libraryKind === "scene" ? (
-        assetLibrary
-      ) : (
-        <button
-          type="button"
-          className={`recreate-drop ${referenceImage ? "has-file" : ""}`}
-          onClick={() => refs.scene.current?.click()}
-        >
-          <span>
-            <ImagePlus size={27} />
-          </span>
-          <strong>确认复刻参考图</strong>
-          <small>上传一张最终确认图，或从素材库选择</small>
-          <small>{referenceImage ? "已选择 1 个" : "已上传 0 / 1 个"}</small>
-          <input
-            ref={refs.scene}
-            type="file"
-            accept={imageAccept}
-            onChange={(event) => choose("scene", event.target.files)}
-          />
-        </button>
-      )}
-      {referenceImage && (
-        <div className="recreate-reference-preview">
-          <img src={referenceImage.preview} alt="参考图预览" />
-          <div>
-            <strong>{referenceImage.name}</strong>
-            <small>{formatBytes(referenceImage.byteSize)}</small>
-          </div>
+      <section className="recreate-plan-preview">
+        <header>
+          <strong>复刻方案摘要</strong>
+          <small>{polishedPrompt?.finalPrompt ? "已使用 AI 润色方案" : "未润色时会使用基础通配方案"}</small>
+        </header>
+        <div className="recreate-plan-tags">
+          <span>保留：镜头节奏</span>
+          <span>保留：构图与动作走势</span>
+          <span>素材：{products.length ? `${products.length} 个素材自动通配` : "未上传素材，按口令生成"}</span>
+          <span>避开：水印 / 原字幕 / 原品牌</span>
         </div>
-      )}
+        <textarea
+          readOnly
+          value={
+            polishedPrompt?.finalPrompt ||
+            [
+              "参考对标视频的十二宫格关键画面，保留镜头节奏、构图、动作走势和光线氛围。",
+              productInfo.trim()
+                ? `复刻口令：${productInfo.trim()}`
+                : "按上传素材做通配替换；能匹配到人物、服装、商品、背景或字幕的素材优先使用。",
+              "匹配不上的素材不要强行使用。生成原创短视频，不复制原人物脸、原商品、原品牌、Logo、水印或原字幕。",
+            ].join("\n")
+          }
+          aria-label="最终复刻生成方案"
+        />
+      </section>
+      {products.length > 0 ? (
+        <div className="recreate-selected-images">
+          {products.map((product, index) => (
+            <article key={`${product.assetId || product.name}-confirm-${index}`}>
+              <img src={product.preview} alt="素材池预览" />
+              <span>{index + 1}</span>
+            </article>
+          ))}
+        </div>
+      ) : null}
+      <button type="button" className="recreate-inline-secondary" onClick={polishRecreateCommand} disabled={frameAnalysisBusy}>
+        {frameAnalysisBusy ? <LoaderCircle className="generation-spinner" size={15} /> : <Sparkles size={15} />}
+        {polishedPrompt?.finalPrompt ? "重新润色复刻口令" : "AI润色复刻口令"}
+      </button>
       <label className="recreate-consent">
         <input
           type="checkbox"
@@ -2371,7 +2455,7 @@ export function RecreateVideoPage() {
             clearTaskState();
           }}
         />
-        我确认当前图片作为本次复刻参考图
+        我确认使用当前十二宫格、素材池和复刻口令生成原创视频
       </label>
       <div className="recreate-source-footer">
         <button
@@ -2444,7 +2528,7 @@ export function RecreateVideoPage() {
             clearTaskState();
           }}
         />
-        我确认拥有对标视频、商品图及其他上传素材的合法使用授权
+        我确认拥有对标视频、素材池及复刻口令中相关内容的合法使用授权
       </label>
       <label className="recreate-toggle">
         自定义模特信息
@@ -2470,16 +2554,20 @@ export function RecreateVideoPage() {
         </label>
       )}
       <label className="recreate-field">
-        产品信息（可选）
+        复刻口令（可选）
         <textarea
           value={productInfo}
-          onChange={(event) => setProductInfo(event.target.value)}
-          maxLength={600}
-          placeholder="例如：产品名称、核心卖点、材质、目标人群"
+          onChange={(event) => {
+            setProductInfo(event.target.value);
+            setPolishedPrompt(null);
+            clearTaskState();
+          }}
+          maxLength={800}
+          placeholder="例如：动作和节奏参考原视频，把服装换成我上传的裙子，背景保持干净明亮。"
         />
       </label>
       <label className="recreate-field">
-        视频特殊要求（可选）
+        补充要求（可选）
         <textarea
           value={special}
           onChange={(event) => setSpecial(event.target.value)}

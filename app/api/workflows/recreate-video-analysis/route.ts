@@ -32,10 +32,12 @@ function validUuid(value: unknown): value is string {
 }
 
 function keyframeSeconds(durationSeconds: number) {
-  const points = [0.12, 0.32, 0.52, 0.72, 0.9].map((ratio) =>
-    Math.round(Math.max(0, durationSeconds * ratio) * 10) / 10,
-  );
-  return [...new Set(points)].slice(0, 5);
+  const frameCount = durationSeconds >= 12 ? 12 : durationSeconds >= 8 ? 9 : 8;
+  const points = Array.from({ length: frameCount }, (_, index) => {
+    const ratio = (index + 0.5) / frameCount;
+    return Math.round(Math.max(0, durationSeconds * ratio) * 10) / 10;
+  });
+  return [...new Set(points)].slice(0, frameCount);
 }
 
 function numericRange(value: unknown, fallback: number, min: number, max: number) {
@@ -242,6 +244,67 @@ async function callSophnetVision(frames: Frame[], options: Record<string, unknow
   }
 }
 
+async function callSophnetPromptPolish(cache: {
+  id: string;
+  metadata_json: Record<string, unknown>;
+}, options: Record<string, unknown>) {
+  const apiKey =
+    process.env.SOPHNET_CHAT_API_KEY ||
+    process.env.SOPHNET_VISION_API_KEY ||
+    process.env.AI_API_KEY;
+  const baseUrl = process.env.SOPHNET_CHAT_BASE_URL || "https://www.sophnet.com/api/open-apis/v1";
+  const model = process.env.SOPHNET_CHAT_MODEL || "doubao-seed-2-0-mini-260428";
+  if (!apiKey) return null;
+  const userCommand = typeof options.userCommand === "string" ? options.userCommand.trim() : "";
+  const materialCount = Number(options.materialCount) || 0;
+  const frameAnalysis = cache.metadata_json?.frameAnalysis || null;
+  const text = [
+    "你是电商短视频复刻工作台的提示词导演。请把用户口语化复刻要求整理成视频生成模型可执行的中文方案，输出严格 JSON，不要 Markdown。",
+    "JSON 结构必须包含：summary、preserve、replace、materialUse、avoid、finalPrompt。",
+    "summary 是一句给用户看的复刻方案摘要。",
+    "preserve、replace、materialUse、avoid 均为中文字符串数组。",
+    "finalPrompt 是给视频生成模型的完整中文提示词。",
+    "原则：保留对标视频的镜头节奏、构图、动作走势、光线氛围；用用户上传素材和复刻口令做通配替换；匹配不上的素材不要强行使用。",
+    "禁止要求复制原视频人物脸、原商品、原品牌、Logo、水印或原字幕。",
+    `用户复刻口令：${userCommand || "用户未填写；请生成一个默认通配复刻方案。"}`,
+    `用户上传素材数量：${materialCount}`,
+    `关键帧视觉分析：${JSON.stringify(frameAnalysis).slice(0, 5000)}`,
+  ].join("\n");
+  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      stream: false,
+      messages: [{ role: "user", content: text }],
+      response_format: { type: "json_object" },
+    }),
+    signal: AbortSignal.timeout(45_000),
+  });
+  const payload = await response.json().catch(() => null);
+  await db.query(
+    `INSERT INTO provider_call_logs (provider, operation, request_json, response_status, response_json, error_code, provider_request_id)
+     VALUES ('sophnet-chat', 'recreate_video_prompt_polish', $1::jsonb, $2, $3::jsonb, $4, $5)`,
+    [
+      JSON.stringify({ model, materialCount, hasFrameAnalysis: Boolean(frameAnalysis), userCommandLength: userCommand.length }),
+      response.status,
+      JSON.stringify(payload || {}),
+      response.ok ? null : "SOPHNET_CHAT_HTTP_ERROR",
+      payload?.id || response.headers.get("x-request-id"),
+    ],
+  );
+  if (!response.ok) {
+    throw new Error(payload?.message || payload?.error?.message || `SophNet Chat HTTP ${response.status}`);
+  }
+  const raw = payload?.choices?.[0]?.message?.content;
+  if (typeof raw !== "string") throw new Error("SophNet Chat did not return text content");
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return { finalPrompt: raw };
+  }
+}
+
 export async function POST(request: NextRequest) {
   const user = await authenticatedUser(request);
   if (!user) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401 });
@@ -267,6 +330,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ code: "CACHE_EXPIRED", message: "对标视频缓存已过期，请重新获取视频" }, { status: 410 });
   }
   try {
+    if (body.mode === "polish") {
+      const polished = await callSophnetPromptPolish(cache, body).catch((error) => ({
+        summary: "已按复刻口令生成基础方案；视觉模型润色暂时不可用。",
+        preserve: ["镜头节奏", "构图", "动作走势", "光线氛围"],
+        replace: ["按用户口令和上传素材做通配替换"],
+        materialUse: ["能匹配上的素材优先使用，匹配不上的素材不强行使用"],
+        avoid: ["原人物脸", "原商品", "原品牌", "Logo", "水印", "原字幕"],
+        finalPrompt: `参考对标视频的镜头节奏、构图、动作走势和光线氛围，${typeof body.userCommand === "string" && body.userCommand.trim() ? body.userCommand.trim() : "使用用户上传素材做通配替换"}。能匹配上的素材优先用于人物、服装、商品、背景或字幕替换；匹配不上的素材不要强行使用。生成原创短视频，不复制原人物脸、原商品、品牌、Logo、水印或原字幕。`,
+        providerError: error instanceof Error ? error.message.slice(0, 300) : "SophNet Chat prompt polish failed",
+      }));
+      await db.query(
+        `UPDATE douyin_video_caches
+         SET metadata_json = metadata_json || $2::jsonb, updated_at = NOW()
+         WHERE id = $1`,
+        [cache.id, JSON.stringify({ polishedRecreatePrompt: polished, promptPolishedAt: new Date().toISOString() })],
+      );
+      return NextResponse.json({
+        polished,
+        providerConfigured: Boolean(process.env.SOPHNET_CHAT_API_KEY || process.env.SOPHNET_VISION_API_KEY || process.env.AI_API_KEY),
+      });
+    }
     const startSeconds = numericRange(body.startSeconds, 0, 0, Math.max(0, Number(cache.duration_seconds) - 0.1));
     const requestedDurationSeconds = numericRange(body.durationSeconds, 15, 3, 15);
     const { frames, durationSeconds } = await extractFrames(cache, {

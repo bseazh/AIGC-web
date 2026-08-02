@@ -152,14 +152,19 @@ const checks = [
     'body.mode === "frames"',
   ],
   [
-    "Recreate video product step shows AI replacement guide",
+    "Recreate video product step shows recreate command workflow",
     "app/components/recreate-video-page.tsx",
-    "AI 建议替换清单",
+    "复刻口令与素材",
   ],
   [
-    "Recreate video product step exposes replacement upload slots",
+    "Recreate video product step polishes recreate commands",
     "app/components/recreate-video-page.tsx",
-    "recreate-replacement-slots",
+    "AI润色口令",
+  ],
+  [
+    "Recreate video prompt polish endpoint uses SophNet",
+    "app/api/workflows/recreate-video-analysis/route.ts",
+    'body.mode === "polish"',
   ],
   [
     "Recreate video no longer forces forward navigation",
