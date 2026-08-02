@@ -244,7 +244,7 @@ const checks = [
   [
     "Recreate video shows multi-frame reference prompt",
     "app/components/recreate-video-page.tsx",
-    "reference 参考提示词",
+    "十二宫格参考策略",
   ],
   [
     "Recreate video analysis extracts frames",

@@ -11,22 +11,21 @@ export async function POST(request: NextRequest) {
       return assetIds.filter((id): id is string => typeof id === "string");
     },
     (assets) => {
-      if (!assets[0]?.mime_type.startsWith("image/"))
-        return "商品图必须是第一项素材";
       const videoIndex = assets.findIndex(
         (asset) => asset.mime_type === "video/mp4",
       );
-      if (videoIndex < 1) return "复刻带货视频必须提供 MP4 对标视频";
-      if (videoIndex > 5) return "对标视频前最多可添加五张商品图";
+      if (videoIndex < 0) return "复刻带货视频必须提供 MP4 对标视频";
+      if (assets.filter((asset) => asset.mime_type.startsWith("image/")).length > 8)
+        return "素材池最多可添加八张图片";
       if (
-        assets.length > 7 ||
+        assets.length > 9 ||
         assets.some(
           (asset) =>
             !asset.mime_type.startsWith("image/") &&
             asset.mime_type !== "video/mp4",
         )
       )
-        return "仅支持商品图、对标视频和一张场景图";
+        return "仅支持素材池图片和一段 MP4 对标视频";
       if (
         assets.filter((asset) => asset.mime_type === "video/mp4").length !== 1
       )

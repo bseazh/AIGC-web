@@ -98,7 +98,7 @@ export const recreateVideoWorkflow = {
   ...videoWorkflowBase,
   key: "recreate-video",
   name: "复刻带货视频",
-  minAssets: 2,
+  minAssets: 1,
   scenes: ["镜头节奏复刻", "商品展示复刻", "种草讲解复刻", "场景切换复刻"],
   styles: ["自然带货", "轻快节奏", "质感种草", "促销转化"],
 } as const;

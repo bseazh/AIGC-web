@@ -52,16 +52,18 @@ function referencePrompt(title: string, durationSeconds: number) {
   return [
     `参考视频《${title}》，分析多帧关键画面，不复制原商品、人物、品牌和字幕。`,
     "重点提取：开场钩子、商品出现方式、镜头景别、运镜速度、转场节奏、手部/人物互动、收尾 CTA 节奏。",
-    `按 ${Math.min(durationSeconds, 15).toFixed(1)} 秒以内的截取片段生成原创换品复刻视频，保留节奏结构但替换成用户商品和参考图。`,
+    `按整条视频均匀抽取十二宫格作为结构参考，最终生成控制在 ${Math.min(durationSeconds, 15).toFixed(1)} 秒以内，保留节奏结构但使用用户复刻口令和素材池重生成。`,
   ].join("\n");
 }
 
 function keyframeSeconds(durationSeconds: number) {
   const safeDuration = Math.max(0, durationSeconds);
-  const points = [0.12, 0.32, 0.52, 0.72, 0.9].map((ratio) =>
-    Math.round(Math.max(0, safeDuration * ratio) * 10) / 10,
-  );
-  return [...new Set(points)].slice(0, 5);
+  const frameCount = safeDuration >= 12 ? 12 : safeDuration >= 8 ? 9 : 8;
+  const points = Array.from({ length: frameCount }, (_, index) => {
+    const ratio = (index + 0.5) / frameCount;
+    return Math.round(Math.max(0, safeDuration * ratio) * 10) / 10;
+  });
+  return [...new Set(points)].slice(0, frameCount);
 }
 
 async function createSourceCache(userId: string, sourceUrl: string, source: Awaited<ReturnType<typeof inspectDouyinVideo>>) {

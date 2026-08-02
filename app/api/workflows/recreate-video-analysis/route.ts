@@ -126,13 +126,14 @@ async function extractFrames(cache: {
     await downloadObjectToFile(cache.storage_key, sourcePath);
     const sourceDurationSeconds = Number(cache.duration_seconds);
     const startSeconds = numericRange(options.startSeconds, 0, 0, Math.max(0, sourceDurationSeconds - 0.1));
+    const availableDurationSeconds = Math.max(0.3, sourceDurationSeconds - startSeconds);
     const requestedDurationSeconds = numericRange(
       options.durationSeconds,
-      Math.min(15, Math.max(3, sourceDurationSeconds - startSeconds)),
+      Math.max(3, availableDurationSeconds),
       3,
-      15,
+      availableDurationSeconds,
     );
-    const durationSeconds = Math.min(requestedDurationSeconds, Math.max(0.3, sourceDurationSeconds - startSeconds));
+    const durationSeconds = Math.min(requestedDurationSeconds, availableDurationSeconds);
     const seconds = keyframeSeconds(durationSeconds);
     const frames: Frame[] = [];
     for (const second of seconds) {
@@ -352,7 +353,12 @@ export async function POST(request: NextRequest) {
       });
     }
     const startSeconds = numericRange(body.startSeconds, 0, 0, Math.max(0, Number(cache.duration_seconds) - 0.1));
-    const requestedDurationSeconds = numericRange(body.durationSeconds, 15, 3, 15);
+    const requestedDurationSeconds = numericRange(
+      body.durationSeconds,
+      Number(cache.duration_seconds),
+      3,
+      Number(cache.duration_seconds),
+    );
     const { frames, durationSeconds } = await extractFrames(cache, {
       startSeconds,
       durationSeconds: requestedDurationSeconds,
