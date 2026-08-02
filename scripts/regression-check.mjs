@@ -167,6 +167,11 @@ const checks = [
     "recreate-material-tags",
   ],
   [
+    "Recreate video material tags support @ mentions",
+    "app/components/recreate-video-page.tsx",
+    "recreate-mention-menu",
+  ],
+  [
     "Recreate video prompt polish endpoint uses SophNet",
     "app/api/workflows/recreate-video-analysis/route.ts",
     'body.mode === "polish"',

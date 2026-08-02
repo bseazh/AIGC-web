@@ -691,6 +691,11 @@ a { color: inherit; text-decoration: none; }
 .recreate-material-tags button img { position: absolute; left: 50%; bottom: calc(100% + 8px); z-index: 8; width: 132px; height: 132px; object-fit: cover; border: 1px solid #d6e4ef; border-radius: 12px; background: #fff; box-shadow: 0 14px 32px rgba(38,65,92,.18); transform: translateX(-50%) translateY(4px); opacity: 0; pointer-events: none; transition: opacity .16s ease, transform .16s ease; }
 .recreate-material-tags button:hover img, .recreate-material-tags button:focus-visible img { opacity: 1; transform: translateX(-50%) translateY(0); }
 .recreate-material-tags small { color: #7a8fa4; font-size: 10px; }
+.recreate-mention-menu { width: min(360px,100%); margin-top: -4px; padding: 8px; display: grid; gap: 6px; border: 1px solid #cfe0ed; border-radius: 12px; background: #fff; box-shadow: 0 16px 36px rgba(43,75,108,.16); }
+.recreate-mention-menu button { min-height: 44px; padding: 6px 8px; display: grid; grid-template-columns: 34px minmax(0,1fr); align-items: center; gap: 8px; border: 0; border-radius: 9px; color: #314b64; background: transparent; text-align: left; font-size: 11px; font-weight: 900; }
+.recreate-mention-menu button:hover { background: #effcff; }
+.recreate-mention-menu img { width: 34px; height: 34px; border-radius: 7px; object-fit: cover; background: #eef4f8; }
+.recreate-mention-menu span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recreate-polished-prompt { padding: 11px; display: grid; gap: 9px; border: 1px solid #cfeff6; border-radius: 10px; background: #f3fdff; }
 .recreate-polished-prompt strong { color: #167f99; font-size: 12px; }
 .recreate-polished-prompt p { margin: 0; color: #52677e; font-size: 11px; line-height: 1.65; }

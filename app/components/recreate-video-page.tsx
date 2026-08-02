@@ -271,6 +271,8 @@ export function RecreateVideoPage() {
   const [productInfo, setProductInfo] = useState("");
   const [special, setSpecial] = useState("");
   const [polishedPrompt, setPolishedPrompt] = useState<PolishedRecreatePrompt | null>(null);
+  const [materialMentionOpen, setMaterialMentionOpen] = useState(false);
+  const [materialMentionQuery, setMaterialMentionQuery] = useState("");
   const [modelOn, setModelOn] = useState(false);
   const [modelInfo, setModelInfo] = useState("");
   const [ratio, setRatio] = useState("9:16");
@@ -441,6 +443,11 @@ export function RecreateVideoPage() {
       })),
     [products],
   );
+  const mentionMaterials = useMemo(() => {
+    const query = materialMentionQuery.trim().replace(/^@/, "");
+    if (!query) return materialReferences;
+    return materialReferences.filter((item) => item.label.includes(query) || item.fallbackLabel.includes(query));
+  }, [materialMentionQuery, materialReferences]);
   const replacementSlots = useMemo(() => {
     const plan = (frameAnalysis?.replacementPlan || []).filter(
       (item) => item.replaceable !== false && (item.target || item.strategy || item.promptInstruction),
@@ -1391,11 +1398,29 @@ export function RecreateVideoPage() {
   };
   const insertMaterialReference = (label: string) => {
     setProductInfo((current) => {
-      const suffix = current.trim() ? ` ${label}` : label;
-      return `${current}${suffix}`.slice(0, 800);
+      const beforeCursor = current;
+      const match = beforeCursor.match(/(^|\s)@[\u4e00-\u9fa5\w-]*$/);
+      if (match) {
+        const start = beforeCursor.length - match[0].length;
+        const prefix = beforeCursor.slice(0, start);
+        const leading = match[1] || "";
+        return `${prefix}${leading}@${label} `.slice(0, 800);
+      }
+      const suffix = current.trim() ? ` @${label}` : `@${label}`;
+      return `${current}${suffix} `.slice(0, 800);
     });
+    setMaterialMentionOpen(false);
+    setMaterialMentionQuery("");
     setPolishedPrompt(null);
     clearTaskState();
+  };
+  const handleCommandInput = (value: string) => {
+    setProductInfo(value);
+    setPolishedPrompt(null);
+    clearTaskState();
+    const match = value.match(/(^|\s)@([\u4e00-\u9fa5\w-]*)$/);
+    setMaterialMentionOpen(Boolean(match && materialReferences.length));
+    setMaterialMentionQuery(match?.[2] || "");
   };
 
   const upload = async (item: Item) => {
@@ -2185,19 +2210,36 @@ export function RecreateVideoPage() {
                 <img src={material.preview} alt={`${material.label}预览`} />
               </button>
             ))}
-            <small>点击标签可插入口令；鼠标悬停可预览图片。</small>
+            <small>在口令里输入 @ 可召唤素材；点击标签也可插入，悬停可预览。</small>
           </div>
         ) : null}
         <textarea
           value={productInfo}
-          onChange={(event) => {
-            setProductInfo(event.target.value);
-            setPolishedPrompt(null);
-            clearTaskState();
+          onChange={(event) => handleCommandInput(event.target.value)}
+          onBlur={() => window.setTimeout(() => setMaterialMentionOpen(false), 140)}
+          onFocus={() => {
+            const match = productInfo.match(/(^|\s)@([\u4e00-\u9fa5\w-]*)$/);
+            setMaterialMentionOpen(Boolean(match && materialReferences.length));
+            setMaterialMentionQuery(match?.[2] || "");
           }}
           maxLength={800}
           placeholder="例如：动作和镜头节奏参考原视频，把人物服装替换为图片一，背景参考图片二，字幕改成夏季显瘦穿搭。"
         />
+        {materialMentionOpen && mentionMaterials.length ? (
+          <div className="recreate-mention-menu">
+            {mentionMaterials.map((material, index) => (
+              <button
+                type="button"
+                key={`${material.label}-mention-${index}`}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => insertMaterialReference(material.label)}
+              >
+                <img src={material.preview} alt={`${material.label}预览`} />
+                <span>@{material.label}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
         {polishedPrompt?.finalPrompt ? (
           <div className="recreate-polished-prompt">
             <strong>AI 已整理成生成方案</strong>
@@ -2493,14 +2535,26 @@ export function RecreateVideoPage() {
         复刻口令（可选）
         <textarea
           value={productInfo}
-          onChange={(event) => {
-            setProductInfo(event.target.value);
-            setPolishedPrompt(null);
-            clearTaskState();
-          }}
+          onChange={(event) => handleCommandInput(event.target.value)}
+          onBlur={() => window.setTimeout(() => setMaterialMentionOpen(false), 140)}
           maxLength={800}
-          placeholder="例如：动作和节奏参考原视频，把服装换成我上传的裙子，背景保持干净明亮。"
+          placeholder="例如：动作和节奏参考原视频，把服装换成 @图片一，背景保持干净明亮。"
         />
+        {materialMentionOpen && mentionMaterials.length ? (
+          <div className="recreate-mention-menu">
+            {mentionMaterials.map((material, index) => (
+              <button
+                type="button"
+                key={`${material.label}-generate-mention-${index}`}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => insertMaterialReference(material.label)}
+              >
+                <img src={material.preview} alt={`${material.label}预览`} />
+                <span>@{material.label}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
       </label>
       <label className="recreate-field">
         补充要求（可选）
