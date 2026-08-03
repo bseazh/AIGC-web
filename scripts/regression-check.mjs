@@ -262,6 +262,11 @@ const checks = [
     "GOOGLE_AI_BASE_URL",
   ],
   [
+    "Gemini response format receives enum aspect ratio values",
+    "scripts/worker.mjs",
+    "ASPECT_RATIO_SIXTEEN_BY_NINE",
+  ],
+  [
     "Gemini image generation supports a worker-only proxy",
     "scripts/worker.mjs",
     "GOOGLE_AI_PROXY_URL",

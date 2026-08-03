@@ -158,6 +158,7 @@ async function createGeminiImage(inputUrls, prompt, generationTaskId, outputInde
   const apiKey = process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.NANO_BANANA_API_KEY;
   const model = process.env.GOOGLE_IMAGE_MODEL || "gemini-2.5-flash-image";
   if (!apiKey) throw new Error("GOOGLE_AI_API_KEY is required for Nano Banana image generation");
+  const responseAspectRatio = geminiImageResponseAspectRatio(aspectRatio);
   const imageParts = [];
   for (const [index, url] of inputUrls.entries()) {
     const response = await fetch(url);
@@ -183,7 +184,7 @@ async function createGeminiImage(inputUrls, prompt, generationTaskId, outputInde
       responseModalities: ["TEXT", "IMAGE"],
       responseFormat: {
         image: {
-          aspectRatio,
+          aspectRatio: responseAspectRatio,
         },
       },
     },
@@ -194,7 +195,7 @@ async function createGeminiImage(inputUrls, prompt, generationTaskId, outputInde
     body: JSON.stringify(requestBody),
   });
   const payload = await response.json().catch(() => null);
-  await logProviderCall(generationTaskId, "google-gemini", "generate_image", { model, outputIndex, inputCount: imageParts.length, promptLength: prompt.length, aspectRatio }, response.status, payload, response.ok ? null : "GEMINI_IMAGE_FAILED", payload?.responseId || response.headers.get("x-request-id"));
+  await logProviderCall(generationTaskId, "google-gemini", "generate_image", { model, outputIndex, inputCount: imageParts.length, promptLength: prompt.length, aspectRatio, responseAspectRatio }, response.status, payload, response.ok ? null : "GEMINI_IMAGE_FAILED", payload?.responseId || response.headers.get("x-request-id"));
   const parts = payload?.candidates?.[0]?.content?.parts || [];
   const imagePart = parts.find((part) => part?.inlineData?.data || part?.inline_data?.data);
   const inlineData = imagePart?.inlineData || imagePart?.inline_data;
@@ -295,6 +296,21 @@ function geminiImageConfigured() {
 
 function geminiAspectRatio(value) {
   return ["1:1", "3:4", "4:3", "9:16", "16:9"].includes(value) ? value : "1:1";
+}
+
+function geminiImageResponseAspectRatio(value) {
+  return ({
+    "1:1": "ASPECT_RATIO_ONE_BY_ONE",
+    "2:3": "ASPECT_RATIO_TWO_BY_THREE",
+    "3:2": "ASPECT_RATIO_THREE_BY_TWO",
+    "3:4": "ASPECT_RATIO_THREE_BY_FOUR",
+    "4:3": "ASPECT_RATIO_FOUR_BY_THREE",
+    "4:5": "ASPECT_RATIO_FOUR_BY_FIVE",
+    "5:4": "ASPECT_RATIO_FIVE_BY_FOUR",
+    "9:16": "ASPECT_RATIO_NINE_BY_SIXTEEN",
+    "16:9": "ASPECT_RATIO_SIXTEEN_BY_NINE",
+    "21:9": "ASPECT_RATIO_TWENTY_ONE_BY_NINE",
+  })[value] || "ASPECT_RATIO_ONE_BY_ONE";
 }
 
 async function generateOne(inputUrls, input, index, workflowKey, generationTaskId) {
