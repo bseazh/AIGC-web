@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +12,29 @@ import { fetch as undiciFetch, ProxyAgent } from "undici";
 import { installStructuredConsole, log } from "./structured-logger.mjs";
 
 installStructuredConsole("aigc-worker");
+
+function loadLocalEnv() {
+  const candidates = process.env.NODE_ENV === "production"
+    ? [".env.production", ".env.local", ".env"]
+    : [".env.local", ".env"];
+  const envPath = candidates.find((candidate) => existsSync(candidate));
+  if (!envPath) return;
+  for (const line of readFileSync(envPath, "utf8").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const separator = trimmed.indexOf("=");
+    if (separator < 0) continue;
+    const key = trimmed.slice(0, separator).trim();
+    let value = trimmed.slice(separator + 1).trim();
+    if (!key || process.env[key] !== undefined) continue;
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    process.env[key] = value;
+  }
+}
+
+loadLocalEnv();
 
 const { Pool } = pg;
 const required = ["DATABASE_URL", "REDIS_URL", "COS_BUCKET", "COS_REGION", "COS_SECRET_ID", "COS_SECRET_KEY"];
@@ -261,6 +285,18 @@ async function waitForImage(taskId, generationTaskId, outputIndex) {
   throw new Error("SophNet task timed out");
 }
 
+function sophnetImageConfigured() {
+  return Boolean(process.env.AI_API_KEY && process.env.AI_MODEL && process.env.AI_BASE_URL);
+}
+
+function geminiImageConfigured() {
+  return Boolean(process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.NANO_BANANA_API_KEY);
+}
+
+function geminiAspectRatio(value) {
+  return ["1:1", "3:4", "4:3", "9:16", "16:9"].includes(value) ? value : "1:1";
+}
+
 async function generateOne(inputUrls, input, index, workflowKey, generationTaskId) {
   const variation = ["正面居中构图", "轻微侧角构图", "留出营销文案空间", "更强调商品材质细节"][index] || "商业构图";
   const detailStage = ["品牌定位与首屏商品展示长图", "核心卖点解析长图", "材质、结构与工艺细节长图", "真实使用场景与效果长图", "规格、服务与购买理由长图"][index] || "商品详情长图";
@@ -306,6 +342,9 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
   ].filter(Boolean).join("\n");
   if (workflowKey === "recreate-reference-image") {
     return createGeminiImage(inputUrls, prompt, generationTaskId, index, input.aspectRatio);
+  }
+  if (!sophnetImageConfigured() && geminiImageConfigured()) {
+    return createGeminiImage(inputUrls, prompt, generationTaskId, index, geminiAspectRatio(input.aspectRatio));
   }
   const providerTaskId = await createImageTask(inputUrls, prompt, generationTaskId, index);
   return { url: await waitForImage(providerTaskId, generationTaskId, index), temporaryKey: null, provider: "sophnet", model: process.env.AI_MODEL };

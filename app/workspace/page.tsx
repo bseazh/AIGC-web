@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { ArrowRight, Boxes, ChevronRight, Clock3, ImageIcon, Layers3, PackageOpen, ScanSearch, Search, Shirt, Video, WandSparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";

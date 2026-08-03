@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { Ban, Check, ClipboardCheck, FileKey, History, RefreshCw, RotateCcw, ShieldCheck, TicketCheck, Users, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";

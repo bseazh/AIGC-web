@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { Activity, Boxes, CircleDollarSign, ClipboardCheck, Coins, FileKey2, FileSearch, MessageSquareText, ScrollText, ShieldCheck, Sparkles, Users, Wrench } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";

@@ -29,6 +29,19 @@ type AssetValidator = (assets: ReadyAsset[]) => string | null;
 type RequestValidator = (body: Record<string, unknown>) => string | null;
 type InputExtras = (body: Record<string, unknown>) => Record<string, unknown>;
 
+function missingProviderConfig(workflowKey: string) {
+  const hasGemini = Boolean(process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.NANO_BANANA_API_KEY);
+  if (workflowKey === "recreate-reference-image") return hasGemini ? [] : ["GOOGLE_AI_API_KEY 或 GEMINI_API_KEY 或 NANO_BANANA_API_KEY"];
+  const missingSophnet = ["AI_API_KEY", "AI_BASE_URL", "AI_MODEL"].filter((key) => !process.env[key]);
+  return missingSophnet.length === 0 || hasGemini ? [] : [...missingSophnet, "或配置 GOOGLE_AI_API_KEY / GEMINI_API_KEY / NANO_BANANA_API_KEY"];
+}
+
+function providerNotConfiguredMessage(workflowKey: string) {
+  const missing = missingProviderConfig(workflowKey);
+  if (process.env.NODE_ENV === "production" || missing.length === 0) return "生成服务暂未开放";
+  return `图片生成服务未配置，请在环境变量中补充：${missing.join("、")}`;
+}
+
 function validUuid(value: unknown): value is string {
   return (
     typeof value === "string" &&
@@ -39,7 +52,7 @@ function validUuid(value: unknown): value is string {
 export async function createImageTask(request: NextRequest, workflow: ImageWorkflow, selectAssets: AssetSelector = (body) => [typeof body.assetId === "string" ? body.assetId : ""], validateAssets?: AssetValidator, validateRequest?: RequestValidator, inputExtras?: InputExtras) {
   const user = await authenticatedUser(request);
   if (!user) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401 });
-  if (!workflow.enabled) return NextResponse.json({ code: "PROVIDER_NOT_CONFIGURED", message: "生成服务暂未开放" }, { status: 503 });
+  if (!workflow.enabled) return NextResponse.json({ code: "PROVIDER_NOT_CONFIGURED", message: providerNotConfiguredMessage(workflow.key) }, { status: 503 });
 
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!body) return NextResponse.json({ code: "INVALID_REQUEST", message: "请求参数不正确" }, { status: 400 });

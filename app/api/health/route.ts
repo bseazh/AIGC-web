@@ -35,7 +35,12 @@ function checkSophnet() {
     const apiKey = process.env.AI_API_KEY;
     const baseUrl = process.env.AI_BASE_URL;
     const model = process.env.AI_MODEL;
-    if (!apiKey || !baseUrl || !model) throw new Error("SophNet is not configured");
+    if (!apiKey || !baseUrl || !model) {
+      if (process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.NANO_BANANA_API_KEY) {
+        return { provider: "google-gemini", model: process.env.GOOGLE_IMAGE_MODEL || "gemini-2.5-flash-image", responseStatus: 0 };
+      }
+      throw new Error("SophNet is not configured");
+    }
     if (!baseUrl.startsWith("https://")) throw new Error("SophNet base URL must use HTTPS");
     const response = await fetch(`${baseUrl.replace(/\/$/, "")}/task/health-check`, {
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },

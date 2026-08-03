@@ -1,8 +1,12 @@
+const sophnetImageConfigured = Boolean(process.env.AI_API_KEY && process.env.AI_BASE_URL && process.env.AI_MODEL);
+const geminiImageConfigured = Boolean(process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.NANO_BANANA_API_KEY);
+const imageProviderConfigured = sophnetImageConfigured || geminiImageConfigured;
+
 export const heroImageWorkflow = {
   key: "product-hero-image",
   name: "商品主图",
-  enabled: Boolean(process.env.AI_API_KEY && process.env.AI_BASE_URL && process.env.AI_MODEL && process.env.COS_SECRET_ID),
-  disabledReason: process.env.AI_API_KEY && process.env.AI_BASE_URL && process.env.AI_MODEL && process.env.COS_SECRET_ID ? null : "PROVIDER_NOT_CONFIGURED",
+  enabled: Boolean(imageProviderConfigured && process.env.COS_SECRET_ID),
+  disabledReason: imageProviderConfigured && process.env.COS_SECRET_ID ? null : "PROVIDER_NOT_CONFIGURED",
   pointsPerTask: Number(process.env.HERO_IMAGE_TASK_POINTS || 10),
   outputsPerTask: 4,
   acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
@@ -16,8 +20,8 @@ export const heroImageWorkflow = {
 export const sceneImageWorkflow = {
   key: "scene-image",
   name: "场景图生成",
-  enabled: Boolean(process.env.AI_API_KEY && process.env.AI_BASE_URL && process.env.AI_MODEL && process.env.COS_SECRET_ID),
-  disabledReason: process.env.AI_API_KEY && process.env.AI_BASE_URL && process.env.AI_MODEL && process.env.COS_SECRET_ID ? null : "PROVIDER_NOT_CONFIGURED",
+  enabled: Boolean(imageProviderConfigured && process.env.COS_SECRET_ID),
+  disabledReason: imageProviderConfigured && process.env.COS_SECRET_ID ? null : "PROVIDER_NOT_CONFIGURED",
   pointsPerTask: Number(process.env.SCENE_IMAGE_TASK_POINTS || 10),
   outputsPerTask: 4,
   acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
@@ -31,7 +35,7 @@ export const sceneImageWorkflow = {
 export const modelWearWorkflow = {
   key: "model-wear",
   name: "模特穿搭",
-  enabled: Boolean(process.env.AI_API_KEY && process.env.AI_BASE_URL && process.env.AI_MODEL && process.env.COS_SECRET_ID),
+  enabled: Boolean(imageProviderConfigured && process.env.COS_SECRET_ID),
   pointsPerTask: Number(process.env.MODEL_WEAR_TASK_POINTS || 10),
   outputsPerTask: 4,
   acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
@@ -45,7 +49,7 @@ export const modelWearWorkflow = {
 export const hdEnhanceWorkflow = {
   key: "hd-enhance",
   name: "高清优化",
-  enabled: Boolean(process.env.AI_API_KEY && process.env.AI_BASE_URL && process.env.AI_MODEL && process.env.COS_SECRET_ID),
+  enabled: Boolean(imageProviderConfigured && process.env.COS_SECRET_ID),
   pointsPerTask: Number(process.env.HD_ENHANCE_TASK_POINTS || 5),
   outputsPerTask: 1,
   acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
@@ -59,7 +63,7 @@ export const hdEnhanceWorkflow = {
 export const detailPageWorkflow = {
   key: "product-detail-page",
   name: "商品详情页",
-  enabled: Boolean(process.env.AI_API_KEY && process.env.AI_BASE_URL && process.env.AI_MODEL && process.env.COS_SECRET_ID),
+  enabled: Boolean(imageProviderConfigured && process.env.COS_SECRET_ID),
   pointsPerTask: Number(process.env.DETAIL_PAGE_TASK_POINTS || 10),
   outputsPerTask: 5,
   acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],

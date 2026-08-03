@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { Crop, ImageIcon, Layers3, ScanSearch, Shirt, Sparkles, Video, WandSparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";

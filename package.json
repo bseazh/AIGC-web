@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "env -u NODE_ENV -u __NEXT_PRIVATE_STANDALONE_CONFIG -u __NEXT_PRIVATE_ORIGIN PORT=3010 HOSTNAME=127.0.0.1 next dev",
+    "build": "env -u __NEXT_PRIVATE_STANDALONE_CONFIG -u __NEXT_PRIVATE_ORIGIN next build --experimental-build-mode compile",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test:regression": "node scripts/regression-check.mjs && node scripts/spokesperson-script.test.mjs && node --experimental-strip-types scripts/douyin-import.test.mjs && node scripts/check-health-alert.test.mjs && node --check scripts/worker.mjs && node --check scripts/moderation-worker.mjs && node --check scripts/wechat-reconcile.mjs && node --check scripts/wechat-pay-acceptance.mjs && node --check scripts/migrate.mjs && node --check scripts/lifecycle-maintenance.mjs",
@@ -23,11 +23,11 @@
     "cos-nodejs-sdk-v5": "^3.0.0",
     "ioredis": "^5.4.2",
     "lucide-react": "^0.468.0",
-    "next": "^15.5.7",
+    "next": "15.5.7",
     "pg": "^8.13.1",
     "qrcode": "^1.5.4",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
     "undici": "^7.29.0"
   },
   "devDependencies": {

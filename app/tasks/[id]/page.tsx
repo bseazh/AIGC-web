@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Download, ImageIcon, LoaderCircle, RefreshCw, X, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";

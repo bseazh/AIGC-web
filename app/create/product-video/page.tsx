@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { VideoCenterPage } from "@/app/components/video-center-page";
 
 export default function ProductVideoPage() {

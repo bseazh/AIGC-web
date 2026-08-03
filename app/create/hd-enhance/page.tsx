@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { ImageWorkflowPage } from "@/app/components/image-workflow-page";
 import { hdEnhanceWorkflow } from "@/lib/product-config";
 

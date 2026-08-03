@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { CheckCircle2, Clock3, FileWarning, LoaderCircle, Paperclip, Send, ShieldAlert } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";

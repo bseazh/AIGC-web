@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { RecreateVideoPage as RecreateVideoWorkspace } from "@/app/components/recreate-video-page";
 
 export default function RecreateVideoPage() {

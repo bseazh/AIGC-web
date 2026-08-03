@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { KeyRound, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
