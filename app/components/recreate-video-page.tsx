@@ -1733,12 +1733,10 @@ export function RecreateVideoPage() {
     height: number,
     variant: number,
   ) => {
-    const paddingX = width * 0.18;
-    const paddingY = height * 0.16;
-    const maskX = Math.max(0, x - paddingX);
-    const maskY = Math.max(0, y - paddingY);
-    const maskWidth = width + paddingX * 2;
-    const maskHeight = height + paddingY * 2;
+    const maskX = Math.max(0, x + width * 0.12);
+    const maskY = Math.max(0, y + height * 0.2);
+    const maskWidth = width * 0.76;
+    const maskHeight = height * 0.48;
     const block = Math.max(5, Math.min(maskWidth, maskHeight) / 6);
     for (let yy = maskY; yy < maskY + maskHeight; yy += block) {
       for (let xx = maskX; xx < maskX + maskWidth; xx += block) {
@@ -1987,13 +1985,14 @@ export function RecreateVideoPage() {
             "主体锁定规则：只要输入图里出现真人、模特、人体轮廓、头发、脸、手臂、腿或穿在人身上的服装，就必须把“完整人物/模特”作为唯一主主体；衣服、裙子、包、鞋只是人物身上的附着物。",
             "请提取输入图里的人物整体轮廓、身形比例、姿态气质、发型轮廓和穿搭关系，生成一位原创虚拟模特的完整人体多角度参考板。",
             "即使输入图只有裙子、衣服或局部穿搭，也必须补全为完整虚拟真人模特：头部、肩颈、躯干、手臂、腿部、脚部都要出现。",
+            "第一步必须先生成完整头部和完整脸部轮廓：脸型外轮廓、头发轮廓、额头、眼鼻口的大致位置关系需要存在，不能省略头部，不能把头部画成空白块、无脸人或裁掉。",
+            "人物身份必须原创，不要复制输入图中的真实五官；但需要保留可用于参考的完整脸型轮廓和头身比例。",
             "必须输出 8 个视图：完整站姿正面、完整站姿左45度、完整站姿右45度、完整左侧身、完整右侧身、完整背面、上半身穿搭细节、下半身姿态细节。",
             "每个主要视图都必须是“衣服穿在模特身上”的效果，不允许出现空心裙、衣架、平铺服装、单件裙子、商品白底图或只有服装没有人体。",
             "如果输出结果只有衣服、长裙、服装商品图或没有人体，则方向错误，必须重新生成完整人物多视图。",
             "禁止输出单件服装多视图、商品展示图、裙子独立展示图。",
             "保留输入服装的款式、颜色、材质、长度、褶皱、版型和穿搭气质，但人物身份必须原创。",
-            "脸部必须隐私化：所有出现脸部的位置都必须做隐私化处理，弱化真实五官，不保留可识别真人身份；可使用半透明网格、柔化、眼周遮挡、鼻梁遮挡、下半脸遮挡或马赛克。",
-            "不要复制真实人脸，不要生成清晰真实五官。",
+            "不要在生图阶段提前遮挡脸部；生成完成后由系统二次遮挡眼鼻口等五官区域，保留脸部外轮廓。",
             "浅灰或白色背景，整张图像是一张干净的人物设定多视图参考板，适合作为后续 @虚拟模特参考 使用。",
           ].join("\n")
         : kind === "scene"
@@ -2014,7 +2013,7 @@ export function RecreateVideoPage() {
               `输出适合作为后续 @${outputName} 使用，浅灰或白色背景，清晰整洁。`,
             ].join("\n");
       const taskScene = isPerson ? "人物多视图" : kind === "scene" ? "场景多视图" : "商品多视图";
-      const taskStyle = isPerson ? "隐私遮挡" : "参考板";
+      const taskStyle = "参考板";
       const response = await fetch("/api/tasks/recreate-reference/", {
         method: "POST",
         headers: {
@@ -2031,7 +2030,7 @@ export function RecreateVideoPage() {
       });
       const created = await response.json().catch(() => null);
       if (!response.ok) throw new Error(created?.message || "多视图参考任务创建失败");
-      setNotice(isPerson ? "正在生成隐私化多角度参考图" : "正在生成素材多视图参考图");
+      setNotice(isPerson ? "正在生成完整人物多角度参考图，完成后会自动遮挡五官" : "正在生成素材多视图参考图");
       const output = await pollPrivacyViewTask(created.taskId);
       const finalOutput = isPerson
         ? await createFaceMaskedReferenceAsset({ url: output.url, name: outputName, assetId: output.assetId })
@@ -2046,7 +2045,7 @@ export function RecreateVideoPage() {
             name: outputName,
             byteSize: finalOutput.byteSize,
             materialKind: isPerson ? "person" : kind,
-            materialSummary: isPerson ? "已生成隐私化人物多角度参考，并强化脸部遮盖" : "已生成素材多视图参考",
+            materialSummary: isPerson ? "已先生成完整人物多角度参考，再二次遮挡五官区域并保留脸部轮廓" : "已生成素材多视图参考",
             materialConfidence: source.materialConfidence,
           };
         }),

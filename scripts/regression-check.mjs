@@ -217,6 +217,16 @@ const checks = [
     "必须把“完整人物”作为唯一主主体来提取和重建",
   ],
   [
+    "Recreate video person multi-view prompt keeps face contour before masking",
+    "app/components/recreate-video-page.tsx",
+    "第一步必须先生成完整头部和完整脸部轮廓",
+  ],
+  [
+    "Recreate reference worker avoids masking faces during generation",
+    "scripts/worker.mjs",
+    "不要在生图阶段遮挡脸部",
+  ],
+  [
     "Recreate video product multi-view prompt must not turn clothing stills into models",
     "app/components/recreate-video-page.tsx",
     "如果输入是服装静物且用户选择了商品类型，则输出服装商品多视图；不要补成人物模特",
@@ -314,7 +324,7 @@ const checks = [
   [
     "Recreate video privacy multi-view prompt masks face identity",
     "app/components/recreate-video-page.tsx",
-    "所有出现脸部的位置都必须做隐私化处理",
+    "生成完成后由系统二次遮挡眼鼻口等五官区域，保留脸部外轮廓",
   ],
   [
     "Recreate video submits keyframe collage as a reference image",
