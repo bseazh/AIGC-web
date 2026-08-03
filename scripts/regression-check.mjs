@@ -252,6 +252,11 @@ const checks = [
     "部分特写只遮额头",
   ],
   [
+    "Recreate reference worker preserves input face structure",
+    "scripts/worker.mjs",
+    "以输入人物脸部结构和五官相对位置为强参考",
+  ],
+  [
     "Recreate reference workflow returns one identity board output",
     "lib/product-config.ts",
     "outputsPerTask: 1",
