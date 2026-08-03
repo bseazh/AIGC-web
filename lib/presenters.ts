@@ -6,6 +6,7 @@ export const workflowNames: Record<string, string> = {
   "product-detail-page": "商品详情页",
   "product-ad-video": "产品广告大片",
   "recreate-video": "复刻带货视频",
+  "recreate-reference-image": "复刻素材参考图",
   "seedance-video": "Seedance2 视频",
 };
 

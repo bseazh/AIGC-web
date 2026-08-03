@@ -202,6 +202,31 @@ const checks = [
     "禁止输出单件服装多视图",
   ],
   [
+    "Recreate video person multi-view prompt can complete clothing into a full model",
+    "app/components/recreate-video-page.tsx",
+    "即使输入图只有裙子、衣服或局部穿搭，也必须补全为完整虚拟真人模特",
+  ],
+  [
+    "Recreate video product multi-view prompt must not turn clothing stills into models",
+    "app/components/recreate-video-page.tsx",
+    "如果输入是服装静物且用户选择了商品类型，则输出服装商品多视图；不要补成人物模特",
+  ],
+  [
+    "Recreate video material multi-view uses a dedicated reference image workflow",
+    "app/components/recreate-video-page.tsx",
+    "/api/tasks/recreate-reference/",
+  ],
+  [
+    "Recreate reference workflow avoids product-scene prompt bias",
+    "scripts/worker.mjs",
+    "不要套用普通商品主图逻辑",
+  ],
+  [
+    "Recreate reference workflow is exposed by API route",
+    "app/api/tasks/recreate-reference/route.ts",
+    "recreateReferenceWorkflow",
+  ],
+  [
     "Recreate video material analysis prioritizes worn clothing as person",
     "app/api/workflows/recreate-material-analysis/route.ts",
     "只要图片中能看到完整人体、人体轮廓、穿着服装的人、模特试穿效果，就必须优先判为 person",

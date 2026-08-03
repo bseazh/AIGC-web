@@ -202,6 +202,8 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
     : "保持商品主体的形状、颜色、商标和关键细节准确，不改变产品本身，不添加文字、水印或额外商品。";
   const taskPrompt = workflowKey === "model-wear"
     ? `以第一张图片中的模特为主体，将后续图片中的服装或商品自然穿戴到模特身上。保持模特身份、面部、体型和人体结构自然，服装版型、材质、颜色和图案准确。场景为${input.scene}，风格为${input.style}，${variation}，画幅比例${input.aspectRatio}。`
+    : workflowKey === "recreate-reference-image"
+    ? `生成电商复刻流程使用的素材多视图参考板。严格以用户补充要求中的任务类型为准区分模特/人物、商品/物体、场景/背景；不要套用普通商品主图逻辑。画幅比例${input.aspectRatio}。`
     : workflowKey === "hd-enhance"
     ? `对原图进行${input.scene}高清优化，策略为${input.style}。重点修复压缩噪点、边缘锯齿和模糊细节，保持画面自然，避免过度锐化、塑料感或内容重绘。`
     : workflowKey === "white-background"
@@ -217,7 +219,11 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
     : workflowKey === "scene-image"
     ? `将商品自然融入${input.scene}场景，风格为${input.style}，${variation}，画幅比例${input.aspectRatio}，真实商业摄影，场景光线与商品接触阴影自然，突出商品主体。`
     : `生成${input.scene}环境中的${input.style}电商商品主图，${variation}，画幅比例${input.aspectRatio}，真实摄影，干净背景，柔和自然阴影。`;
-  const prompt = [shared, taskPrompt, input.prompt ? `用户补充要求：${input.prompt}` : ""].filter(Boolean).join("\n");
+  const prompt = [
+    workflowKey === "recreate-reference-image" ? "" : shared,
+    taskPrompt,
+    input.prompt ? `用户补充要求：${input.prompt}` : "",
+  ].filter(Boolean).join("\n");
   const providerTaskId = await createImageTask(inputUrls, prompt, generationTaskId, index);
   return waitForImage(providerTaskId, generationTaskId, index);
 }
