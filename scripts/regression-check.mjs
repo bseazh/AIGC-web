@@ -222,19 +222,29 @@ const checks = [
     "第一步必须先生成完整头部和完整脸部轮廓",
   ],
   [
-    "Recreate video combines multiple reference outputs into a board",
+    "Recreate video person prompt uses a single character identity board",
     "app/components/recreate-video-page.tsx",
-    "createMultiViewBoardAsset(outputs, outputName)",
+    "创建一张 16:9 人物角色身份板",
   ],
   [
-    "Recreate video no longer keeps only the first reference output",
+    "Recreate video person prompt requires auxiliary side and back views",
     "app/components/recreate-video-page.tsx",
-    "return task.outputs as Array",
+    "背面全身、侧面全身、3/4 角度全身",
   ],
   [
-    "Recreate reference worker assigns deterministic person angles",
+    "Recreate reference worker generates a single character identity board",
     "scripts/worker.mjs",
-    "referenceAngles",
+    "创建一张 16:9 人物/模特角色身份板",
+  ],
+  [
+    "Recreate reference workflow returns one identity board output",
+    "lib/product-config.ts",
+    "outputsPerTask: 1",
+  ],
+  [
+    "Recreate video face mask fallback does not cover landscape identity boards",
+    "app/components/recreate-video-page.tsx",
+    "canvas.width < canvas.height ? fallbackFaceRegions",
   ],
   [
     "Recreate reference worker avoids masking faces during generation",

@@ -1815,7 +1815,7 @@ export function RecreateVideoPage() {
     if (!context) throw new Error("脸部遮盖处理失败");
     context.drawImage(image, 0, 0);
     const detectedRegions = await analyzeFaceMaskRegions(source.assetId);
-    const regions = detectedRegions.length ? detectedRegions : fallbackFaceRegions(canvas.width, canvas.height);
+    const regions = detectedRegions.length ? detectedRegions : canvas.width < canvas.height ? fallbackFaceRegions(canvas.width, canvas.height) : [];
     regions.forEach((region: FaceMaskRegion, index: number) =>
       drawFaceMask(
         context,
@@ -2042,14 +2042,15 @@ export function RecreateVideoPage() {
         ? [
             "任务类型：模特/人物多视图参考，不是商品图生成。",
             "主体锁定规则：只要输入图里出现真人、模特、人体轮廓、头发、脸、手臂、腿或穿在人身上的服装，就必须把“完整人物/模特”作为唯一主主体；衣服、裙子、包、鞋只是人物身上的附着物。",
+            "创建一张 16:9 人物角色身份板，必须在同一张图里包含多个清晰分离的角色研究，而不是只输出一张正面图。",
             "请提取输入图里的人物整体轮廓、身形比例、姿态气质、发型轮廓和穿搭关系，生成一位原创虚拟模特的完整人体多角度参考板。",
             "即使输入图只有裙子、衣服或局部穿搭，也必须补全为完整虚拟真人模特：头部、肩颈、躯干、手臂、腿部、脚部都要出现。",
             "第一步必须先生成完整头部和完整脸部轮廓：脸型外轮廓、头发轮廓、额头、眼鼻口的大致位置关系需要存在，不能省略头部，不能把头部画成空白块、无脸人或裁掉。",
             "人物身份必须原创，不要复制输入图中的真实五官；但需要保留可用于参考的完整脸型轮廓和头身比例。",
-            "系统会分多张图生成不同角度，最后自动拼成多视图参考板；每张图都必须是一个明确角度的完整人物，而不是重复的单张正面图。",
-            "需要覆盖完整站姿正面、左45度、右45度、背面、侧身或局部细节等多个角度。",
+            "布局参考高端动画工作室角色身份板：一个大型完整站姿英雄全身视角，周围排列较小辅助研究：背面全身、侧面全身、3/4 角度全身、上半身脸型与发型轮廓、服装/姿态细节。",
+            "每个视角都必须是同一位虚拟模特，保持相同脸型轮廓、发型轮廓、身体比例、服装轮廓和姿态气质；每个视角都要清晰分离，不要重叠。",
             "每个主要视图都必须是“衣服穿在模特身上”的效果，不允许出现空心裙、衣架、平铺服装、单件裙子、商品白底图或只有服装没有人体。",
-            "如果输出结果只有衣服、长裙、服装商品图或没有人体，则方向错误，必须重新生成完整人物多视图。",
+            "如果输出结果只有衣服、长裙、服装商品图、空白分格或没有人体，则方向错误，必须重新生成完整人物多视图。",
             "禁止输出单件服装多视图、商品展示图、裙子独立展示图。",
             "保留输入服装的款式、颜色、材质、长度、褶皱、版型和穿搭气质，但人物身份必须原创。",
             "不要在生图阶段提前遮挡脸部；生成完成后由系统二次遮挡眼鼻口等五官区域，保留脸部外轮廓。",
@@ -2082,7 +2083,7 @@ export function RecreateVideoPage() {
         },
         body: JSON.stringify({
           assetId,
-          aspectRatio: "1:1",
+          aspectRatio: isPerson ? "16:9" : "1:1",
           scene: taskScene,
           style: taskStyle,
           prompt,
@@ -2092,7 +2093,9 @@ export function RecreateVideoPage() {
       if (!response.ok) throw new Error(created?.message || "多视图参考任务创建失败");
       setNotice(isPerson ? "正在生成完整人物多角度参考图，完成后会自动遮挡五官" : "正在生成素材多视图参考图");
       const outputs = await pollPrivacyViewTask(created.taskId);
-      const boardOutput = await createMultiViewBoardAsset(outputs, outputName);
+      const boardOutput = isPerson
+        ? { assetId: outputs[0].assetId, url: outputs[0].url, byteSize: 0 }
+        : await createMultiViewBoardAsset(outputs, outputName);
       const finalOutput = isPerson
         ? await createFaceMaskedReferenceAsset({ url: boardOutput.url, name: outputName, assetId: boardOutput.assetId })
         : boardOutput;
