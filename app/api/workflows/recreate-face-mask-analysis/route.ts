@@ -38,7 +38,7 @@ async function callSophnetFaceVision(imageUrl: string, originalName: string | nu
         "只输出严格 JSON，不要 Markdown。",
         "JSON 字段：faceRegions、summary。",
         "faceRegions 是数组，每项包含 x、y、width、height、confidence、view。",
-        "x、y、width、height 必须是相对整张图片的 0-1 归一化坐标，框住脸部和可识别五官区域即可，不要框住完整身体。",
+        "x、y、width、height 必须是相对整张图片的 0-1 归一化坐标，只框住脸部上半区域或眼鼻附近区域，不要框住完整脸、下巴、头发或完整身体。",
         "多视图参考板里每个小格的人脸都要尽量标出；侧脸、远景小脸、局部露眼也要标出。",
         "如果无法确定，返回空数组。",
         `文件名：${originalName || "未命名素材"}`,

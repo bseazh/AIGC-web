@@ -1744,29 +1744,29 @@ export function RecreateVideoPage() {
     height: number,
     variant: number,
   ) => {
-    const maskX = Math.max(0, x + width * 0.12);
-    const maskY = Math.max(0, y + height * 0.2);
-    const maskWidth = width * 0.76;
-    const maskHeight = height * 0.48;
+    const maskX = Math.max(0, x + width * 0.2);
+    const maskY = Math.max(0, y + height * 0.24);
+    const maskWidth = width * 0.6;
+    const maskHeight = height * 0.28;
     const block = Math.max(5, Math.min(maskWidth, maskHeight) / 6);
     for (let yy = maskY; yy < maskY + maskHeight; yy += block) {
       for (let xx = maskX; xx < maskX + maskWidth; xx += block) {
         const tone = 170 + ((Math.floor(xx / block) + Math.floor(yy / block) + variant) % 4) * 18;
-        context.fillStyle = `rgba(${tone}, ${Math.min(255, tone + 5)}, ${Math.min(255, tone + 14)}, 0.7)`;
+        context.fillStyle = `rgba(${tone}, ${Math.min(255, tone + 5)}, ${Math.min(255, tone + 14)}, 0.42)`;
         context.fillRect(xx, yy, block + 1, block + 1);
       }
     }
     if (variant % 4 === 0) {
-      context.fillStyle = "rgba(12, 18, 28, 0.78)";
-      context.fillRect(maskX, maskY + maskHeight * 0.32, maskWidth, maskHeight * 0.32);
-      context.fillStyle = "rgba(238, 242, 247, 0.4)";
-      context.fillRect(maskX, maskY, maskWidth, maskHeight);
+      context.fillStyle = "rgba(12, 18, 28, 0.52)";
+      context.fillRect(maskX, maskY + maskHeight * 0.34, maskWidth, maskHeight * 0.28);
+      context.fillStyle = "rgba(238, 242, 247, 0.24)";
+      context.fillRect(maskX, maskY, maskWidth, maskHeight * 0.72);
       return;
     }
     if (variant % 4 === 1) {
-      context.fillStyle = "rgba(238, 242, 247, 0.72)";
+      context.fillStyle = "rgba(238, 242, 247, 0.46)";
       context.fillRect(maskX, maskY, maskWidth, maskHeight);
-      context.strokeStyle = "rgba(12, 18, 28, 0.36)";
+      context.strokeStyle = "rgba(12, 18, 28, 0.24)";
       context.lineWidth = Math.max(1, maskWidth / 34);
       for (let offset = -maskHeight; offset < maskWidth; offset += Math.max(8, maskWidth / 7)) {
         context.beginPath();
@@ -1780,18 +1780,18 @@ export function RecreateVideoPage() {
       for (let yy = maskY; yy < maskY + maskHeight; yy += block) {
         for (let xx = maskX; xx < maskX + maskWidth; xx += block) {
           const tone = 185 + ((Math.floor(xx / block) + Math.floor(yy / block)) % 3) * 18;
-          context.fillStyle = `rgba(${tone}, ${tone + 4}, ${Math.min(255, tone + 12)}, 0.86)`;
+          context.fillStyle = `rgba(${tone}, ${tone + 4}, ${Math.min(255, tone + 12)}, 0.52)`;
           context.fillRect(xx, yy, block + 1, block + 1);
         }
       }
       return;
     }
-    context.fillStyle = "rgba(255, 255, 255, 0.58)";
+    context.fillStyle = "rgba(255, 255, 255, 0.38)";
     context.fillRect(maskX, maskY, maskWidth, maskHeight);
-    context.strokeStyle = "rgba(10, 18, 30, 0.5)";
-    context.lineWidth = Math.max(2, maskWidth / 28);
+    context.strokeStyle = "rgba(10, 18, 30, 0.32)";
+    context.lineWidth = Math.max(1, maskWidth / 34);
     context.strokeRect(maskX, maskY, maskWidth, maskHeight);
-    context.fillStyle = "rgba(10, 18, 30, 0.18)";
+    context.fillStyle = "rgba(10, 18, 30, 0.12)";
     context.fillRect(maskX, maskY + maskHeight * 0.42, maskWidth, maskHeight * 0.16);
   };
 
@@ -1805,10 +1805,10 @@ export function RecreateVideoPage() {
         const cellX = column / columns;
         const cellY = row / rows;
         regions.push({
-          x: cellX + 0.32 / columns,
-          y: cellY + 0.13 / rows,
-          width: 0.36 / columns,
-          height: 0.22 / rows,
+          x: cellX + 0.35 / columns,
+          y: cellY + 0.15 / rows,
+          width: 0.3 / columns,
+          height: 0.16 / rows,
           confidence: 0.2,
           view: "fallback",
         });
@@ -2076,19 +2076,19 @@ export function RecreateVideoPage() {
         ? [
             "任务类型：模特/人物多视图参考，不是商品图生成。",
             "主体锁定规则：只要输入图里出现真人、模特、人体轮廓、头发、脸、手臂、腿或穿在人身上的服装，就必须把“完整人物/模特”作为唯一主主体；衣服、裙子、包、鞋只是人物身上的附着物。",
-            "创建一张 16:9 人物角色身份板，参考高端动画工作室 character identity board，必须在同一张图里包含多个清晰分离的角色研究，而不是只输出一张正面图。",
+            "创建一张 16:9 人物角色身份板，必须是真人摄影风格的虚拟模特多角度参考板，真实皮肤、真实布料、自然光影、真实人体比例，不能是动漫、插画、手绘、3D 卡通或概念设定图。",
             "先提取身份锚点：脸型外轮廓、五官大致比例、肤色与年龄感、身材比例、体态、发型轮廓和穿搭关系；不要继承原图背景、光线、拍摄角度、当下表情或真实身份。",
             "请提取输入图里的人物整体轮廓、身形比例、姿态气质、发型轮廓和穿搭关系，生成一位原创虚拟模特的完整人体多角度参考板。",
             "即使输入图只有裙子、衣服或局部穿搭，也必须补全为完整虚拟真人模特：头部、肩颈、躯干、手臂、腿部、脚部都要出现。",
             "第一步必须先生成完整头部和完整脸部轮廓：脸型外轮廓、头发轮廓、额头、眼鼻口的大致位置关系需要存在，不能省略头部，不能把头部画成空白块、无脸人或裁掉。",
             "人物身份必须原创，不要复制输入图中的真实五官；但需要保留可用于参考的完整脸型轮廓和头身比例。",
-            "布局参考高端动画工作室角色身份板：一个大型完整站姿英雄全身视角，周围排列较小辅助研究：背面全身、侧面全身、3/4 角度全身、上半身脸型与发型轮廓、服装/姿态细节、2-3 个小型黑色轮廓研究。",
+            "布局为真实电商试衣/模特 casting 多视图参考板：一个大型完整站姿英雄全身视角，周围排列较小辅助研究：背面全身、侧面全身、3/4 角度全身、上半身脸型与发型轮廓、服装/姿态细节、2-3 个小型黑色轮廓研究。",
             "每个视角都必须是同一位虚拟模特，保持相同脸型轮廓、发型轮廓、身体比例、服装轮廓和姿态气质；每个视角都要清晰分离，不要重叠。",
             "每个主要视图都必须是“衣服穿在模特身上”的效果，不允许出现空心裙、衣架、平铺服装、单件裙子、商品白底图或只有服装没有人体。",
             "如果输出结果只有衣服、长裙、服装商品图、空白分格或没有人体，则方向错误，必须重新生成完整人物多视图。",
             "禁止输出单件服装多视图、商品展示图、裙子独立展示图。",
             "保留输入服装的款式、颜色、材质、长度、褶皱、版型和穿搭气质，但人物身份必须原创。",
-            "不要在生图阶段提前遮挡脸部；生成完成后由系统二次遮挡眼鼻口等五官区域，保留脸部外轮廓。",
+            "不要在生图阶段提前遮挡脸部；生成完成后由系统二次轻遮挡脸部上半区域，保留脸型、下半脸、发型和头部轮廓。",
             "浅灰或白色背景，整张图像是一张干净的人物设定多视图参考板，适合作为后续 @虚拟模特参考 使用。",
           ].join("\n")
         : kind === "scene"

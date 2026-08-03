@@ -237,6 +237,11 @@ const checks = [
     "创建一张 16:9 人物/模特角色身份板",
   ],
   [
+    "Recreate reference worker requires realistic human photo style",
+    "scripts/worker.mjs",
+    "必须是真人摄影风格的虚拟模特多角度参考板",
+  ],
+  [
     "Recreate reference workflow returns one identity board output",
     "lib/product-config.ts",
     "outputsPerTask: 1",
@@ -389,7 +394,7 @@ const checks = [
   [
     "Recreate video privacy multi-view prompt masks face identity",
     "app/components/recreate-video-page.tsx",
-    "生成完成后由系统二次遮挡眼鼻口等五官区域，保留脸部外轮廓",
+    "生成完成后由系统二次轻遮挡脸部上半区域",
   ],
   [
     "Recreate video submits keyframe collage as a reference image",
