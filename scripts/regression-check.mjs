@@ -187,9 +187,34 @@ const checks = [
     "智能识别素材",
   ],
   [
+    "Recreate video lets users actively tag material kind",
+    "app/components/recreate-video-page.tsx",
+    "主动标识",
+  ],
+  [
+    "Recreate video material kind selector includes model product and scene",
+    "app/components/recreate-video-page.tsx",
+    "<option value=\"scene\">场景",
+  ],
+  [
+    "Recreate video person multi-view prompt keeps full body instead of clothing only",
+    "app/components/recreate-video-page.tsx",
+    "禁止输出单件服装多视图",
+  ],
+  [
+    "Recreate video material analysis prioritizes worn clothing as person",
+    "app/api/workflows/recreate-material-analysis/route.ts",
+    "只要图片中能看到完整人体、人体轮廓、穿着服装的人、模特试穿效果，就必须优先判为 person",
+  ],
+  [
     "Recreate video material module supports product multi-view references",
     "app/components/recreate-video-page.tsx",
-    "生成商品/素材多视图",
+    "生成商品多视图",
+  ],
+  [
+    "Recreate video material module supports scene multi-view references",
+    "app/components/recreate-video-page.tsx",
+    "生成场景多视图",
   ],
   [
     "Recreate video material images open a zoom preview",

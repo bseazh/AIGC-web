@@ -481,7 +481,7 @@ export function RecreateVideoPage() {
   const portraitCandidateIndex = products.length ? Math.max(privacyReferenceIndex, 0) : -1;
   const portraitCandidate = portraitCandidateIndex >= 0 ? products[portraitCandidateIndex] : null;
   const materialKindLabel = (kind?: MaterialKind) => {
-    if (kind === "person") return "人物/真人";
+    if (kind === "person") return "模特/人物";
     if (kind === "product") return "商品/物体";
     if (kind === "scene") return "场景/背景";
     if (kind === "text") return "文字/Logo";
@@ -1499,6 +1499,31 @@ export function RecreateVideoPage() {
       setMaterialAnalysisBusyIndex(null);
     }
   };
+  const setMaterialKind = (index: number, kind: MaterialKind) => {
+    setProducts((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              materialKind: kind,
+              materialSummary:
+                kind === "person"
+                  ? "已手动标为模特/人物，请生成隐私化完整人体多视图"
+                  : kind === "product"
+                    ? "已手动标为商品/物体，请生成商品多视图"
+                    : kind === "scene"
+                      ? "已手动标为场景/背景"
+                      : kind === "text"
+                        ? "已手动标为文字/Logo"
+                        : "已手动标为未识别素材",
+              materialConfidence: 1,
+            }
+          : item,
+      ),
+    );
+    setPolishedPrompt(null);
+    clearTaskState();
+  };
   const insertMaterialReference = (label: string) => {
     setProductInfo((current) => {
       const beforeCursor = current;
@@ -1714,6 +1739,14 @@ export function RecreateVideoPage() {
     const maskY = Math.max(0, y - paddingY);
     const maskWidth = width + paddingX * 2;
     const maskHeight = height + paddingY * 2;
+    const block = Math.max(5, Math.min(maskWidth, maskHeight) / 6);
+    for (let yy = maskY; yy < maskY + maskHeight; yy += block) {
+      for (let xx = maskX; xx < maskX + maskWidth; xx += block) {
+        const tone = 170 + ((Math.floor(xx / block) + Math.floor(yy / block) + variant) % 4) * 18;
+        context.fillStyle = `rgba(${tone}, ${Math.min(255, tone + 5)}, ${Math.min(255, tone + 14)}, 0.7)`;
+        context.fillRect(xx, yy, block + 1, block + 1);
+      }
+    }
     if (variant % 4 === 0) {
       context.fillStyle = "rgba(12, 18, 28, 0.78)";
       context.fillRect(maskX, maskY + maskHeight * 0.32, maskWidth, maskHeight * 0.32);
@@ -1735,7 +1768,6 @@ export function RecreateVideoPage() {
       return;
     }
     if (variant % 4 === 2) {
-      const block = Math.max(6, Math.min(maskWidth, maskHeight) / 5);
       for (let yy = maskY; yy < maskY + maskHeight; yy += block) {
         for (let xx = maskX; xx < maskX + maskWidth; xx += block) {
           const tone = 185 + ((Math.floor(xx / block) + Math.floor(yy / block)) % 3) * 18;
@@ -1952,10 +1984,13 @@ export function RecreateVideoPage() {
       const prompt = isPerson
         ? [
             "基于输入人像参考图，生成一张隐私化虚拟模特多角度参考图。",
-            "画面是一张干净的多视图参考板，包含正面、左45度、右45度、左侧身、右侧身、背面、上半身服装细节、局部姿态细节。",
+            "必须输出完整人物/模特主体，而不是单独的裙子、衣服、商品平铺图或服装白底图。",
+            "画面是一张干净的人物多视图参考板，包含完整站姿正面、完整站姿左45度、完整站姿右45度、完整侧身、完整背面、上半身穿搭细节、下半身姿态细节、局部动作细节。",
+            "每个主要视图都要保留人体头部、肩颈、躯干、手臂、腿部和整体身形比例；服装只是穿在虚拟模特身上的一部分，不得把人物裁掉只留下衣服。",
             "保留服装款式、颜色、材质、发型轮廓、身形比例、姿态气质和整体穿搭氛围。",
             "所有出现脸部的位置都必须做隐私化处理：弱化真实五官，不保留可识别真人身份；不同视图综合使用半透明网格、柔化、额头/眼周遮挡、鼻梁/中庭遮挡、下半脸遮挡等方式。",
             "不要复制原人物脸部身份，不要生成清晰真实人脸；重点输出可用于原创视频生成的虚拟模特参考。",
+            "禁止输出单件服装多视图、商品展示图、裙子独立展示图。",
             "浅灰或白色背景，参考图清晰整洁，适合作为后续 @虚拟模特参考 使用。",
           ].join("\n")
         : [
@@ -2836,6 +2871,19 @@ export function RecreateVideoPage() {
                   )}
                   {materialAnalysisBusyIndex === portraitCandidateIndex ? "正在识别素材" : "智能识别素材"}
                 </button>
+                <label className="recreate-kind-select">
+                  主动标识
+                  <select
+                    value={portraitCandidate.materialKind && ["person", "product", "scene"].includes(portraitCandidate.materialKind) ? portraitCandidate.materialKind : ""}
+                    onChange={(event) => setMaterialKind(portraitCandidateIndex, event.target.value as MaterialKind)}
+                    disabled={privacyViewBusyIndex !== null || materialAnalysisBusyIndex !== null}
+                  >
+                    <option value="">请选择类型</option>
+                    <option value="person">模特/人物</option>
+                    <option value="product">商品/物体</option>
+                    <option value="scene">场景/背景</option>
+                  </select>
+                </label>
               <button
                 type="button"
                 className="privacy-view"
@@ -2847,12 +2895,14 @@ export function RecreateVideoPage() {
                 ) : (
                   <Sparkles size={14} />
                 )}
-                {privacyViewBusyIndex === portraitCandidateIndex
+                  {privacyViewBusyIndex === portraitCandidateIndex
                   ? "正在生成多视图参考"
                   : portraitCandidate.materialKind === "person"
                     ? "生成隐私化人物多视图"
-                    : portraitCandidate.materialKind && portraitCandidate.materialKind !== "unknown"
-                      ? "生成商品/素材多视图"
+                    : portraitCandidate.materialKind === "scene"
+                      ? "生成场景多视图"
+                      : portraitCandidate.materialKind && portraitCandidate.materialKind !== "unknown"
+                        ? "生成商品多视图"
                       : "生成通用多视图参考"}
               </button>
               {portraitCandidate.materialKind === "person" ? (
@@ -2896,6 +2946,19 @@ export function RecreateVideoPage() {
                   aria-label={`重命名${materialLabel(index)}`}
                   placeholder={materialLabel(index)}
                 />
+                <label className="recreate-material-kind-select">
+                  类型
+                  <select
+                    value={product.materialKind && ["person", "product", "scene"].includes(product.materialKind) ? product.materialKind : ""}
+                    onChange={(event) => setMaterialKind(index, event.target.value as MaterialKind)}
+                    disabled={privacyViewBusyIndex !== null || materialAnalysisBusyIndex !== null}
+                  >
+                    <option value="">请选择</option>
+                    <option value="person">模特</option>
+                    <option value="product">商品</option>
+                    <option value="scene">场景</option>
+                  </select>
+                </label>
                 <button
                   type="button"
                   className="privacy-view"
@@ -2911,6 +2974,8 @@ export function RecreateVideoPage() {
                     ? "生成中"
                     : product.materialKind === "person"
                       ? "人物多视图"
+                      : product.materialKind === "scene"
+                        ? "场景多视图"
                       : "素材多视图"}
                 </button>
                 {product.materialKind === "person" ? (
