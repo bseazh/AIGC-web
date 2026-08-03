@@ -1922,12 +1922,71 @@ export function RecreateVideoPage() {
       const response = await fetch(`/api/tasks/${taskId}/`, { cache: "no-store" });
       const task = await response.json().catch(() => null);
       if (!response.ok) throw new Error(task?.message || "多视图任务查询失败");
-      if (task.status === "SUCCEEDED" && task.outputs?.[0]) return task.outputs[0] as { assetId: string; url: string; name?: string };
+      if (task.status === "SUCCEEDED" && task.outputs?.[0]) return task.outputs as Array<{ assetId: string; url: string; name?: string }>;
       if (task.status === "FAILED" || task.status === "CANCELED")
         throw new Error(task.errorCode || "多视图参考生成失败");
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
     throw new Error("多视图参考仍在生成中，请稍后在任务中心查看");
+  };
+
+  const createMultiViewBoardAsset = async (outputs: Array<{ assetId: string; url: string; name?: string }>, name: string) => {
+    const selected = outputs.slice(0, 8);
+    if (selected.length === 1) {
+      return { assetId: selected[0].assetId, url: selected[0].url, byteSize: 0 };
+    }
+    const images = await Promise.all(selected.map((output) => loadImageForCanvas(output.url)));
+    const columns = selected.length <= 4 ? 2 : 4;
+    const rows = Math.ceil(selected.length / columns);
+    const cellWidth = 420;
+    const cellHeight = 620;
+    const labelHeight = 38;
+    const gap = 10;
+    const padding = 18;
+    const width = columns * cellWidth + (columns - 1) * gap + padding * 2;
+    const height = rows * (cellHeight + labelHeight) + (rows - 1) * gap + padding * 2;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("多视图参考板生成失败");
+    context.fillStyle = "#f8fafc";
+    context.fillRect(0, 0, width, height);
+    context.font = "22px sans-serif";
+    context.textBaseline = "middle";
+    const labels = ["正面", "左 45°", "右 45°", "背面", "左侧身", "右侧身", "上半身", "下半身"];
+    images.forEach((image, index) => {
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const x = padding + column * (cellWidth + gap);
+      const y = padding + row * (cellHeight + labelHeight + gap);
+      const scale = Math.min(cellWidth / image.naturalWidth, cellHeight / image.naturalHeight);
+      const drawWidth = image.naturalWidth * scale;
+      const drawHeight = image.naturalHeight * scale;
+      const drawX = x + (cellWidth - drawWidth) / 2;
+      const drawY = y + (cellHeight - drawHeight) / 2;
+      context.fillStyle = "#ffffff";
+      context.roundRect(x, y, cellWidth, cellHeight, 18);
+      context.fill();
+      context.save();
+      context.beginPath();
+      context.roundRect(x, y, cellWidth, cellHeight, 18);
+      context.clip();
+      context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+      context.restore();
+      context.fillStyle = "rgba(15, 23, 42, 0.88)";
+      context.fillRect(x, y + cellHeight, cellWidth, labelHeight);
+      context.fillStyle = "#ffffff";
+      context.fillText(labels[index] || `视图 ${index + 1}`, x + 14, y + cellHeight + labelHeight / 2);
+    });
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+    if (!blob) throw new Error("多视图参考板导出失败");
+    const file = new File([blob], "recreate-multiview-board.jpg", { type: "image/jpeg" });
+    const preview = URL.createObjectURL(file);
+    const assetId = await upload({ file, preview, name, byteSize: file.size });
+    const url = await resolveAssetPreviewUrl(assetId, preview);
+    if (url !== preview) URL.revokeObjectURL(preview);
+    return { assetId, url, byteSize: file.size };
   };
 
   const strengthenFaceMask = async (index: number) => {
@@ -1987,7 +2046,8 @@ export function RecreateVideoPage() {
             "即使输入图只有裙子、衣服或局部穿搭，也必须补全为完整虚拟真人模特：头部、肩颈、躯干、手臂、腿部、脚部都要出现。",
             "第一步必须先生成完整头部和完整脸部轮廓：脸型外轮廓、头发轮廓、额头、眼鼻口的大致位置关系需要存在，不能省略头部，不能把头部画成空白块、无脸人或裁掉。",
             "人物身份必须原创，不要复制输入图中的真实五官；但需要保留可用于参考的完整脸型轮廓和头身比例。",
-            "必须输出 8 个视图：完整站姿正面、完整站姿左45度、完整站姿右45度、完整左侧身、完整右侧身、完整背面、上半身穿搭细节、下半身姿态细节。",
+            "系统会分多张图生成不同角度，最后自动拼成多视图参考板；每张图都必须是一个明确角度的完整人物，而不是重复的单张正面图。",
+            "需要覆盖完整站姿正面、左45度、右45度、背面、侧身或局部细节等多个角度。",
             "每个主要视图都必须是“衣服穿在模特身上”的效果，不允许出现空心裙、衣架、平铺服装、单件裙子、商品白底图或只有服装没有人体。",
             "如果输出结果只有衣服、长裙、服装商品图或没有人体，则方向错误，必须重新生成完整人物多视图。",
             "禁止输出单件服装多视图、商品展示图、裙子独立展示图。",
@@ -2031,10 +2091,11 @@ export function RecreateVideoPage() {
       const created = await response.json().catch(() => null);
       if (!response.ok) throw new Error(created?.message || "多视图参考任务创建失败");
       setNotice(isPerson ? "正在生成完整人物多角度参考图，完成后会自动遮挡五官" : "正在生成素材多视图参考图");
-      const output = await pollPrivacyViewTask(created.taskId);
+      const outputs = await pollPrivacyViewTask(created.taskId);
+      const boardOutput = await createMultiViewBoardAsset(outputs, outputName);
       const finalOutput = isPerson
-        ? await createFaceMaskedReferenceAsset({ url: output.url, name: outputName, assetId: output.assetId })
-        : { assetId: output.assetId, url: output.url, byteSize: 0 };
+        ? await createFaceMaskedReferenceAsset({ url: boardOutput.url, name: outputName, assetId: boardOutput.assetId })
+        : boardOutput;
       setProducts((current) =>
         current.map((item, itemIndex) => {
           if (itemIndex !== index) return item;

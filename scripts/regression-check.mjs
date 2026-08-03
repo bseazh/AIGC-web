@@ -222,6 +222,21 @@ const checks = [
     "第一步必须先生成完整头部和完整脸部轮廓",
   ],
   [
+    "Recreate video combines multiple reference outputs into a board",
+    "app/components/recreate-video-page.tsx",
+    "createMultiViewBoardAsset(outputs, outputName)",
+  ],
+  [
+    "Recreate video no longer keeps only the first reference output",
+    "app/components/recreate-video-page.tsx",
+    "return task.outputs as Array",
+  ],
+  [
+    "Recreate reference worker assigns deterministic person angles",
+    "scripts/worker.mjs",
+    "referenceAngles",
+  ],
+  [
     "Recreate reference worker avoids masking faces during generation",
     "scripts/worker.mjs",
     "不要在生图阶段遮挡脸部",

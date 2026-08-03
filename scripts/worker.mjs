@@ -200,8 +200,10 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
     : ["recreate-product-hero", "recreate-detail-page"].includes(workflowKey)
     ? "参考输入图的构图层级、留白和商业视觉方向，使用同一商品制作原创电商视觉；不得复制原图的文字、品牌、人物或具体画面，不添加水印。"
     : "保持商品主体的形状、颜色、商标和关键细节准确，不改变产品本身，不添加文字、水印或额外商品。";
+  const referenceAngles = ["完整站姿正面", "完整站姿左45度", "完整站姿右45度", "完整站姿背面", "完整左侧身", "完整右侧身", "上半身脸型与发型轮廓", "下半身姿态细节"];
+  const referenceAngle = referenceAngles[index] || `多视图角度 ${index + 1}`;
   const recreateReferencePrompt = workflowKey === "recreate-reference-image" && input.scene === "人物多视图"
-    ? `生成人物/模特多视图参考板。第一张输入图如果出现真人、模特、人体轮廓、头发、脸、手臂、腿或穿在人身上的服装，必须把“完整人物”作为唯一主主体来提取和重建；服装只是穿在人物身上的附着物，不得把服装单独当商品。输出必须包含完整头部、完整脸部轮廓、头发轮廓、肩颈、躯干、手臂、腿部和脚部的多角度人体，不允许只有裙子、空心衣服、衣架、平铺服装、无头模特、无脸空白块或商品白底图。不要在生图阶段遮挡脸部；生成原创虚拟脸型轮廓，不复制真实五官，后续系统会二次遮挡五官区域。画幅比例${input.aspectRatio}。`
+    ? `生成人物/模特多视图参考板中的单个角度图：${referenceAngle}。第一张输入图如果出现真人、模特、人体轮廓、头发、脸、手臂、腿或穿在人身上的服装，必须把“完整人物”作为唯一主主体来提取和重建；服装只是穿在人物身上的附着物，不得把服装单独当商品。本次只输出这个角度的一张完整人物图，后续系统会把多张角度图拼成多视图参考板。输出必须包含完整头部、完整脸部轮廓、头发轮廓、肩颈、躯干、手臂、腿部和脚部，不允许只有裙子、空心衣服、衣架、平铺服装、无头模特、无脸空白块或商品白底图。不要在生图阶段遮挡脸部；生成原创虚拟脸型轮廓，不复制真实五官，后续系统会二次遮挡五官区域。画幅比例${input.aspectRatio}。`
     : workflowKey === "recreate-reference-image" && input.scene === "场景多视图"
     ? `生成场景/背景多视图参考板。以空间、光线、背景层次、材质和可摆放主体区域为核心，不要把画面中的单个商品或人物当成唯一主主体。画幅比例${input.aspectRatio}。`
     : workflowKey === "recreate-reference-image"
