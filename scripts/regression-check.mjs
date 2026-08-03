@@ -262,6 +262,16 @@ const checks = [
     "GOOGLE_AI_BASE_URL",
   ],
   [
+    "Gemini image generation supports a worker-only proxy",
+    "scripts/worker.mjs",
+    "GOOGLE_AI_PROXY_URL",
+  ],
+  [
+    "Gemini proxy support uses undici ProxyAgent",
+    "scripts/worker.mjs",
+    "new ProxyAgent(proxyUrl)",
+  ],
+  [
     "Gemini image generation parses inline image data",
     "scripts/worker.mjs",
     "inlineData || imagePart?.inline_data",

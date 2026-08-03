@@ -7,6 +7,7 @@ import tls from "node:tls";
 import { Queue, Worker } from "bullmq";
 import COS from "cos-nodejs-sdk-v5";
 import pg from "pg";
+import { fetch as undiciFetch, ProxyAgent } from "undici";
 import { installStructuredConsole, log } from "./structured-logger.mjs";
 
 installStructuredConsole("aigc-worker");
@@ -86,6 +87,16 @@ function googleAiUrl(path, apiKey) {
   return `${baseUrl}${path}${separator}key=${encodeURIComponent(apiKey)}`;
 }
 
+function googleProxyUrl() {
+  return process.env.GOOGLE_AI_PROXY_URL || process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy || "";
+}
+
+async function googleFetch(url, init = {}) {
+  const proxyUrl = googleProxyUrl();
+  if (!proxyUrl) return fetch(url, init);
+  return undiciFetch(url, { ...init, dispatcher: new ProxyAgent(proxyUrl) });
+}
+
 async function sophnet(path, init = {}, audit = {}) {
   if (!process.env.AI_API_KEY || !process.env.AI_MODEL || !process.env.AI_BASE_URL) {
     throw new Error("Image provider is not configured");
@@ -153,7 +164,7 @@ async function createGeminiImage(inputUrls, prompt, generationTaskId, outputInde
       },
     },
   };
-  const response = await fetch(googleAiUrl(`/models/${model}:generateContent`, apiKey), {
+  const response = await googleFetch(googleAiUrl(`/models/${model}:generateContent`, apiKey), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(requestBody),
