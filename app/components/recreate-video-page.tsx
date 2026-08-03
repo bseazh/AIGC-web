@@ -1602,6 +1602,17 @@ export function RecreateVideoPage() {
     return typeof asset?.url === "string" ? asset.url : fallbackUrl;
   };
 
+  const tracePrivacyMultiView = (stage: string, details: Record<string, unknown> = {}) => {
+    const payload = { stage, details };
+    console.info("[recreate-multiview]", stage, details);
+    fetch("/api/tasks/recreate-reference/?debug=1", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    }).catch(() => {});
+  };
+
   const loadImageForCanvas = async (url: string) => {
     const image = new Image();
     image.decoding = "async";
@@ -1916,17 +1927,24 @@ export function RecreateVideoPage() {
     throw new Error("视频仍在生成中，请稍后在任务中心查看");
   };
 
-  const pollPrivacyViewTask = async (taskId: string) => {
+  const pollPrivacyViewTask = async (taskId: string, flowId?: string) => {
     const deadline = Date.now() + 10 * 60 * 1000;
+    tracePrivacyMultiView("poll_started", { flowId, taskId });
     while (Date.now() < deadline) {
       const response = await fetch(`/api/tasks/${taskId}/`, { cache: "no-store" });
       const task = await response.json().catch(() => null);
       if (!response.ok) throw new Error(task?.message || "多视图任务查询失败");
-      if (task.status === "SUCCEEDED" && task.outputs?.[0]) return task.outputs as Array<{ assetId: string; url: string; name?: string }>;
-      if (task.status === "FAILED" || task.status === "CANCELED")
+      if (task.status === "SUCCEEDED" && task.outputs?.[0]) {
+        tracePrivacyMultiView("task_succeeded", { flowId, taskId, outputCount: Array.isArray(task.outputs) ? task.outputs.length : 0 });
+        return task.outputs as Array<{ assetId: string; url: string; name?: string }>;
+      }
+      if (task.status === "FAILED" || task.status === "CANCELED") {
+        tracePrivacyMultiView("task_failed", { flowId, taskId, status: task.status, errorCode: task.errorCode });
         throw new Error(task.errorCode || "多视图参考生成失败");
+      }
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
+    tracePrivacyMultiView("poll_timeout", { flowId, taskId });
     throw new Error("多视图参考仍在生成中，请稍后在任务中心查看");
   };
 
@@ -2022,15 +2040,31 @@ export function RecreateVideoPage() {
   };
 
   const createPrivacyMultiView = async (index: number) => {
+    const flowId = crypto.randomUUID();
     const source = products[index];
+    tracePrivacyMultiView("clicked", {
+      flowId,
+      index,
+      productCount: products.length,
+      busyIndex: privacyViewBusyIndex,
+      materialAnalysisBusyIndex,
+      hasSource: Boolean(source),
+      hasAssetId: Boolean(source?.assetId),
+      hasFile: Boolean(source?.file),
+      materialKind: source?.materialKind || "unset",
+      sourceName: source?.name || "",
+      byteSize: source?.byteSize || 0,
+    });
     if (!source || privacyViewBusyIndex !== null) return;
     setError("");
     setPrivacyViewBusyIndex(index);
+    setNotice("正在准备多视图参考素材");
     try {
       const assetId = await upload(source);
       const kind = source.materialKind || "unknown";
       const label = source.name.trim() || materialLabel(index);
       const isPerson = kind === "person" || label.includes("模特") || label.includes("人物") || label.includes("真人");
+      tracePrivacyMultiView("asset_ready", { flowId, index, assetId, kind, label, isPerson });
       const outputName = isPerson
         ? "虚拟模特参考"
         : kind === "scene"
@@ -2077,6 +2111,7 @@ export function RecreateVideoPage() {
             ].join("\n");
       const taskScene = isPerson ? "人物多视图" : kind === "scene" ? "场景多视图" : "商品多视图";
       const taskStyle = "参考板";
+      setNotice(isPerson ? "素材已准备，正在创建人物多视图任务" : "素材已准备，正在创建多视图任务");
       const response = await fetch("/api/tasks/recreate-reference/", {
         method: "POST",
         headers: {
@@ -2092,15 +2127,31 @@ export function RecreateVideoPage() {
         }),
       });
       const created = await response.json().catch(() => null);
+      tracePrivacyMultiView("task_create_response", {
+        flowId,
+        status: response.status,
+        ok: response.ok,
+        taskId: created?.taskId || "",
+        code: created?.code || "",
+        message: created?.message || "",
+        taskScene,
+      });
       if (!response.ok) throw new Error(created?.message || "多视图参考任务创建失败");
       setNotice(isPerson ? "正在生成完整人物多角度参考图，完成后会自动遮挡五官" : "正在生成素材多视图参考图");
-      const outputs = await pollPrivacyViewTask(created.taskId);
+      const outputs = await pollPrivacyViewTask(created.taskId, flowId);
       const boardOutput = isPerson
         ? { assetId: outputs[0].assetId, url: outputs[0].url, byteSize: 0 }
         : await createMultiViewBoardAsset(outputs, outputName);
+      if (isPerson) tracePrivacyMultiView("face_mask_started", { flowId, taskId: created.taskId, assetId: boardOutput.assetId });
       const finalOutput = isPerson
         ? await createFaceMaskedReferenceAsset({ url: boardOutput.url, name: outputName, assetId: boardOutput.assetId })
         : boardOutput;
+      tracePrivacyMultiView("finished", {
+        flowId,
+        taskId: created.taskId,
+        finalAssetId: finalOutput.assetId,
+        isPerson,
+      });
       setProducts((current) =>
         current.map((item, itemIndex) => {
           if (itemIndex !== index) return item;
@@ -2126,6 +2177,11 @@ export function RecreateVideoPage() {
       setNotice(`已生成 @${outputName}，并替换原素材`);
       window.setTimeout(() => setNotice(""), 2600);
     } catch (caught) {
+      tracePrivacyMultiView("failed", {
+        flowId,
+        index,
+        message: caught instanceof Error ? caught.message : "多视图参考生成失败",
+      });
       setError(caught instanceof Error ? caught.message : "多视图参考生成失败");
     } finally {
       setPrivacyViewBusyIndex(null);
