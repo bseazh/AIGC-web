@@ -31,8 +31,8 @@ type InputExtras = (body: Record<string, unknown>) => Record<string, unknown>;
 
 function missingProviderConfig(workflowKey: string) {
   const hasGemini = Boolean(process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.NANO_BANANA_API_KEY);
-  if (workflowKey === "recreate-reference-image") return hasGemini ? [] : ["GOOGLE_AI_API_KEY 或 GEMINI_API_KEY 或 NANO_BANANA_API_KEY"];
   const missingSophnet = ["AI_API_KEY", "AI_BASE_URL", "AI_MODEL"].filter((key) => !process.env[key]);
+  if (workflowKey === "recreate-reference-image") return missingSophnet.length === 0 || hasGemini ? [] : [...missingSophnet, "或配置 GOOGLE_AI_API_KEY / GEMINI_API_KEY / NANO_BANANA_API_KEY"];
   return missingSophnet.length === 0 || hasGemini ? [] : [...missingSophnet, "或配置 GOOGLE_AI_API_KEY / GEMINI_API_KEY / NANO_BANANA_API_KEY"];
 }
 

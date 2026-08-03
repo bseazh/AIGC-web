@@ -341,7 +341,11 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
     input.prompt ? `用户补充要求：${input.prompt}` : "",
   ].filter(Boolean).join("\n");
   if (workflowKey === "recreate-reference-image") {
-    return createGeminiImage(inputUrls, prompt, generationTaskId, index, input.aspectRatio);
+    if (geminiImageConfigured()) {
+      return createGeminiImage(inputUrls, prompt, generationTaskId, index, input.aspectRatio);
+    }
+    const providerTaskId = await createImageTask(inputUrls, prompt, generationTaskId, index);
+    return { url: await waitForImage(providerTaskId, generationTaskId, index), temporaryKey: null, provider: "sophnet", model: process.env.AI_MODEL };
   }
   if (!sophnetImageConfigured() && geminiImageConfigured()) {
     return createGeminiImage(inputUrls, prompt, generationTaskId, index, geminiAspectRatio(input.aspectRatio));
