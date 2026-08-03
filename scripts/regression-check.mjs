@@ -247,6 +247,11 @@ const checks = [
     "必须单独包含 3-5 个脸部/头部特写小图",
   ],
   [
+    "Recreate reference worker asks face close-ups to mask different parts",
+    "scripts/worker.mjs",
+    "部分特写只遮额头",
+  ],
+  [
     "Recreate reference workflow returns one identity board output",
     "lib/product-config.ts",
     "outputsPerTask: 1",
@@ -399,7 +404,7 @@ const checks = [
   [
     "Recreate video privacy multi-view prompt masks face identity",
     "app/components/recreate-video-page.tsx",
-    "生成完成后由系统二次做轻微模糊/淡马赛克",
+    "生成完成后由系统二次做极轻微模糊",
   ],
   [
     "Recreate video submits keyframe collage as a reference image",

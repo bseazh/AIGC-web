@@ -1756,23 +1756,36 @@ export function RecreateVideoPage() {
     source.getContext("2d")?.drawImage(context.canvas, maskX, maskY, maskWidth, maskHeight, 0, 0, source.width, source.height);
 
     context.save();
-    context.filter = `blur(${Math.max(1.2, Math.min(4, maskWidth / 90))}px)`;
+    context.filter = `blur(${Math.max(0.35, Math.min(1.1, maskWidth / 260))}px)`;
     context.drawImage(source, 0, 0, source.width, source.height, maskX, maskY, maskWidth, maskHeight);
     context.restore();
 
-    const block = Math.max(4, Math.min(maskWidth, maskHeight) / 9);
-    for (let yy = maskY; yy < maskY + maskHeight; yy += block) {
-      for (let xx = maskX; xx < maskX + maskWidth; xx += block) {
+    const partials = [
+      { x: 0.18, y: 0.04, width: 0.64, height: 0.18 },
+      { x: 0.16, y: 0.3, width: 0.68, height: 0.16 },
+      { x: 0.26, y: 0.45, width: 0.48, height: 0.18 },
+      { x: 0.28, y: 0.68, width: 0.44, height: 0.16 },
+      { x: 0.1, y: 0.38, width: 0.22, height: 0.26 },
+      { x: 0.68, y: 0.38, width: 0.22, height: 0.26 },
+    ];
+    const partial = partials[variant % partials.length];
+    const partialX = maskX + maskWidth * partial.x;
+    const partialY = maskY + maskHeight * partial.y;
+    const partialWidth = maskWidth * partial.width;
+    const partialHeight = maskHeight * partial.height;
+    const block = Math.max(3, Math.min(partialWidth, partialHeight) / 7);
+    for (let yy = partialY; yy < partialY + partialHeight; yy += block) {
+      for (let xx = partialX; xx < partialX + partialWidth; xx += block) {
         const tone = 225 + ((Math.floor(xx / block) + Math.floor(yy / block) + variant) % 3) * 8;
-        context.fillStyle = `rgba(${tone}, ${tone}, ${Math.min(255, tone + 4)}, 0.12)`;
+        context.fillStyle = `rgba(${tone}, ${tone}, ${Math.min(255, tone + 4)}, 0.22)`;
         context.fillRect(xx, yy, block + 1, block + 1);
       }
     }
-    context.fillStyle = "rgba(255, 255, 255, 0.12)";
-    context.fillRect(maskX, maskY, maskWidth, maskHeight);
+    context.fillStyle = "rgba(255, 255, 255, 0.1)";
+    context.fillRect(partialX, partialY, partialWidth, partialHeight);
     context.strokeStyle = "rgba(15, 23, 42, 0.12)";
-    context.lineWidth = Math.max(1, maskWidth / 60);
-    context.strokeRect(maskX, maskY, maskWidth, maskHeight);
+    context.lineWidth = Math.max(1, partialWidth / 50);
+    context.strokeRect(partialX, partialY, partialWidth, partialHeight);
   };
 
   const fallbackFaceRegions = (width: number, height: number) => {
@@ -2064,12 +2077,13 @@ export function RecreateVideoPage() {
             "人物身份必须原创，不要复制输入图中的真实五官；但需要保留可用于参考的完整脸型轮廓和头身比例。",
             "布局为真实电商试衣/模特 casting 多视图参考板：一个大型完整站姿英雄全身视角，周围排列较小辅助研究：背面全身、侧面全身、3/4 角度全身、上半身脸型与发型轮廓、服装/姿态细节、2-3 个小型黑色轮廓研究。",
             "必须单独包含 3-5 个脸部/头部特写小图：正面脸部特写、侧面脸部特写、3/4 脸部特写、发型轮廓特写和表情中性特写；这些特写要是真人摄影质感，五官比例、脸型、发际线、鼻梁、嘴型位置要能看清，用于后续参考。",
+            "脸部特写必须互补：部分特写无遮挡，部分特写只遮额头，部分只遮眼睛，部分只遮下巴或脸颊，不要所有脸都遮同一个区域。",
             "每个视角都必须是同一位虚拟模特，保持相同脸型轮廓、发型轮廓、身体比例、服装轮廓和姿态气质；每个视角都要清晰分离，不要重叠。",
             "每个主要视图都必须是“衣服穿在模特身上”的效果，不允许出现空心裙、衣架、平铺服装、单件裙子、商品白底图或只有服装没有人体。",
             "如果输出结果只有衣服、长裙、服装商品图、空白分格或没有人体，则方向错误，必须重新生成完整人物多视图。",
             "禁止输出单件服装多视图、商品展示图、裙子独立展示图。",
             "保留输入服装的款式、颜色、材质、长度、褶皱、版型和穿搭气质，但人物身份必须原创。",
-            "不要在生图阶段提前遮挡脸部；生成完成后由系统二次做轻微模糊/淡马赛克，五官比例仍可辨认但真实身份不清晰，保留脸型、发型和头部轮廓。",
+            "不要在生图阶段提前遮挡脸部；生成完成后由系统二次做极轻微模糊，并按不同脸部小图局部遮挡额头、眼睛、鼻口、下巴或脸颊中的某一小部分，五官比例仍可辨认但真实身份不清晰，保留脸型、发型和头部轮廓。",
             "浅灰或白色背景，整张图像是一张干净的人物设定多视图参考板，适合作为后续 @虚拟模特参考 使用。",
           ].join("\n")
         : kind === "scene"
