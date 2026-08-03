@@ -200,10 +200,17 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
     : ["recreate-product-hero", "recreate-detail-page"].includes(workflowKey)
     ? "参考输入图的构图层级、留白和商业视觉方向，使用同一商品制作原创电商视觉；不得复制原图的文字、品牌、人物或具体画面，不添加水印。"
     : "保持商品主体的形状、颜色、商标和关键细节准确，不改变产品本身，不添加文字、水印或额外商品。";
+  const recreateReferencePrompt = workflowKey === "recreate-reference-image" && input.scene === "人物多视图"
+    ? `生成人物/模特多视图参考板。第一张输入图如果出现真人、模特、人体轮廓、头发、脸、手臂、腿或穿在人身上的服装，必须把“完整人物”作为唯一主主体来提取和重建；服装只是穿在人物身上的附着物，不得把服装单独当商品。输出必须包含完整头部、肩颈、躯干、手臂、腿部和脚部的多角度人体，不允许只有裙子、空心衣服、衣架、平铺服装或商品白底图。所有脸部需要隐私化弱化或遮挡。画幅比例${input.aspectRatio}。`
+    : workflowKey === "recreate-reference-image" && input.scene === "场景多视图"
+    ? `生成场景/背景多视图参考板。以空间、光线、背景层次、材质和可摆放主体区域为核心，不要把画面中的单个商品或人物当成唯一主主体。画幅比例${input.aspectRatio}。`
+    : workflowKey === "recreate-reference-image"
+    ? `生成商品/物体多视图参考板。以用户选择的商品/物体为主体，保留轮廓、结构、颜色、材质和关键卖点；如果用户选择商品类型，即使输入是服装静物也不要补成人物模特。不要套用普通商品主图逻辑。画幅比例${input.aspectRatio}。`
+    : "";
   const taskPrompt = workflowKey === "model-wear"
     ? `以第一张图片中的模特为主体，将后续图片中的服装或商品自然穿戴到模特身上。保持模特身份、面部、体型和人体结构自然，服装版型、材质、颜色和图案准确。场景为${input.scene}，风格为${input.style}，${variation}，画幅比例${input.aspectRatio}。`
     : workflowKey === "recreate-reference-image"
-    ? `生成电商复刻流程使用的素材多视图参考板。严格以用户补充要求中的任务类型为准区分模特/人物、商品/物体、场景/背景；不要套用普通商品主图逻辑。画幅比例${input.aspectRatio}。`
+    ? recreateReferencePrompt
     : workflowKey === "hd-enhance"
     ? `对原图进行${input.scene}高清优化，策略为${input.style}。重点修复压缩噪点、边缘锯齿和模糊细节，保持画面自然，避免过度锐化、塑料感或内容重绘。`
     : workflowKey === "white-background"

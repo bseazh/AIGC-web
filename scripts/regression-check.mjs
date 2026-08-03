@@ -207,6 +207,16 @@ const checks = [
     "即使输入图只有裙子、衣服或局部穿搭，也必须补全为完整虚拟真人模特",
   ],
   [
+    "Recreate video person multi-view prompt locks the full person as subject",
+    "app/components/recreate-video-page.tsx",
+    "必须把“完整人物/模特”作为唯一主主体",
+  ],
+  [
+    "Recreate reference worker locks person scene to full body subject",
+    "scripts/worker.mjs",
+    "必须把“完整人物”作为唯一主主体来提取和重建",
+  ],
+  [
     "Recreate video product multi-view prompt must not turn clothing stills into models",
     "app/components/recreate-video-page.tsx",
     "如果输入是服装静物且用户选择了商品类型，则输出服装商品多视图；不要补成人物模特",
