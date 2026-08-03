@@ -242,6 +242,31 @@ const checks = [
     "outputsPerTask: 1",
   ],
   [
+    "Recreate reference workflow is powered by Google image credentials",
+    "lib/product-config.ts",
+    "GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.NANO_BANANA_API_KEY",
+  ],
+  [
+    "Worker routes recreate references to Nano Banana image generation",
+    "scripts/worker.mjs",
+    "createGeminiImage(inputUrls, prompt, generationTaskId, index, input.aspectRatio)",
+  ],
+  [
+    "Gemini image generation asks for text and image modalities",
+    "scripts/worker.mjs",
+    'responseModalities: ["TEXT", "IMAGE"]',
+  ],
+  [
+    "Gemini image generation supports a configurable relay endpoint",
+    "scripts/worker.mjs",
+    "GOOGLE_AI_BASE_URL",
+  ],
+  [
+    "Gemini image generation parses inline image data",
+    "scripts/worker.mjs",
+    "inlineData || imagePart?.inline_data",
+  ],
+  [
     "Recreate video face mask fallback does not cover landscape identity boards",
     "app/components/recreate-video-page.tsx",
     "canvas.width < canvas.height ? fallbackFaceRegions",

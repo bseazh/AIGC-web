@@ -80,6 +80,12 @@ function sophnetUrl(path) {
   return `${String(process.env.AI_BASE_URL || "").replace(/\/$/, "")}${path}`;
 }
 
+function googleAiUrl(path, apiKey) {
+  const baseUrl = (process.env.GOOGLE_AI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
+  const separator = path.includes("?") ? "&" : "?";
+  return `${baseUrl}${path}${separator}key=${encodeURIComponent(apiKey)}`;
+}
+
 async function sophnet(path, init = {}, audit = {}) {
   if (!process.env.AI_API_KEY || !process.env.AI_MODEL || !process.env.AI_BASE_URL) {
     throw new Error("Image provider is not configured");
@@ -111,6 +117,62 @@ async function createImageTask(inputUrls, prompt, generationTaskId, outputIndex)
   const taskId = payload?.output?.taskId;
   if (!taskId) throw new Error("SophNet did not return taskId");
   return taskId;
+}
+
+async function createGeminiImage(inputUrls, prompt, generationTaskId, outputIndex, aspectRatio = "1:1") {
+  const apiKey = process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.NANO_BANANA_API_KEY;
+  const model = process.env.GOOGLE_IMAGE_MODEL || "gemini-2.5-flash-image";
+  if (!apiKey) throw new Error("GOOGLE_AI_API_KEY is required for Nano Banana image generation");
+  const imageParts = [];
+  for (const [index, url] of inputUrls.entries()) {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Could not read Gemini input image ${response.status}`);
+    const contentType = response.headers.get("content-type")?.split(";")[0] || "image/png";
+    const buffer = Buffer.from(await response.arrayBuffer());
+    imageParts.push({
+      inline_data: {
+        mime_type: contentType,
+        data: buffer.toString("base64"),
+      },
+    });
+    if (index >= 2 && model === "gemini-2.5-flash-image") break;
+  }
+  const requestBody = {
+    contents: [{
+      parts: [
+        { text: prompt },
+        ...imageParts,
+      ],
+    }],
+    generationConfig: {
+      responseModalities: ["TEXT", "IMAGE"],
+      responseFormat: {
+        image: {
+          aspectRatio,
+        },
+      },
+    },
+  };
+  const response = await fetch(googleAiUrl(`/models/${model}:generateContent`, apiKey), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(requestBody),
+  });
+  const payload = await response.json().catch(() => null);
+  await logProviderCall(generationTaskId, "google-gemini", "generate_image", { model, outputIndex, inputCount: imageParts.length, promptLength: prompt.length, aspectRatio }, response.status, payload, response.ok ? null : "GEMINI_IMAGE_FAILED", payload?.responseId || response.headers.get("x-request-id"));
+  const parts = payload?.candidates?.[0]?.content?.parts || [];
+  const imagePart = parts.find((part) => part?.inlineData?.data || part?.inline_data?.data);
+  const inlineData = imagePart?.inlineData || imagePart?.inline_data;
+  if (!response.ok || !inlineData?.data) {
+    const message = payload?.error?.message || payload?.message || "image generation failed";
+    throw new Error(`Gemini ${response.status}: ${message}`);
+  }
+  const buffer = Buffer.from(inlineData.data, "base64");
+  const contentType = inlineData.mimeType || inlineData.mime_type || "image/png";
+  const extension = contentType === "image/jpeg" ? "jpg" : contentType === "image/webp" ? "webp" : "png";
+  const key = `temporary/gemini/${generationTaskId}/${outputIndex + 1}-${randomUUID()}.${extension}`;
+  await putObject(key, buffer, contentType);
+  return { url: await cosUrl(key, "GET", 3600), temporaryKey: key, provider: "google-gemini", model };
 }
 
 function findVideoUrl(value) {
@@ -231,8 +293,11 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
     taskPrompt,
     input.prompt ? `用户补充要求：${input.prompt}` : "",
   ].filter(Boolean).join("\n");
+  if (workflowKey === "recreate-reference-image") {
+    return createGeminiImage(inputUrls, prompt, generationTaskId, index, input.aspectRatio);
+  }
   const providerTaskId = await createImageTask(inputUrls, prompt, generationTaskId, index);
-  return waitForImage(providerTaskId, generationTaskId, index);
+  return { url: await waitForImage(providerTaskId, generationTaskId, index), temporaryKey: null, provider: "sophnet", model: process.env.AI_MODEL };
 }
 
 async function generateVideo(inputUrls, input, workflowKey, taskId) {
@@ -432,7 +497,7 @@ const worker = new Worker("generation", async (job) => {
       ? [await generateMix(inputUrls, task.input_json, task)]
       : ["product-ad-video", "recreate-video", "seedance-video"].includes(task.workflow_key)
       ? [{ url: await generateVideo(inputUrls, task.input_json, task.workflow_key, task.id), temporaryKey: null }]
-      : (await Promise.all(Array.from({ length: task.input_json.outputs || 4 }, (_, index) => generateOne(inputUrls, task.input_json, index, task.workflow_key, task.id)))).map((url) => ({ url, temporaryKey: null }));
+      : await Promise.all(Array.from({ length: task.input_json.outputs || 4 }, (_, index) => generateOne(inputUrls, task.input_json, index, task.workflow_key, task.id)));
     temporaryKeys = temporaryOutputs.flatMap((output) => output.temporaryKey ? [output.temporaryKey] : []);
     const savedAssets = [];
     for (const [index, output] of temporaryOutputs.entries()) {
@@ -440,6 +505,8 @@ const worker = new Worker("generation", async (job) => {
       if (!response.ok) throw new Error(`Could not download provider output ${response.status}`);
       const buffer = Buffer.from(await response.arrayBuffer());
       const isVideoTask = ["product-ad-video", "recreate-video", "seedance-video", "video-mix"].includes(task.workflow_key);
+      const provider = output.provider || (isVideoTask ? "ark" : "sophnet");
+      const model = output.model || (isVideoTask ? (process.env.ARK_MODEL || "doubao-seedance-2-0-260128") : process.env.AI_MODEL);
       const contentType = response.headers.get("content-type")?.split(";")[0] || (isVideoTask ? "video/mp4" : "image/png");
       const extension = contentType === "image/jpeg" ? "jpg" : contentType === "image/webp" ? "webp" : contentType === "video/webm" ? "webm" : contentType.startsWith("video/") ? "mp4" : "png";
       const key = `users/${task.user_id}/outputs/${task.id}/${index + 1}-${randomUUID()}.${extension}`;
@@ -449,7 +516,7 @@ const worker = new Worker("generation", async (job) => {
       const asset = await pool.query(
         `INSERT INTO assets (owner_id, kind, storage_key, mime_type, byte_size, audit_status, original_name, metadata_json)
          VALUES ($1, 'OUTPUT', $2, $3, $4, $5, $6, $7::jsonb) RETURNING id`,
-        [task.user_id, key, contentType, buffer.length, auditStatus, `${task.workflow_key}-${index + 1}.${extension}`, JSON.stringify({ taskId: task.id, workflowKey: task.workflow_key, provider: isVideoTask ? "ark" : "sophnet", model: isVideoTask ? (process.env.ARK_MODEL || "doubao-seedance-2-0-260128") : process.env.AI_MODEL, aiGenerated: true, aiContentLabel: "AI_GENERATED", provenance: { generatedAt: new Date().toISOString(), workerId }, moderation: { status: contentReviewEnabled ? "PENDING_REVIEW" : "BYPASSED" } })],
+        [task.user_id, key, contentType, buffer.length, auditStatus, `${task.workflow_key}-${index + 1}.${extension}`, JSON.stringify({ taskId: task.id, workflowKey: task.workflow_key, provider, model, aiGenerated: true, aiContentLabel: "AI_GENERATED", provenance: { generatedAt: new Date().toISOString(), workerId }, moderation: { status: contentReviewEnabled ? "PENDING_REVIEW" : "BYPASSED" } })],
       );
       savedAssets.push({ assetId: asset.rows[0].id, storageKey: key });
     }
