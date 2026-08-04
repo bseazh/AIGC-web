@@ -267,9 +267,14 @@ const checks = [
     "GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.NANO_BANANA_API_KEY",
   ],
   [
-    "Worker routes recreate references to Nano Banana image generation",
+    "Worker routes recreate references to Nano Banana image generation with fallback",
     "scripts/worker.mjs",
-    "createGeminiImage(inputUrls, prompt, generationTaskId, index, input.aspectRatio)",
+    "createGeminiImageWithSophnetFallback(inputUrls, prompt, generationTaskId, index, input.aspectRatio)",
+  ],
+  [
+    "Gemini image generation falls back to SophNet when configured",
+    "scripts/worker.mjs",
+    "gemini_image_fallback_to_sophnet",
   ],
   [
     "Gemini image generation asks for text and image modalities",

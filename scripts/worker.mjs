@@ -154,6 +154,11 @@ async function createImageTask(inputUrls, prompt, generationTaskId, outputIndex)
   return taskId;
 }
 
+async function createSophnetImage(inputUrls, prompt, generationTaskId, outputIndex) {
+  const providerTaskId = await createImageTask(inputUrls, prompt, generationTaskId, outputIndex);
+  return { url: await waitForImage(providerTaskId, generationTaskId, outputIndex), temporaryKey: null, provider: "sophnet", model: process.env.AI_MODEL };
+}
+
 async function createGeminiImage(inputUrls, prompt, generationTaskId, outputIndex, aspectRatio = "1:1") {
   const apiKey = process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.NANO_BANANA_API_KEY;
   const model = process.env.GOOGLE_IMAGE_MODEL || "gemini-2.5-flash-image";
@@ -209,6 +214,22 @@ async function createGeminiImage(inputUrls, prompt, generationTaskId, outputInde
   const key = `temporary/gemini/${generationTaskId}/${outputIndex + 1}-${randomUUID()}.${extension}`;
   await putObject(key, buffer, contentType);
   return { url: await cosUrl(key, "GET", 3600), temporaryKey: key, provider: "google-gemini", model };
+}
+
+async function createGeminiImageWithSophnetFallback(inputUrls, prompt, generationTaskId, outputIndex, aspectRatio = "1:1") {
+  try {
+    return await createGeminiImage(inputUrls, prompt, generationTaskId, outputIndex, aspectRatio);
+  } catch (error) {
+    if (!sophnetImageConfigured()) throw error;
+    const geminiMessage = error instanceof Error ? error.message : "Gemini image generation failed";
+    log("warn", "gemini_image_fallback_to_sophnet", { taskId: generationTaskId, outputIndex, reason: geminiMessage.slice(0, 200) });
+    try {
+      return await createSophnetImage(inputUrls, prompt, generationTaskId, outputIndex);
+    } catch (fallbackError) {
+      const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : "SophNet fallback failed";
+      throw new Error(`${geminiMessage}; SophNet fallback failed: ${fallbackMessage}`);
+    }
+  }
 }
 
 function findVideoUrl(value) {
@@ -358,16 +379,14 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
   ].filter(Boolean).join("\n");
   if (workflowKey === "recreate-reference-image") {
     if (geminiImageConfigured()) {
-      return createGeminiImage(inputUrls, prompt, generationTaskId, index, input.aspectRatio);
+      return createGeminiImageWithSophnetFallback(inputUrls, prompt, generationTaskId, index, input.aspectRatio);
     }
-    const providerTaskId = await createImageTask(inputUrls, prompt, generationTaskId, index);
-    return { url: await waitForImage(providerTaskId, generationTaskId, index), temporaryKey: null, provider: "sophnet", model: process.env.AI_MODEL };
+    return createSophnetImage(inputUrls, prompt, generationTaskId, index);
   }
   if (!sophnetImageConfigured() && geminiImageConfigured()) {
     return createGeminiImage(inputUrls, prompt, generationTaskId, index, geminiAspectRatio(input.aspectRatio));
   }
-  const providerTaskId = await createImageTask(inputUrls, prompt, generationTaskId, index);
-  return { url: await waitForImage(providerTaskId, generationTaskId, index), temporaryKey: null, provider: "sophnet", model: process.env.AI_MODEL };
+  return createSophnetImage(inputUrls, prompt, generationTaskId, index);
 }
 
 async function generateVideo(inputUrls, input, workflowKey, taskId) {
