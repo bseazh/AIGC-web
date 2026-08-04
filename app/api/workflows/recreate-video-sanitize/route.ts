@@ -27,6 +27,12 @@ function validUuid(value: unknown): value is string {
   );
 }
 
+function targetSize(aspectRatio: unknown) {
+  return aspectRatio === "16:9"
+    ? { width: 1280, height: 720, label: "16:9" }
+    : { width: 720, height: 1280, label: "9:16" };
+}
+
 export async function POST(request: NextRequest) {
   const user = await authenticatedUser(request);
   if (!user) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401 });
@@ -51,6 +57,7 @@ export async function POST(request: NextRequest) {
   const directory = await mkdtemp(join(tmpdir(), "recreate-video-sanitize-"));
   const inputPath = join(directory, "source.mp4");
   const outputPath = join(directory, "privacy-structure-reference.mp4");
+  const size = targetSize(body?.aspectRatio);
   try {
     await downloadObjectToFile(source.storage_key, inputPath);
     await execute(
@@ -66,7 +73,9 @@ export async function POST(request: NextRequest) {
         [
           "fps=15",
           "scale=360:-2:force_original_aspect_ratio=decrease",
-          "boxblur=8:2",
+          "boxblur=16:2",
+          `scale=${size.width}:${size.height}:force_original_aspect_ratio=decrease`,
+          `pad=${size.width}:${size.height}:(ow-iw)/2:(oh-ih)/2:color=black`,
           "drawgrid=w=iw/6:h=ih/10:t=1:c=white@0.18",
           "format=yuv420p",
         ].join(","),
@@ -97,7 +106,9 @@ export async function POST(request: NextRequest) {
       durationSeconds: Math.min(15, Number(source.metadata_json?.durationSeconds) || 15),
       sourceAssetId: source.id,
       privacyReference: true,
-      transform: "low-resolution-blur-grid-no-audio",
+      transform: "strong-blur-grid-no-audio-minimum-ark-resolution",
+      aspectRatio: size.label,
+      pixelCount: size.width * size.height,
       generatedAt: new Date().toISOString(),
       moderation: reviewEnabled
         ? { status: "PENDING_REVIEW", submittedAt: new Date().toISOString() }
@@ -121,7 +132,7 @@ export async function POST(request: NextRequest) {
       url: await createSignedObjectUrl(storageKey, "GET", 3600),
       byteSize: outputSize,
       durationSeconds: metadata.durationSeconds,
-      message: "已生成轻量合规参考视频",
+      message: "已生成整体模糊合规参考视频",
     });
   } catch (error) {
     console.error("recreate video sanitize failed", error);

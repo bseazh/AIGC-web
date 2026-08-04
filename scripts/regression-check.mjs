@@ -367,9 +367,9 @@ const checks = [
     "mp4OnlyTest ? null : await prepareKeyframeCollageReference()",
   ],
   [
-    "Recreate video can create lightweight compliant reference videos",
+    "Recreate video can create blurred compliant reference videos",
     "app/components/recreate-video-page.tsx",
-    "轻量合规参考视频",
+    "整体模糊合规参考视频",
   ],
   [
     "Recreate video compliant reference mode calls the sanitize endpoint",
@@ -377,9 +377,14 @@ const checks = [
     "/api/workflows/recreate-video-sanitize/",
   ],
   [
-    "Recreate video sanitize endpoint removes audio and adds grid blur",
+    "Recreate video sanitize endpoint removes audio and meets Ark pixel floor",
     "app/api/workflows/recreate-video-sanitize/route.ts",
-    "low-resolution-blur-grid-no-audio",
+    "strong-blur-grid-no-audio-minimum-ark-resolution",
+  ],
+  [
+    "Recreate video sanitize endpoint outputs at least 720p reference video",
+    "app/api/workflows/recreate-video-sanitize/route.ts",
+    "width: 720, height: 1280",
   ],
   [
     "Recreate video supports deterministic face mask strengthening",

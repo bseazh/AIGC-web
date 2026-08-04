@@ -1962,11 +1962,11 @@ export function RecreateVideoPage() {
     const response = await fetch("/api/workflows/recreate-video-sanitize/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ assetId }),
+      body: JSON.stringify({ assetId, aspectRatio: ratio }),
     });
     const body = await response.json().catch(() => null);
     if (!response.ok) throw new Error(body?.message || "合规参考视频生成失败");
-    setNotice("已生成轻量合规参考视频，将用于提交给视频模型");
+    setNotice("已生成整体模糊合规参考视频，将用于提交给视频模型");
     window.setTimeout(() => setNotice(""), 2600);
     return body.assetId as string;
   };
@@ -3429,7 +3429,7 @@ export function RecreateVideoPage() {
       </label>
       <p className="recreate-test-note">
         {compliantReferenceVideo && !mp4OnlyTest
-          ? "提交前会先生成低清、模糊、去音频、带网格的结构参考视频，尽量保留动作节奏并降低真人可识别度。"
+          ? "提交前会先生成整体模糊、去音频、带网格且满足模型最低分辨率的结构参考视频，尽量保留动作节奏并降低真人可识别度。"
           : mp4OnlyTest
             ? "MP4 测试模式会跳过合规处理，用于验证原视频是否被 Ark 接受。"
             : "当前会直接提交原始对标视频，含真人时可能被 Ark 拒绝。"}
