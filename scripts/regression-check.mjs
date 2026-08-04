@@ -222,9 +222,9 @@ const checks = [
     "第一步必须先生成完整头部和完整脸部轮廓",
   ],
   [
-    "Recreate video person prompt uses a single character identity board",
+    "Recreate video person prompt uses a real studio contact sheet",
     "app/components/recreate-video-page.tsx",
-    "创建一张 16:9 人物角色身份板",
+    "真实摄影棚多机位试衣参考图",
   ],
   [
     "Recreate video person prompt requires auxiliary side and back views",
@@ -232,24 +232,24 @@ const checks = [
     "背面全身、侧面全身、3/4 角度全身",
   ],
   [
-    "Recreate reference worker generates a single character identity board",
+    "Recreate reference worker generates a real studio contact sheet",
     "scripts/worker.mjs",
-    "创建一张 16:9 人物/模特角色身份板",
+    "真实摄影棚多机位试衣参考图",
   ],
   [
     "Recreate reference worker requires realistic human photo style",
     "scripts/worker.mjs",
-    "必须是真人摄影风格的虚拟模特多角度参考板",
+    "真实皮肤纹理、真实布料、自然站姿",
   ],
   [
     "Recreate reference worker requires face close-up studies",
     "scripts/worker.mjs",
-    "必须单独包含 3-5 个脸部/头部特写小图",
+    "脸部/头部近景控制在 2-3 个即可",
   ],
   [
     "Recreate reference worker asks face close-ups to mask different parts",
     "scripts/worker.mjs",
-    "部分特写只遮额头",
+    "部分只做很轻的局部隐私遮挡",
   ],
   [
     "Recreate reference worker preserves input face structure",
@@ -312,9 +312,9 @@ const checks = [
     "canvas.width < canvas.height ? fallbackFaceRegions",
   ],
   [
-    "Recreate reference worker avoids masking faces during generation",
+    "Recreate reference worker avoids heavy face masks during generation",
     "scripts/worker.mjs",
-    "不要在生图阶段遮挡脸部",
+    "不要用粗重马赛克或大面积白条破坏真实感",
   ],
   [
     "Recreate video product multi-view prompt must not turn clothing stills into models",
