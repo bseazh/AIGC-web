@@ -838,6 +838,71 @@ export function RecreateVideoPage() {
       video.src = videoUrl;
     });
 
+  const captureVideoFrameForCanvas = (videoUrl: string, time: number) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+      const video = document.createElement("video");
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+      if (!context) {
+        reject(new Error("当前浏览器无法截取关键帧"));
+        return;
+      }
+      video.crossOrigin = "anonymous";
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = "auto";
+      const cleanup = () => {
+        video.removeAttribute("src");
+        video.load();
+      };
+      video.onerror = () => {
+        cleanup();
+        reject(new Error("视频关键帧读取失败"));
+      };
+      video.onloadedmetadata = () => {
+        const targetTime = Math.min(Math.max(0, time), Math.max(0, video.duration - 0.05));
+        const timeout = window.setTimeout(() => {
+          cleanup();
+          reject(new Error("视频关键帧定位超时"));
+        }, 5000);
+        video.onseeked = () => {
+          window.clearTimeout(timeout);
+          try {
+            canvas.width = video.videoWidth || 720;
+            canvas.height = video.videoHeight || 1280;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const image = new Image();
+            image.onload = () => {
+              cleanup();
+              resolve(image);
+            };
+            image.onerror = () => {
+              cleanup();
+              reject(new Error("视频关键帧截图加载失败"));
+            };
+            image.src = canvas.toDataURL("image/jpeg", 0.86);
+          } catch (error) {
+            cleanup();
+            reject(error);
+          }
+        };
+        video.currentTime = targetTime;
+      };
+      video.src = videoUrl;
+    });
+
+  const drawKeyframePlaceholder = (context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, label: string) => {
+    context.save();
+    context.fillStyle = "#edf4fa";
+    context.fillRect(x, y, width, height);
+    context.fillStyle = "#7a8fa4";
+    context.font = "22px sans-serif";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(label, x + width / 2, y + height / 2);
+    context.restore();
+  };
+
   const openLibrary = async (kind: SourceKind) => {
     setLibraryKind(kind);
     setAssetsLoading(true);
@@ -1660,22 +1725,28 @@ export function RecreateVideoPage() {
     context.textBaseline = "middle";
     context.textAlign = "left";
     for (const [index, frame] of frames.entries()) {
-      const image = await loadImageForCanvas(frame.url);
       const column = index % columns;
       const row = Math.floor(index / columns);
       const x = padding + column * (cellWidth + gap);
       const y = padding + row * (cellHeight + labelHeight + gap);
-      const scale = Math.max(cellWidth / image.naturalWidth, cellHeight / image.naturalHeight);
-      const drawWidth = image.naturalWidth * scale;
-      const drawHeight = image.naturalHeight * scale;
-      const drawX = x + (cellWidth - drawWidth) / 2;
-      const drawY = y + (cellHeight - drawHeight) / 2;
-      context.save();
-      context.beginPath();
-      context.roundRect(x, y, cellWidth, cellHeight, 18);
-      context.clip();
-      context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
-      context.restore();
+      const image = await loadImageForCanvas(frame.url)
+        .catch(() => sourceSelection?.preview ? captureVideoFrameForCanvas(sourceSelection.preview, frame.time) : null)
+        .catch(() => null);
+      if (image) {
+        const scale = Math.max(cellWidth / image.naturalWidth, cellHeight / image.naturalHeight);
+        const drawWidth = image.naturalWidth * scale;
+        const drawHeight = image.naturalHeight * scale;
+        const drawX = x + (cellWidth - drawWidth) / 2;
+        const drawY = y + (cellHeight - drawHeight) / 2;
+        context.save();
+        context.beginPath();
+        context.roundRect(x, y, cellWidth, cellHeight, 18);
+        context.clip();
+        context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+        context.restore();
+      } else {
+        drawKeyframePlaceholder(context, x, y, cellWidth, cellHeight, "关键帧暂不可用");
+      }
       context.fillStyle = "rgba(15, 23, 42, 0.86)";
       context.fillRect(x, y + cellHeight - labelHeight, cellWidth, labelHeight);
       context.fillStyle = "#ffffff";

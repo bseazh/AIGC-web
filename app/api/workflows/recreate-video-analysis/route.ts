@@ -161,7 +161,7 @@ async function extractFrames(cache: {
       frames.push({
         time: sourceSecond,
         storageKey,
-        url: await createSignedObjectUrl(storageKey, "GET", 3600),
+        url: await createSignedObjectUrl(storageKey, "GET", 24 * 3600),
       });
     }
     await db.query(

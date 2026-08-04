@@ -422,6 +422,16 @@ const checks = [
     "createKeyframeCollageAsset",
   ],
   [
+    "Recreate video keyframe collage falls back to video capture",
+    "app/components/recreate-video-page.tsx",
+    "captureVideoFrameForCanvas(sourceSelection.preview, frame.time)",
+  ],
+  [
+    "Recreate video extracted keyframe URLs last through long editing sessions",
+    "app/api/workflows/recreate-video-analysis/route.ts",
+    "24 * 3600",
+  ],
+  [
     "Recreate video prompt identifies the submitted keyframe collage",
     "app/components/recreate-video-page.tsx",
     "第${collageImageIndex}张参考图是一张由已选关键画面拼接而成的十二宫格参考板",
