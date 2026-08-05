@@ -2067,9 +2067,6 @@ export function RecreateVideoPage() {
           url: douyinInput,
           action: "import",
           cacheId: douyinAnalysis.cacheId,
-          ...(douyinAnalysis.durationSeconds > 15
-            ? { startSeconds: 0, clipDurationSeconds: 15 }
-            : {}),
         }),
       });
       const body = await response.json().catch(() => null);
@@ -2425,9 +2422,9 @@ export function RecreateVideoPage() {
       const productAssetIds = await Promise.all(products.map(upload));
       const confirmedReferenceAssetId = referenceImage ? await upload(referenceImage) : null;
       const assetIds = [
+        referenceVideoAssetId,
         ...(keyframeCollageAssetId ? [keyframeCollageAssetId] : []),
         ...productAssetIds,
-        referenceVideoAssetId,
         ...(confirmedReferenceAssetId ? [confirmedReferenceAssetId] : []),
       ];
       const collageImageIndex = keyframeCollageAssetId ? 1 : null;
@@ -2437,6 +2434,7 @@ export function RecreateVideoPage() {
         compliantReferenceVideo
           ? "对标视频已先转换为动作结构参考视频：去除原音频并转为边缘轮廓线稿，用于参考镜头节奏、运镜、构图、人体姿态和动作轮廓。"
           : "当前直接提交原始对标视频作为 reference_video。",
+        `动作复刻优先级：请先读取第一段 reference_video，完整提取从开始到结束的动作走势；如果生成时长 ${duration} 秒短于原视频或所选片段，请按比例压缩完整舞蹈/手势/走位段落，不要改成站立走秀、慢速摆拍或随机转身。`,
         selectedKeyframes.length
           ? `已确认关键画面时间点：${selectedKeyframes.map((frame) => `${frame.time.toFixed(1)}s`).join("、")}。请以这些画面作为复刻参考节点，保持原视频镜头节奏但重生成原创内容。`
           : "",

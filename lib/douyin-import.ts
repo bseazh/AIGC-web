@@ -174,7 +174,7 @@ export function resolveDouyinClip(
   durationValue?: unknown,
 ): DouyinClip {
   const sourceDuration = validateSourceDuration(sourceDurationValue);
-  if (sourceDuration <= DOUYIN_MAX_DURATION_SECONDS && durationValue == null) {
+  if (durationValue == null) {
     return {
       startSeconds: 0,
       endSeconds: sourceDuration,
@@ -382,7 +382,9 @@ async function importDouyinVideoFile(
     const probe = JSON.parse(probeResult.stdout) as {
       format?: { duration?: string; format_name?: string };
     };
-    const durationSeconds = validateDouyinDuration(probe.format?.duration);
+    const durationSeconds = clip.isFullVideo
+      ? validateSourceDuration(probe.format?.duration)
+      : validateDouyinDuration(probe.format?.duration);
     if (
       !String(probe.format?.format_name || "")
         .split(",")

@@ -19,6 +19,9 @@ const execute = promisify(execFile);
 const ffmpegPath =
   process.env.FFMPEG_PATH ||
   (process.platform === "darwin" ? "ffmpeg" : "/usr/bin/ffmpeg");
+const ffprobePath =
+  process.env.FFPROBE_PATH ||
+  (process.platform === "darwin" ? "ffprobe" : "/usr/bin/ffprobe");
 
 function validUuid(value: unknown): value is string {
   return (
@@ -31,6 +34,19 @@ function targetSize(aspectRatio: unknown) {
   return aspectRatio === "16:9"
     ? { width: 1280, height: 720, label: "16:9" }
     : { width: 720, height: 1280, label: "9:16" };
+}
+
+async function inspectDuration(filePath: string, fallback: unknown) {
+  const fallbackDuration = Number(fallback);
+  if (Number.isFinite(fallbackDuration) && fallbackDuration > 0) return fallbackDuration;
+  const result = await execute(
+    ffprobePath,
+    ["-v", "error", "-show_entries", "format=duration", "-of", "json", filePath],
+    { timeout: 15_000, maxBuffer: 1024 * 1024 },
+  );
+  const probe = JSON.parse(result.stdout) as { format?: { duration?: string } };
+  const duration = Number(probe.format?.duration);
+  return Number.isFinite(duration) && duration > 0 ? duration : 15;
 }
 
 export async function POST(request: NextRequest) {
@@ -60,17 +76,20 @@ export async function POST(request: NextRequest) {
   const size = targetSize(body?.aspectRatio);
   try {
     await downloadObjectToFile(source.storage_key, inputPath);
+    const sourceDuration = await inspectDuration(inputPath, source.metadata_json?.durationSeconds);
+    const targetDuration = Math.min(15, Math.round(sourceDuration * 1000) / 1000);
+    const speed = sourceDuration > 15 ? sourceDuration / 15 : 1;
+    const timingFilters = speed > 1.001 ? [`setpts=PTS/${speed.toFixed(6)}`] : [];
     await execute(
       ffmpegPath,
       [
         "-y",
         "-i",
         inputPath,
-        "-t",
-        "15",
         "-an",
         "-vf",
         [
+          ...timingFilters,
           "fps=15",
           "scale=720:-2:force_original_aspect_ratio=decrease",
           "format=gray",
@@ -88,6 +107,8 @@ export async function POST(request: NextRequest) {
         "ultrafast",
         "-crf",
         "28",
+        "-t",
+        "15",
         "-movflags",
         "+faststart",
         outputPath,
@@ -106,10 +127,12 @@ export async function POST(request: NextRequest) {
     await uploadLocalObject(storageKey, outputPath, "video/mp4");
     const reviewEnabled = contentReviewEnabled();
     const metadata = {
-      durationSeconds: Math.min(15, Number(source.metadata_json?.durationSeconds) || 15),
+      durationSeconds: targetDuration,
+      sourceDurationSeconds: Math.round(sourceDuration * 1000) / 1000,
+      speedFactor: Math.round(speed * 1000) / 1000,
       sourceAssetId: source.id,
       privacyReference: true,
-      transform: "edge-motion-structure-no-audio-minimum-ark-resolution",
+      transform: "edge-motion-structure-no-audio-minimum-ark-resolution-time-compressed",
       aspectRatio: size.label,
       pixelCount: size.width * size.height,
       generatedAt: new Date().toISOString(),

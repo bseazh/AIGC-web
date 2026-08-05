@@ -279,15 +279,15 @@ async function createVideoTask(inputUrls, input, workflowKey, taskId) {
   };
   let { response, payload } = await sendArkRequest(requestBody, mimeTypes);
   const errorMessage = String(payload?.error?.message || "");
+  const privacyCollageContentIndex = content.findIndex((item) => item.type === "image_url" && /(?:隐私结构|动作结构)十二宫格/.test(input.prompt || ""));
   const canDropPrivacyCollage =
     workflowKey === "recreate-video" &&
-    content[1]?.type === "image_url" &&
-    /(?:隐私结构|动作结构)十二宫格/.test(input.prompt || "") &&
-    /content\[1\].*real person/i.test(errorMessage);
+    privacyCollageContentIndex > 0 &&
+    new RegExp(`content\\[${privacyCollageContentIndex}\\].*real person`, "i").test(errorMessage);
   if ((!response.ok || !payload?.id) && canDropPrivacyCollage) {
-    const retryContent = [content[0], ...content.slice(2)];
+    const retryContent = content.filter((_, index) => index !== privacyCollageContentIndex);
     const retryBody = { ...requestBody, content: retryContent };
-    ({ response, payload } = await sendArkRequest(retryBody, ["dropped_privacy_keyframe_collage", ...mimeTypes.slice(1)], "drop_privacy_keyframe_collage_real_person_rejection"));
+    ({ response, payload } = await sendArkRequest(retryBody, ["dropped_privacy_keyframe_collage", ...mimeTypes.filter((_, index) => index !== privacyCollageContentIndex - 1)], "drop_privacy_keyframe_collage_real_person_rejection"));
   }
   if (!response.ok || !payload?.id) throw new Error(`Ark ${response.status}: ${payload?.error?.message || "task creation failed"}`);
   return payload.id;

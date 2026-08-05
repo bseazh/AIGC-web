@@ -384,7 +384,12 @@ const checks = [
   [
     "Recreate video sanitize endpoint creates edge motion video and meets Ark pixel floor",
     "app/api/workflows/recreate-video-sanitize/route.ts",
-    "edge-motion-structure-no-audio-minimum-ark-resolution",
+    "edge-motion-structure-no-audio-minimum-ark-resolution-time-compressed",
+  ],
+  [
+    "Recreate video sanitize endpoint compresses long references instead of clipping",
+    "app/api/workflows/recreate-video-sanitize/route.ts",
+    "setpts=PTS/${speed.toFixed(6)}",
   ],
   [
     "Recreate video sanitize endpoint outputs at least 720p reference video",
@@ -442,9 +447,24 @@ const checks = [
     "Math.sqrt(gx * gx + gy * gy)",
   ],
   [
-    "Recreate video submits keyframe collage before replacement assets",
+    "Recreate video submits reference video before keyframe collage",
     "app/components/recreate-video-page.tsx",
-    "...(keyframeCollageAssetId ? [keyframeCollageAssetId] : [])",
+    "referenceVideoAssetId",
+  ],
+  [
+    "Recreate video prompt asks model to time-compress full motion",
+    "app/components/recreate-video-page.tsx",
+    "按比例压缩完整舞蹈/手势/走位段落",
+  ],
+  [
+    "Recreate video imports full Douyin references for sanitize compression",
+    "app/components/recreate-video-page.tsx",
+    "cacheId: douyinAnalysis.cacheId",
+  ],
+  [
+    "Douyin full reference import can exceed Ark task duration before sanitize",
+    "lib/douyin-import.ts",
+    "clip.isFullVideo",
   ],
   [
     "Recreate video keyframe collage falls back to video capture",
@@ -489,7 +509,7 @@ const checks = [
   [
     "Recreate video worker can drop rejected system collage and retry",
     "scripts/worker.mjs",
-    "drop_privacy_keyframe_collage_real_person_rejection",
+    "privacyCollageContentIndex",
   ],
   [
     "Recreate video task allows one system keyframe collage image",
