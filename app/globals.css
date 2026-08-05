@@ -906,6 +906,18 @@ a { color: inherit; text-decoration: none; }
 .admin-summary-grid article>svg,.admin-summary-grid>a>svg { grid-row:1/4; color:#1685e8; }
 .admin-summary-grid span,.admin-summary-grid small { color:#71839a; font-size:11px; }
 .admin-summary-grid strong { color:#253951; font-size:25px; }
+.admin-stats-panel { margin:0 0 18px; padding:18px; border:1px solid #dfe8f4; border-radius:15px; background:rgba(255,255,255,.94); box-shadow:0 10px 28px rgba(43,77,118,.05); }
+.admin-stats-panel>header { margin:0 0 14px; display:flex; align-items:flex-end; justify-content:space-between; gap:16px; }
+.admin-stats-panel h2 { margin:5px 0 0; color:#2f435c; font-size:18px; }
+.admin-stats-panel small,.admin-stats-panel span { color:#75869a; font-size:12px; }
+.admin-stats-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.admin-stats-grid article { padding:14px; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; border:1px solid #e3ebf5; border-radius:12px; background:#f8fbff; }
+.admin-stats-grid article>strong,.admin-stats-grid article>span,.admin-stats-grid article>em { grid-column:1/-1; }
+.admin-stats-grid article>strong { color:#2f435c; font-size:14px; }
+.admin-stats-grid article div { min-width:0; padding:8px; border-radius:9px; background:#fff; }
+.admin-stats-grid article b { display:block; margin-top:3px; color:#1685e8; font-size:16px; }
+.admin-stats-grid article>em { color:#a75f00; font-size:12px; font-style:normal; }
+.admin-stats-note { margin:-6px 0 18px; color:#52677f; font-size:13px; }
 .admin-module-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
 .admin-module-grid>a { min-height:108px; padding:18px; display:grid; grid-template-columns:46px minmax(0,1fr) auto; align-items:center; gap:14px; border:1px solid #dfe8f4; border-radius:15px; color:#50647c; background:rgba(255,255,255,.92); box-shadow:0 10px 28px rgba(43,77,118,.05); }
 .admin-module-grid>a:hover { border-color:#aad2f5; transform:translateY(-1px); }
@@ -932,7 +944,7 @@ a { color: inherit; text-decoration: none; }
 .recharge-code-panel button { height:40px; padding:0 16px; border:0; border-radius:8px; color:#fff; background:#167de2; font-weight:700; }
 .recharge-code-panel button:disabled { opacity:.5; }
 .recharge-code-panel small { margin-top:8px; display:block; color:#28785f; font-size:12px; }
-@media (max-width:900px) { .admin-summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.admin-module-grid,.admin-code-layout { grid-template-columns:1fr; }.recharge-code-panel div>div { flex-direction:column; } }
+@media (max-width:900px) { .admin-summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.admin-module-grid,.admin-code-layout,.admin-stats-grid { grid-template-columns:1fr; }.admin-stats-panel>header { align-items:flex-start; flex-direction:column; }.recharge-code-panel div>div { flex-direction:column; } }
 .log-query { padding:14px; display:flex; align-items:center; gap:10px; border-bottom:1px solid #e8eef5; }.log-segments { display:flex; gap:4px; }.log-segments button { height:34px; padding:0 10px; border:1px solid #d9e4ef; border-radius:6px; color:#60758d; background:#fff; }.log-segments button.active { border-color:#167de2; color:#fff; background:#167de2; }.log-query>label { min-width:220px; flex:1; height:36px; padding:0 9px; display:flex; align-items:center; gap:7px; border:1px solid #d7e1ee; border-radius:7px; color:#8291a2; }.log-query input { min-width:0; width:100%; border:0; outline:0; }.log-query>button { height:36px; padding:0 12px; display:flex; align-items:center; gap:5px; border:0; border-radius:7px; color:#fff; background:#167de2; }.admin-table-wrap td code { max-width:260px; overflow:hidden; display:block; text-overflow:ellipsis; white-space:nowrap; }.admin-table-wrap td>strong { display:block; }.admin-table-wrap td>small { display:block; margin-top:3px; color:#8494a6; font-size:9px; }
 @media (max-width:900px) { .log-query { align-items:stretch; flex-direction:column; }.log-segments { overflow-x:auto; }.log-query>label { min-width:0; flex:none; } }
 .review-metrics { min-height: 100vh; }

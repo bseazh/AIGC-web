@@ -55,6 +55,7 @@ export function VideoGenerationProgress({
           : 1;
   const estimate = expectedSeconds(durationSeconds);
   const remaining = Math.max(0, estimate - elapsedSeconds);
+  const overtimeSeconds = Math.max(0, elapsedSeconds - estimate);
   const stageFloor = [4, 20, 32, 44, 96][currentStep];
   const stageCeiling = [18, 30, 42, 94, 99][currentStep];
   const timedProgress = Math.min(
@@ -85,8 +86,8 @@ export function VideoGenerationProgress({
       </header>
       <div className="video-progress-times">
         <div>
-          <span>预计剩余</span>
-          <strong>{remaining > 0 ? formatTime(remaining) : "正在收尾"}</strong>
+          <span>{overtimeSeconds > 0 ? "超过预估" : "预计剩余"}</span>
+          <strong>{overtimeSeconds > 0 ? formatTime(overtimeSeconds) : formatTime(remaining)}</strong>
         </div>
         <div>
           <span>已处理</span>
@@ -124,8 +125,9 @@ export function VideoGenerationProgress({
         ))}
       </ol>
       <p>
-        预计总耗时约 {Math.round(estimate / 60)}{" "}
-        分钟，实际时间会受模型队列和视频复杂度影响。
+        {overtimeSeconds > 0
+          ? "已超过预估时间，模型仍在处理；实际返回会受模型队列、视频复杂度和参考素材审核影响。"
+          : `预计总耗时约 ${Math.round(estimate / 60)} 分钟，实际时间会受模型队列和视频复杂度影响。`}
       </p>
     </section>
   );
