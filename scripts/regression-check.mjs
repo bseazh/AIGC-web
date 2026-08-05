@@ -162,6 +162,21 @@ const checks = [
     "AI润色口令",
   ],
   [
+    "Recreate video includes a built-in remake prompt",
+    "app/components/recreate-video-page.tsx",
+    "builtInRecreatePrompt",
+  ],
+  [
+    "Recreate video built-in prompt maps uploaded models to original actions",
+    "app/components/recreate-video-page.tsx",
+    "必须用该新模特替换原视频中的真人主体",
+  ],
+  [
+    "Recreate video fourth step is an automatic strategy review",
+    "app/components/recreate-video-page.tsx",
+    "内置复刻策略",
+  ],
+  [
     "Recreate video material tags can be referenced in commands",
     "app/components/recreate-video-page.tsx",
     "recreate-material-tags",
@@ -427,6 +442,11 @@ const checks = [
     "createKeyframeCollageAsset",
   ],
   [
+    "Recreate video submits keyframe collage before replacement assets",
+    "app/components/recreate-video-page.tsx",
+    "...(keyframeCollageAssetId ? [keyframeCollageAssetId] : [])",
+  ],
+  [
     "Recreate video keyframe collage falls back to video capture",
     "app/components/recreate-video-page.tsx",
     "captureVideoFrameForCanvas(sourceSelection.preview, frame.time)",
@@ -440,6 +460,11 @@ const checks = [
     "Recreate video prompt identifies the submitted keyframe collage",
     "app/components/recreate-video-page.tsx",
     "第${collageImageIndex}张参考图是一张由已选关键画面拼接而成的十二宫格参考板",
+  ],
+  [
+    "Recreate video worker has a backend remake director fallback",
+    "scripts/worker.mjs",
+    "内置复刻导演指令",
   ],
   [
     "Recreate video task allows one system keyframe collage image",

@@ -145,7 +145,6 @@ type Draft = {
   selectedKeyframes: KeyframeSelection[];
   products: Array<Pick<Item, "preview" | "name" | "byteSize" | "assetId" | "materialKind" | "materialSummary" | "materialConfidence" | "materialSuggestedAction">>;
   referenceImage: Pick<Item, "preview" | "name" | "byteSize" | "assetId"> | null;
-  referenceConfirmed: boolean;
   usageAuthorized: boolean;
   productInfo: string;
   special: string;
@@ -177,8 +176,8 @@ const workflowSteps: Array<{
   { key: "source", number: 1, title: "添加对标视频", subtitle: "抖音获取或本地上传" },
   { key: "clip", number: 2, title: "十二宫格抽帧", subtitle: "锁定复刻节奏与画面" },
   { key: "product", number: 3, title: "复刻口令与素材", subtitle: "一句话说明怎么替换" },
-  { key: "reference", number: 4, title: "确认生成方案", subtitle: "确认 AI 润色后的方案" },
-  { key: "generate", number: 5, title: "生成复刻视频", subtitle: "开始任务输出" },
+  { key: "reference", number: 4, title: "内置复刻策略", subtitle: "自动整理镜头与替换关系" },
+  { key: "generate", number: 5, title: "提交生成", subtitle: "开始任务输出" },
 ];
 
 function cloneItem(item: Item | null | undefined): Item | null {
@@ -269,7 +268,6 @@ export function RecreateVideoPage() {
   const [selectedKeyframes, setSelectedKeyframes] = useState<KeyframeSelection[]>([]);
   const [products, setProducts] = useState<Item[]>([]);
   const [referenceImage, setReferenceImage] = useState<Item | null>(null);
-  const [referenceConfirmed, setReferenceConfirmed] = useState(false);
   const [usageAuthorized, setUsageAuthorized] = useState(false);
   const [douyinInput, setDouyinInput] = useState("");
   const [douyinBusy, setDouyinBusy] = useState<"analyzing" | "importing" | null>(
@@ -344,7 +342,6 @@ export function RecreateVideoPage() {
     })),
     products: products.map((item) => cloneItem(item)).filter(Boolean) as Draft["products"],
     referenceImage: cloneItem(referenceImage),
-    referenceConfirmed,
     usageAuthorized,
     productInfo,
     special,
@@ -398,7 +395,6 @@ export function RecreateVideoPage() {
     );
     setProducts((draft.products || []).map(restoreItem).filter(Boolean) as Item[]);
     setReferenceImage(restoreItem(draft.referenceImage));
-    setReferenceConfirmed(Boolean(draft.referenceConfirmed));
     setUsageAuthorized(Boolean(draft.usageAuthorized));
     setProductInfo(draft.productInfo || "");
     setSpecial(draft.special || "");
@@ -658,7 +654,7 @@ export function RecreateVideoPage() {
     sourceReady &&
     selectedKeyframes.length >= 4;
   const productReady = mp4OnlyTest || products.length > 0 || Boolean(productInfo.trim()) || Boolean(polishedPrompt?.finalPrompt);
-  const referenceReady = referenceConfirmed;
+  const referenceReady = productReady;
   const generateReady =
     sourceReady && clipReady && productReady && referenceReady && usageAuthorized;
   const completedCount = [sourceReady, clipReady, productReady, referenceReady, phase === "succeeded"].filter(
@@ -736,7 +732,6 @@ export function RecreateVideoPage() {
     products,
     polishedPrompt,
     ratio,
-    referenceConfirmed,
     referenceImage,
     resolution,
     selectedKeyframes,
@@ -991,7 +986,6 @@ export function RecreateVideoPage() {
     setClips([]);
     setProducts([]);
     setReferenceImage(null);
-    setReferenceConfirmed(false);
     setUsageAuthorized(false);
     setProductInfo("");
     setSpecial("");
@@ -1057,7 +1051,6 @@ export function RecreateVideoPage() {
         byteSize: asset.byteSize,
       };
       setReferenceImage(selected);
-      setReferenceConfirmed(false);
       clearTaskState();
       setStep("reference");
     }
@@ -1116,7 +1109,6 @@ export function RecreateVideoPage() {
         return setError("请上传 10MB 以内的 JPG、PNG 或 WebP 图片");
       if (kind === "scene") {
         setReferenceImage(valid[0]);
-        setReferenceConfirmed(false);
         setStep("reference");
       } else {
         setProducts((current) =>
@@ -1779,6 +1771,20 @@ export function RecreateVideoPage() {
       ? `十二宫格参考图：第${collageImageIndex}张参考图是一张由已选关键画面拼接而成的十二宫格参考板，请结合这张图理解镜头顺序、主体位置、景别变化、动作走势和画面氛围；它只用于结构参考，不得复制原人物脸、原商品、原品牌、Logo、水印或原字幕。`
       : "十二宫格参考图：当前只有关键画面时间点，未能提交拼接图；请主要参考对标视频的镜头节奏和已确认时间点。";
 
+  const builtInRecreatePrompt = (collageImageIndex: number | null) =>
+    [
+      "【系统内置复刻策略】",
+      "先阅读 reference_video 和十二宫格参考图，提取原视频的镜头顺序、景别变化、主体站位、动作节奏、运镜方向、构图重心、光线氛围和剪辑节点；这些内容是本次复刻的结构骨架。",
+      collageImageIndex
+        ? `第${collageImageIndex}张参考图是十二宫格关键帧拼图，必须按从左到右、从上到下的顺序理解镜头推进，不要把它当作普通商品图或海报。`
+        : "如果十二宫格拼图不可用，则以 reference_video 和已确认关键帧时间点作为镜头结构依据。",
+      "再阅读其余上传图片作为替换素材：人物/模特素材用于替换原视频人物或手部动作主体，商品素材用于替换原视频售卖商品，场景素材用于替换背景氛围，文字/Logo 素材只作为用户新内容参考。",
+      "生成时保留原视频的动作参考、镜头节奏、构图、景别、人物/商品出现时机和展示逻辑；但必须重生成原创画面，不复制原人物脸、原商品、原品牌、Logo、水印、字幕或可识别真实身份。",
+      "如果上传了 @虚拟模特参考 或人物多视图参考，必须用该新模特替换原视频中的真人主体：参考原视频动作、姿态、走位和出镜节奏，但脸型、发型、身形、服装关系以用户上传人物素材为准。",
+      "如果上传了商品或服装素材，必须让新商品/服装出现在原视频对应展示位置和镜头段落里，保持新商品外观、颜色、材质、比例和关键细节准确。",
+      "用户不需要写专业提示词；即使用户口令为空，也按以上内置策略自动完成镜头复刻和素材替换。",
+    ].join("\n");
+
   const analyzeFaceMaskRegions = async (assetId?: string) => {
     if (!assetId) return [];
     const response = await fetch("/api/workflows/recreate-face-mask-analysis/", {
@@ -2273,30 +2279,31 @@ export function RecreateVideoPage() {
     try {
       const sourceReferenceVideoAssetId = await prepareReferenceVideoAsset(selectedClip || sourceItem!);
       const referenceVideoAssetId = await prepareCompliantReferenceVideoAsset(sourceReferenceVideoAssetId);
-      const productAssetIds = mp4OnlyTest ? [] : await Promise.all(products.map(upload));
       const keyframeCollageAssetId = mp4OnlyTest ? null : await prepareKeyframeCollageReference();
+      const productAssetIds = mp4OnlyTest ? [] : await Promise.all(products.map(upload));
       const confirmedReferenceAssetId = !mp4OnlyTest && referenceImage ? await upload(referenceImage) : null;
       const assetIds = mp4OnlyTest
         ? [referenceVideoAssetId]
         : [
-            ...productAssetIds,
             ...(keyframeCollageAssetId ? [keyframeCollageAssetId] : []),
+            ...productAssetIds,
             referenceVideoAssetId,
             ...(confirmedReferenceAssetId ? [confirmedReferenceAssetId] : []),
           ];
-      const collageImageIndex = !mp4OnlyTest && keyframeCollageAssetId ? products.length + 1 : null;
+      const collageImageIndex = !mp4OnlyTest && keyframeCollageAssetId ? 1 : null;
       const prompt = [
+        mp4OnlyTest ? "" : builtInRecreatePrompt(collageImageIndex),
         mp4OnlyTest
           ? "当前为仅 MP4 对标视频测试模式：本次只提交对标视频，不提交十二宫格参考图、素材池图片或额外参考图，用于验证 Ark 是否接受该 MP4 reference_video。"
           : compliantReferenceVideo
-            ? "对标视频已先转换为轻量合规结构参考视频：去除原音频、降低清晰度、模糊真人细节并叠加网格，仅用于参考镜头节奏、运镜、构图和动作轮廓。"
+            ? "对标视频已先转换为整体模糊合规结构参考视频：去除原音频、模糊真人细节并叠加网格，仅用于参考镜头节奏、运镜、构图和动作轮廓。"
             : "当前直接提交原始对标视频作为 reference_video。",
         selectedKeyframes.length
           ? `已确认关键画面时间点：${selectedKeyframes.map((frame) => `${frame.time.toFixed(1)}s`).join("、")}。请以这些画面作为复刻参考节点，保持原视频镜头节奏但重生成原创内容。`
           : "",
         mp4OnlyTest ? "" : keyframeCollagePrompt(collageImageIndex),
         !mp4OnlyTest && products.length
-          ? `素材池：用户上传了 ${products.length} 个通配素材，按输入顺序分别标记为：${materialReferences.map((item, index) => `${item.label}=第${index + 1}张参考图`).join("；")}。请自动识别素材类型，能匹配到人物、服装、商品、背景、Logo 或字幕的素材优先使用；如果用户口令明确引用某个图片标签，请优先按该引用执行；匹配不上的素材不要强行使用。`
+          ? `替换素材池：用户上传了 ${products.length} 个通配替换素材，按素材池顺序分别标记为：${materialReferences.map((item, index) => `${item.label}=第${index + 1 + (collageImageIndex ? 1 : 0)}张参考图`).join("；")}。请自动识别素材类型，能匹配到人物、服装、商品、背景、Logo 或字幕的素材优先使用；如果用户口令明确引用某个图片标签，请优先按该引用执行；匹配不上的素材不要强行使用。`
           : mp4OnlyTest
             ? ""
             : "素材池：用户未上传素材，请按复刻口令生成原创内容。",
@@ -3216,7 +3223,7 @@ export function RecreateVideoPage() {
           onClick={() => setStep("reference")}
           disabled={!productReady}
         >
-          下一步：确认生成方案
+          下一步：查看内置策略
         </button>
       </div>
       <input
@@ -3235,12 +3242,12 @@ export function RecreateVideoPage() {
       <header className="recreate-panel-head">
         <div className="recreate-frame-collage">
           <strong>当前步骤</strong>
-          <h2>确认生成方案</h2>
+          <h2>内置复刻策略</h2>
         </div>
         <span>4 / 5</span>
       </header>
       <p className="recreate-panel-copy">
-        最后确认系统会怎么复刻：十二宫格作为镜头参考，素材池作为通配替换来源，复刻口令会被整理成最终生成提示词。
+        系统会自动把十二宫格和对标视频作为动作与镜头参考，再用素材池替换原人物、商品和场景；用户口令只是补充要求，不需要写专业提示词。
       </p>
       <section className="recreate-reference-keyframes">
         <header>
@@ -3262,14 +3269,14 @@ export function RecreateVideoPage() {
       </section>
       <section className="recreate-plan-preview">
         <header>
-          <strong>复刻方案摘要</strong>
-          <small>{polishedPrompt?.finalPrompt ? "已使用 AI 润色方案" : "未润色时会使用基础通配方案"}</small>
+          <strong>系统内置生成提示词</strong>
+          <small>{polishedPrompt?.finalPrompt ? "已叠加 AI 润色方案" : "即使不填写口令，也会按内置策略复刻"}</small>
         </header>
         <div className="recreate-plan-tags">
-          <span>保留：镜头节奏</span>
-          <span>保留：构图与动作走势</span>
-          <span>素材：{products.length ? `${products.length} 个素材自动通配` : "未上传素材，按口令生成"}</span>
-          <span>避开：水印 / 原字幕 / 原品牌</span>
+          <span>参考：对标视频动作</span>
+          <span>参考：十二宫格镜头顺序</span>
+          <span>替换：{products.length ? `${products.length} 个素材自动通配` : "未上传素材，按内置策略原创生成"}</span>
+          <span>避开：原脸 / 原商品 / Logo / 原字幕</span>
         </div>
         {materialReferences.length ? (
           <div className="recreate-material-tags" aria-label="最终素材标签">
@@ -3284,7 +3291,11 @@ export function RecreateVideoPage() {
         <textarea
           readOnly
           value={
-            polishedPrompt?.finalPrompt ||
+            [
+              builtInRecreatePrompt(selectedKeyframes.some((frame) => frame.url) ? 1 : null),
+              polishedPrompt?.finalPrompt ? `AI润色补充方案：\n${polishedPrompt.finalPrompt}` : "",
+              productInfo.trim() ? `用户补充要求：${productInfo.trim()}` : "",
+            ].filter(Boolean).join("\n\n") ||
             [
               "参考对标视频的十二宫格关键画面，保留镜头节奏、构图、动作走势和光线氛围。",
               productInfo.trim()
@@ -3309,21 +3320,6 @@ export function RecreateVideoPage() {
           ))}
         </div>
       ) : null}
-      <button type="button" className="recreate-inline-secondary" onClick={polishRecreateCommand} disabled={frameAnalysisBusy}>
-        {frameAnalysisBusy ? <LoaderCircle className="generation-spinner" size={15} /> : <Sparkles size={15} />}
-        {polishedPrompt?.finalPrompt ? "重新润色复刻口令" : "AI润色复刻口令"}
-      </button>
-      <label className="recreate-consent">
-        <input
-          type="checkbox"
-          checked={referenceConfirmed}
-          onChange={(event) => {
-            setReferenceConfirmed(event.target.checked);
-            clearTaskState();
-          }}
-        />
-        我确认使用当前十二宫格、素材池和复刻口令生成原创视频
-      </label>
       <div className="recreate-source-footer">
         <button
           type="button"
@@ -3331,7 +3327,7 @@ export function RecreateVideoPage() {
           onClick={() => setStep("generate")}
           disabled={!referenceReady}
         >
-          下一步：生成复刻视频
+          下一步：提交生成
         </button>
       </div>
     </section>

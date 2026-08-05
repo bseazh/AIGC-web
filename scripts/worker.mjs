@@ -247,11 +247,19 @@ async function createVideoTask(inputUrls, input, workflowKey, taskId) {
   if (!process.env.ARK_API_KEY) throw new Error("ARK_API_KEY is required for video generation");
   const mimeTypes = input.assetMimeTypes || [];
   const templateDirection = typeof input.promptConfig?.template === "string" ? input.promptConfig.template : "按用户脚本和全部参考素材生成原创短片。";
+  const recreateVideoDirective = workflowKey === "recreate-video"
+    ? [
+        "内置复刻导演指令：reference_video 只用于提取镜头节奏、动作走势、运镜、构图、景别变化和主体出现时机，不得复制原人物脸、原商品、原品牌、Logo、水印或原字幕。",
+        "如果输入中包含十二宫格关键帧拼图，请优先把它当作镜头顺序和构图结构参考；其余图片素材用于替换原视频中的人物、服装、商品、背景或文字元素。",
+        "生成时必须把上传的人物/模特/商品素材通配到原视频对应动作和展示段落里，即保留原视频动作参考和镜头结构，重生成原创替换内容。",
+      ].join("\n")
+    : "";
   const content = [{ type: "text", text: [
     `生成一支${input.scene}方向的电商带货短视频，整体节奏为${input.style}，画幅比例${input.aspectRatio}，时长 ${input.duration} 秒，分辨率 ${input.resolution}。`,
     templateDirection,
+    recreateVideoDirective,
     input.prompt || "保持商品主体、颜色、标识与关键细节准确，不添加水印。",
-  ].join("\n") }];
+  ].filter(Boolean).join("\n") }];
   inputUrls.forEach((url, index) => {
     const mime = mimeTypes[index] || "";
     if (mime.startsWith("image/")) content.push({ type: "image_url", image_url: { url }, role: "reference_image" });
