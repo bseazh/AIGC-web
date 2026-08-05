@@ -632,6 +632,11 @@ const checks = [
     "/create/model-spokesperson-video",
   ],
   [
+    "Video center exposes recreate as a dedicated tab",
+    "app/components/video-center-page.tsx",
+    'key: "recreate"',
+  ],
+  [
     "Model spokesperson starts with an editable script workflow",
     "app/components/model-spokesperson-script-page.tsx",
     "使用文案生成口播视频 · 下一阶段",
