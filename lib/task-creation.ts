@@ -111,8 +111,8 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
     if (draftId) {
       await client.query(
         `UPDATE workflow_drafts
-         SET status = 'ARCHIVED', task_id = $4, archived_at = NOW(), updated_at = NOW()
-         WHERE id = $1 AND user_id = $2 AND workflow_key = $3 AND status = 'ACTIVE'`,
+         SET status = 'ACTIVE', task_id = $4, archived_at = NULL, updated_at = NOW()
+         WHERE id = $1 AND user_id = $2 AND workflow_key = $3 AND status IN ('ACTIVE', 'ARCHIVED')`,
         [draftId, user.id, workflow.key, taskId],
       );
     }

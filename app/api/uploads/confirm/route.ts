@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
   const user = await authenticatedUser(request);
   if (!user) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401 });
   const body = await request.json().catch(() => null);
+  const contentHash = typeof body?.contentHash === "string" && /^[a-f0-9]{64}$/i.test(body.contentHash) ? body.contentHash.toLowerCase() : "";
   if (typeof body?.assetId !== "string") {
     return NextResponse.json({ code: "INVALID_ASSET" }, { status: 400 });
   }
@@ -31,12 +32,19 @@ export async function POST(request: NextRequest) {
     if (asset.mime_type === "video/mp4" && (!Number.isFinite(videoDurationSeconds) || videoDurationSeconds <= 0 || videoDurationSeconds > 24 * 60 * 60)) {
       return NextResponse.json({ code: "VIDEO_METADATA_REQUIRED", message: "无法读取视频时长，请重新选择可正常播放的 MP4 文件" }, { status: 400 });
     }
-    const metadataJson = asset.mime_type === "video/mp4" ? { durationSeconds: Math.round(videoDurationSeconds * 1000) / 1000 } : {};
+    const metadataJson = {
+      ...(asset.mime_type === "video/mp4" ? { durationSeconds: Math.round(videoDurationSeconds * 1000) / 1000 } : {}),
+      ...(contentHash ? { contentHash } : {}),
+    };
     if (!contentReviewEnabled()) {
       const changed = await db.query(
-        `UPDATE assets SET audit_status = 'READY', metadata_json = metadata_json || $2::jsonb, updated_at = NOW()
+        `UPDATE assets
+         SET audit_status = 'READY',
+             content_hash = COALESCE(content_hash, $3),
+             metadata_json = metadata_json || $2::jsonb,
+             updated_at = NOW()
          WHERE id = $1 AND audit_status = 'UPLOADING' RETURNING id`,
-        [asset.id, JSON.stringify({ ...metadataJson, moderation: { status: "BYPASSED", bypassedAt: new Date().toISOString() } })],
+        [asset.id, JSON.stringify({ ...metadataJson, moderation: { status: "BYPASSED", bypassedAt: new Date().toISOString() } }), contentHash || null],
       );
       if (!changed.rowCount) return NextResponse.json({ code: "ASSET_STATE_CHANGED" }, { status: 409 });
       await audit(user.id, "ASSET_UPLOAD_CONFIRMED", request, { type: "asset", id: asset.id }, { contentReview: "disabled" });
@@ -47,9 +55,13 @@ export async function POST(request: NextRequest) {
     try {
       await client.query("BEGIN");
       const changed = await client.query(
-        `UPDATE assets SET audit_status = 'PENDING_REVIEW', metadata_json = metadata_json || $2::jsonb, updated_at = NOW()
+        `UPDATE assets
+         SET audit_status = 'PENDING_REVIEW',
+             content_hash = COALESCE(content_hash, $3),
+             metadata_json = metadata_json || $2::jsonb,
+             updated_at = NOW()
          WHERE id = $1 AND audit_status = 'UPLOADING' RETURNING id`,
-        [asset.id, JSON.stringify({ ...metadataJson, moderation: { status: "PENDING_REVIEW", submittedAt: new Date().toISOString() } })],
+        [asset.id, JSON.stringify({ ...metadataJson, moderation: { status: "PENDING_REVIEW", submittedAt: new Date().toISOString() } }), contentHash || null],
       );
       if (!changed.rowCount) {
         await client.query("ROLLBACK");

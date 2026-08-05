@@ -124,11 +124,15 @@ try {
     ALTER TABLE assets ADD COLUMN IF NOT EXISTS original_name TEXT;
     ALTER TABLE assets ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb;
     ALTER TABLE assets ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    ALTER TABLE assets ADD COLUMN IF NOT EXISTS content_hash TEXT;
     UPDATE assets SET audit_status = 'PENDING_REVIEW' WHERE audit_status = 'PENDING';
     ALTER TABLE assets DROP CONSTRAINT IF EXISTS assets_audit_status_check;
     ALTER TABLE assets ADD CONSTRAINT assets_audit_status_check CHECK (audit_status IN ('UPLOADING', 'PENDING_REVIEW', 'READY', 'REJECTED'));
     ALTER TABLE assets DROP CONSTRAINT IF EXISTS assets_byte_size_check;
     ALTER TABLE assets ADD CONSTRAINT assets_byte_size_check CHECK (byte_size >= 0 AND byte_size <= 104857600);
+    CREATE INDEX IF NOT EXISTS assets_owner_content_hash_ready_idx
+      ON assets (owner_id, content_hash, mime_type, created_at DESC)
+      WHERE content_hash IS NOT NULL AND audit_status = 'READY';
 
     CREATE TABLE IF NOT EXISTS content_review_records (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

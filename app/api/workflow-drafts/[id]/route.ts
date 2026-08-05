@@ -40,7 +40,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const result = await db.query<Parameters<typeof presentDraft>[0]>(
     `SELECT id, title, workflow_key, status, payload_json, task_id, created_at, updated_at
      FROM workflow_drafts
-     WHERE id = $1 AND user_id = $2 AND status = 'ACTIVE'`,
+     WHERE id = $1 AND user_id = $2 AND status IN ('ACTIVE', 'ARCHIVED')`,
     [id, user.id],
   );
   const draft = result.rows[0];
@@ -57,7 +57,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   const result = await db.query<{ id: string }>(
     `UPDATE workflow_drafts
      SET status = 'DELETED', updated_at = NOW()
-     WHERE id = $1 AND user_id = $2 AND status = 'ACTIVE'
+     WHERE id = $1 AND user_id = $2 AND status IN ('ACTIVE', 'ARCHIVED')
      RETURNING id`,
     [id, user.id],
   );

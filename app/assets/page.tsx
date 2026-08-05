@@ -14,6 +14,11 @@ const kinds = [{ key: "ALL", label: "全部" }, { key: "INPUT", label: "上传�
 const mediaFilters = [{ key: "ALL", label: "全部类型" }, { key: "IMAGE", label: "图片" }, { key: "VIDEO", label: "视频" }, { key: "AUDIO", label: "音频" }];
 const formatBytes = (bytes: number) => bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 const matchesMediaType = (asset: Asset, mediaType: string) => mediaType === "ALL" || mediaType === "IMAGE" && asset.mimeType.startsWith("image/") || mediaType === "VIDEO" && asset.mimeType.startsWith("video/") || mediaType === "AUDIO" && asset.mimeType.startsWith("audio/");
+const sha256Hex = async (blob: Blob) => {
+  const buffer = await blob.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(hashBuffer)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+};
 
 export default function AssetsPage() {
   const router = useRouter();
@@ -68,10 +73,15 @@ export default function AssetsPage() {
   const upload = async (file: File) => {
     setUploading(true);
     try {
-      const presign = await fetch("/api/uploads/presign/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ fileName: file.name, mimeType: file.type, byteSize: file.size }) });
+      const contentHash = await sha256Hex(file);
+      const presign = await fetch("/api/uploads/presign/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ fileName: file.name, mimeType: file.type, byteSize: file.size, contentHash }) });
       const signed = await presign.json(); if (!presign.ok) throw new Error(signed.message || "无法上传该文件");
+      if (signed.duplicate) {
+        await refresh();
+        return;
+      }
       const put = await fetch(signed.uploadUrl, { method: "PUT", body: file, headers: { "content-type": file.type } }); if (!put.ok) throw new Error("文件上传失败");
-      const confirm = await fetch("/api/uploads/confirm/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ assetId: signed.assetId }) }); const confirmed = await confirm.json(); if (!confirm.ok) throw new Error(confirmed.message || "文件校验失败");
+      const confirm = await fetch("/api/uploads/confirm/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ assetId: signed.assetId, contentHash }) }); const confirmed = await confirm.json(); if (!confirm.ok) throw new Error(confirmed.message || "文件校验失败");
       if (confirmed.status === "PENDING_REVIEW") window.alert("素材已提交审核，通过后会显示在内容资产中。");
       await refresh();
     } catch (error) { window.alert(error instanceof Error ? error.message : "上传失败"); } finally { setUploading(false); }

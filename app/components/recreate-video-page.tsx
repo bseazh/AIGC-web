@@ -169,6 +169,7 @@ type ServerDraft = {
   id: string;
   title: string;
   workflowKey: string;
+  status?: string;
   payload: Partial<Draft>;
   taskId: string | null;
   createdAt: string;
@@ -232,6 +233,14 @@ function restoreItem(raw: unknown): Item | null {
     clipEndSeconds:
       typeof item.clipEndSeconds === "number" ? item.clipEndSeconds : undefined,
   };
+}
+
+async function sha256Hex(blob: Blob) {
+  const buffer = await blob.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 function formatBytes(byteSize: number) {
@@ -321,7 +330,14 @@ export function RecreateVideoPage() {
   const restoredLocalDraftRef = useRef(false);
   const restoringServerDraftRef = useRef(false);
   const autoKeyframeSourceRef = useRef<string | null>(null);
-  const visibleDrafts = useMemo(() => serverDrafts.slice(0, 1), [serverDrafts]);
+  const visibleDrafts = useMemo(() => serverDrafts.slice(0, 8), [serverDrafts]);
+  const mergeServerDraft = (draft: ServerDraft) => {
+    setServerDrafts((current) =>
+      [draft, ...current.filter((item) => item.id !== draft.id)]
+        .sort((first, second) => new Date(second.updatedAt).getTime() - new Date(first.updatedAt).getTime())
+        .slice(0, 20),
+    );
+  };
 
   useEffect(() => {
     fetch("/api/auth/session/", { cache: "no-store" })
@@ -711,7 +727,7 @@ export function RecreateVideoPage() {
           setDraftId(body.draft.id);
           setDraftTitle(body.draft.title);
           setDraftSyncState("saved");
-          setServerDrafts([body.draft]);
+          mergeServerDraft(body.draft);
         })
         .catch(() => setDraftSyncState("error"));
     }, 900);
@@ -945,7 +961,7 @@ export function RecreateVideoPage() {
       setDraftId(body.draft.id);
       setDraftTitle(body.draft.title);
       setDraftSyncState("saved");
-      setServerDrafts([body.draft]);
+      mergeServerDraft(body.draft);
       setNotice("项目已保存到账户");
     } catch {
       setDraftSyncState("error");
@@ -1620,6 +1636,7 @@ export function RecreateVideoPage() {
   const upload = async (item: Item) => {
     if (item.assetId) return item.assetId;
     if (!item.file) throw new Error("素材未找到");
+    const contentHash = await sha256Hex(item.file);
     const response = await fetch("/api/uploads/presign/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1627,10 +1644,12 @@ export function RecreateVideoPage() {
         fileName: item.file.name,
         mimeType: item.file.type,
         byteSize: item.file.size,
+        contentHash,
       }),
     });
     const presign = await response.json();
     if (!response.ok) throw new Error(presign.message || "上传失败");
+    if (presign.duplicate && typeof presign.assetId === "string") return presign.assetId as string;
     if (
       !(
         await fetch(presign.uploadUrl, {
@@ -1646,6 +1665,7 @@ export function RecreateVideoPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         assetId: presign.assetId,
+        contentHash,
         ...(item.file.type === "video/mp4"
           ? { videoDurationSeconds: item.durationSeconds }
           : {}),
@@ -3641,7 +3661,7 @@ export function RecreateVideoPage() {
           <section className="recreate-draft-box">
             <div className="recreate-draft-box-head">
               <div>
-                <strong>当前项目</strong>
+                <strong>项目存档</strong>
                 <small>
                   {draftSyncState === "saving"
                     ? "正在自动保存"
@@ -3666,7 +3686,7 @@ export function RecreateVideoPage() {
               />
             </label>
             <button type="button" className="recreate-new-draft" onClick={startNewDraft}>
-              重置当前项目
+              新建空项目
             </button>
             <div className="recreate-draft-list">
               {visibleDrafts.length ? (

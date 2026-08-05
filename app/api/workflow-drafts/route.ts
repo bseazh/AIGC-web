@@ -29,6 +29,7 @@ type DraftRow = {
   id: string;
   title: string;
   workflow_key: string;
+  status: string;
   payload_json: Record<string, unknown>;
   task_id: string | null;
   created_at: string;
@@ -42,28 +43,10 @@ function presentDraft(draft: DraftRow) {
     workflowKey: draft.workflow_key,
     payload: draft.payload_json,
     taskId: draft.task_id,
+    status: draft.status,
     createdAt: draft.created_at,
     updatedAt: draft.updated_at,
   };
-}
-
-async function archiveDuplicateDrafts(userId: string, workflowKey: string, keepId?: string) {
-  await db.query(
-    `WITH ranked AS (
-       SELECT id, ROW_NUMBER() OVER (ORDER BY updated_at DESC, created_at DESC) AS rank
-       FROM workflow_drafts
-       WHERE user_id = $1 AND workflow_key = $2 AND status = 'ACTIVE'
-     )
-     UPDATE workflow_drafts draft
-     SET status = 'ARCHIVED', archived_at = COALESCE(archived_at, NOW()), updated_at = NOW()
-     FROM ranked
-     WHERE draft.id = ranked.id
-       AND (
-         ($3::uuid IS NULL AND ranked.rank > 1)
-         OR ($3::uuid IS NOT NULL AND draft.id <> $3::uuid)
-       )`,
-    [userId, workflowKey, keepId || null],
-  );
 }
 
 export async function GET(request: NextRequest) {
@@ -72,12 +55,11 @@ export async function GET(request: NextRequest) {
 
   const workflowKey = normalizeWorkflow(request.nextUrl.searchParams.get("workflowKey") || "recreate-video");
   if (!workflowKey) return NextResponse.json({ code: "INVALID_WORKFLOW" }, { status: 400 });
-  await archiveDuplicateDrafts(user.id, workflowKey);
   const limit = Math.min(Math.max(Number(request.nextUrl.searchParams.get("limit") || 20), 1), 50);
   const result = await db.query<DraftRow>(
-    `SELECT id, title, workflow_key, payload_json, task_id, created_at, updated_at
+    `SELECT id, title, workflow_key, status, payload_json, task_id, created_at, updated_at
      FROM workflow_drafts
-     WHERE user_id = $1 AND workflow_key = $2 AND status = 'ACTIVE'
+     WHERE user_id = $1 AND workflow_key = $2 AND status IN ('ACTIVE', 'ARCHIVED')
      ORDER BY updated_at DESC
      LIMIT $3`,
     [user.id, workflowKey, limit],
@@ -101,42 +83,23 @@ export async function POST(request: NextRequest) {
   const result = draftId
     ? await db.query<DraftRow>(
         `UPDATE workflow_drafts
-         SET title = $4, payload_json = $5::jsonb, status = 'ACTIVE', updated_at = NOW()
-         WHERE id = $1 AND user_id = $2 AND workflow_key = $3 AND status = 'ACTIVE'
-         RETURNING id, title, workflow_key, payload_json, task_id, created_at, updated_at`,
+         SET title = $4, payload_json = $5::jsonb, status = 'ACTIVE', archived_at = NULL, updated_at = NOW()
+         WHERE id = $1 AND user_id = $2 AND workflow_key = $3 AND status IN ('ACTIVE', 'ARCHIVED')
+         RETURNING id, title, workflow_key, status, payload_json, task_id, created_at, updated_at`,
         [draftId, user.id, workflowKey, title, JSON.stringify(payload)],
       )
     : { rows: [] as DraftRow[] };
 
-  const latestResult = result.rows[0]
-    ? result
-    : await db.query<DraftRow>(
-        `WITH latest AS (
-           SELECT id
-           FROM workflow_drafts
-           WHERE user_id = $1 AND workflow_key = $2 AND status = 'ACTIVE'
-           ORDER BY updated_at DESC
-           LIMIT 1
-         )
-         UPDATE workflow_drafts draft
-         SET title = $3, payload_json = $4::jsonb, status = 'ACTIVE', updated_at = NOW()
-         FROM latest
-         WHERE draft.id = latest.id
-         RETURNING draft.id, draft.title, draft.workflow_key, draft.payload_json, draft.task_id, draft.created_at, draft.updated_at`,
-        [user.id, workflowKey, title, JSON.stringify(payload)],
-      );
-
   const saved =
-    latestResult.rows[0] ||
+    result.rows[0] ||
     (
       await db.query<DraftRow>(
         `INSERT INTO workflow_drafts (user_id, workflow_key, title, payload_json)
          VALUES ($1, $2, $3, $4::jsonb)
-         RETURNING id, title, workflow_key, payload_json, task_id, created_at, updated_at`,
+         RETURNING id, title, workflow_key, status, payload_json, task_id, created_at, updated_at`,
         [user.id, workflowKey, title, JSON.stringify(payload)],
       )
     ).rows[0];
 
-  await archiveDuplicateDrafts(user.id, workflowKey, saved.id);
   return NextResponse.json({ draft: presentDraft(saved) });
 }

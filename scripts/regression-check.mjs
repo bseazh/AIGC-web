@@ -122,9 +122,9 @@ const checks = [
     'fetch("/api/workflow-drafts/"',
   ],
   [
-    "Recreate video shows one current project",
+    "Recreate video shows saved project list",
     "app/components/recreate-video-page.tsx",
-    "visibleDrafts = useMemo(() => serverDrafts.slice(0, 1)",
+    "visibleDrafts = useMemo(() => serverDrafts.slice(0, 8)",
   ],
   [
     "Recreate video supports previous step navigation",
@@ -512,9 +512,14 @@ const checks = [
     "workflowSteps.findIndex((item) => item.key === step) > unlockedIndex",
   ],
   [
-    "Workflow drafts archive duplicate active records",
+    "Workflow drafts list active saved projects",
     "app/api/workflow-drafts/route.ts",
-    "archiveDuplicateDrafts",
+    "status IN ('ACTIVE', 'ARCHIVED')",
+  ],
+  [
+    "Workflow drafts restore archived projects on save",
+    "app/api/workflow-drafts/route.ts",
+    "archived_at = NULL",
   ],
   [
     "Workflow drafts persist to database",
@@ -522,9 +527,24 @@ const checks = [
     "CREATE TABLE IF NOT EXISTS workflow_drafts",
   ],
   [
-    "Generated tasks archive source drafts",
+    "Generated tasks keep source project visible",
     "lib/task-creation.ts",
-    "UPDATE workflow_drafts",
+    "SET status = 'ACTIVE', task_id = $4, archived_at = NULL, updated_at = NOW()",
+  ],
+  [
+    "Assets store content hashes for dedupe",
+    "scripts/migrate.mjs",
+    "ALTER TABLE assets ADD COLUMN IF NOT EXISTS content_hash TEXT",
+  ],
+  [
+    "Upload presign reuses duplicate ready assets",
+    "app/api/uploads/presign/route.ts",
+    "ASSET_UPLOAD_DEDUPED",
+  ],
+  [
+    "Recreate uploads send SHA-256 content hashes",
+    "app/components/recreate-video-page.tsx",
+    "const contentHash = await sha256Hex(item.file)",
   ],
   [
     "Video mix accepts an ordered dynamic material list",
