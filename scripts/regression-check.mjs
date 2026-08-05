@@ -477,6 +477,11 @@ const checks = [
     "【逐帧动作导演脚本】",
   ],
   [
+    "Recreate video hides internal prompt details from the review step",
+    "app/components/recreate-video-page.tsx",
+    "内置策略状态",
+  ],
+  [
     "Recreate video worker has a backend remake director fallback",
     "scripts/worker.mjs",
     "内置复刻导演指令",

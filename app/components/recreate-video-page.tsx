@@ -3036,14 +3036,7 @@ export function RecreateVideoPage() {
         {frameAnalysis ? (
           <div className="recreate-command-insight">
             {frameAnalysis.summary ? <p>{frameAnalysis.summary}</p> : null}
-            {frameAnalysis.actionTimeline?.length ? (
-              <p>
-                动作脚本：
-                {frameAnalysis.actionTimeline.slice(0, 4).map((item, index) =>
-                  `${index + 1}. ${Number(item.time || 0).toFixed(1)}s ${item.pose || item.replicationInstruction || "按该帧姿态复刻"}`,
-                ).join("；")}
-              </p>
-            ) : null}
+            {frameAnalysis.actionTimeline?.length ? <p>已生成内部动作连续性指引，会在提交时自动用于模型生成。</p> : null}
             <div>
               {replacementSlots.slice(0, 5).map((slot, index) => (
                 <span key={`${slot.target || "元素"}-${index}`}>
@@ -3391,14 +3384,14 @@ export function RecreateVideoPage() {
       </section>
       <section className="recreate-plan-preview">
         <header>
-          <strong>系统内置生成提示词</strong>
-          <small>{polishedPrompt?.finalPrompt ? "已叠加 AI 润色方案" : "即使不填写口令，也会按内置策略复刻"}</small>
+          <strong>内置策略状态</strong>
+          <small>系统会在提交时自动注入动作、镜头和素材替换策略</small>
         </header>
         <div className="recreate-plan-tags">
-          <span>参考：对标视频动作</span>
-          <span>参考：十二宫格镜头顺序</span>
+          <span>{frameAnalysis?.actionTimeline?.length ? "动作：已拆解连续性" : "动作：提交前自动分析"}</span>
+          <span>参考：动作结构十二宫格</span>
           <span>替换：{products.length ? `${products.length} 个素材自动通配` : "未上传素材，按内置策略原创生成"}</span>
-          <span>避开：原脸 / 原商品 / Logo / 原字幕</span>
+          <span>合规：避开原脸 / 原商品 / Logo / 原字幕</span>
         </div>
         {materialReferences.length ? (
           <div className="recreate-material-tags" aria-label="最终素材标签">
@@ -3410,28 +3403,6 @@ export function RecreateVideoPage() {
             ))}
           </div>
         ) : null}
-        <textarea
-          readOnly
-          value={
-            [
-              builtInRecreatePrompt(selectedKeyframes.some((frame) => frame.url) ? 1 : null),
-              actionDirectorPrompt(frameAnalysis),
-              polishedPrompt?.finalPrompt ? `AI润色补充方案：\n${polishedPrompt.finalPrompt}` : "",
-              productInfo.trim() ? `用户补充要求：${productInfo.trim()}` : "",
-            ].filter(Boolean).join("\n\n") ||
-            [
-              "参考对标视频的十二宫格关键画面，保留镜头节奏、构图、动作走势和光线氛围。",
-              productInfo.trim()
-                ? `复刻口令：${productInfo.trim()}`
-                : "按上传素材做通配替换；能匹配到人物、服装、商品、背景或字幕的素材优先使用。",
-              materialReferences.length
-                ? `素材标签：${materialReferences.map((item, index) => `${item.label}=第${index + 1}张参考图`).join("；")}。`
-                : "",
-              "匹配不上的素材不要强行使用。生成原创短视频，不复制原人物脸、原商品、原品牌、Logo、水印或原字幕。",
-            ].filter(Boolean).join("\n")
-          }
-          aria-label="最终复刻生成方案"
-        />
       </section>
       {products.length > 0 ? (
         <div className="recreate-selected-images">
