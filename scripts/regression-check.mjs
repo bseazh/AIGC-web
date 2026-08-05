@@ -372,9 +372,9 @@ const checks = [
     "setPreviewMedia({ url, name, mimeType: \"image/*\" })",
   ],
   [
-    "Recreate video can create blurred compliant reference videos",
+    "Recreate video can create motion-structure reference videos",
     "app/components/recreate-video-page.tsx",
-    "整体模糊合规参考视频",
+    "动作结构参考视频",
   ],
   [
     "Recreate video compliant reference mode calls the sanitize endpoint",
@@ -382,9 +382,9 @@ const checks = [
     "/api/workflows/recreate-video-sanitize/",
   ],
   [
-    "Recreate video sanitize endpoint removes audio and meets Ark pixel floor",
+    "Recreate video sanitize endpoint creates edge motion video and meets Ark pixel floor",
     "app/api/workflows/recreate-video-sanitize/route.ts",
-    "strong-blur-grid-no-audio-minimum-ark-resolution",
+    "edge-motion-structure-no-audio-minimum-ark-resolution",
   ],
   [
     "Recreate video sanitize endpoint outputs at least 720p reference video",
@@ -432,14 +432,14 @@ const checks = [
     "createKeyframeCollageAsset",
   ],
   [
-    "Recreate video keyframe collage is privacy-obfuscated before Ark",
+    "Recreate video keyframe collage is converted to a motion structure board before Ark",
     "app/components/recreate-video-page.tsx",
-    "recreate-privacy-keyframe-collage.jpg",
+    "recreate-motion-structure-collage.jpg",
   ],
   [
-    "Recreate video keyframe collage uses mosaic blur instead of raw frames",
+    "Recreate video keyframe collage uses Sobel edges instead of raw frames",
     "app/components/recreate-video-page.tsx",
-    "blur(5px) grayscale(0.9) saturate(0.35)",
+    "Math.sqrt(gx * gx + gy * gy)",
   ],
   [
     "Recreate video submits keyframe collage before replacement assets",
@@ -459,7 +459,7 @@ const checks = [
   [
     "Recreate video prompt identifies the submitted keyframe collage",
     "app/components/recreate-video-page.tsx",
-    "第${collageImageIndex}张参考图是一张由已选关键画面拼接而成的模糊结构参考板",
+    "第${collageImageIndex}张参考图是一张由已选关键画面转换成边缘轮廓线稿的动作结构板",
   ],
   [
     "Recreate video worker has a backend remake director fallback",

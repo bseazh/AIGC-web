@@ -1702,7 +1702,7 @@ export function RecreateVideoPage() {
     context.font = "24px sans-serif";
     context.textBaseline = "middle";
     context.textAlign = "left";
-    const drawPrivacyKeyframeImage = (
+    const drawMotionStructureKeyframe = (
       image: HTMLImageElement,
       x: number,
       y: number,
@@ -1710,13 +1710,15 @@ export function RecreateVideoPage() {
       cellHeight: number,
     ) => {
       const proxy = document.createElement("canvas");
-      proxy.width = 36;
-      proxy.height = 64;
+      proxy.width = 144;
+      proxy.height = 256;
       const proxyContext = proxy.getContext("2d");
       if (!proxyContext) return false;
       const proxyScale = Math.max(proxy.width / image.naturalWidth, proxy.height / image.naturalHeight);
       const proxyDrawWidth = image.naturalWidth * proxyScale;
       const proxyDrawHeight = image.naturalHeight * proxyScale;
+      proxyContext.fillStyle = "#ffffff";
+      proxyContext.fillRect(0, 0, proxy.width, proxy.height);
       proxyContext.drawImage(
         image,
         (proxy.width - proxyDrawWidth) / 2,
@@ -1724,18 +1726,44 @@ export function RecreateVideoPage() {
         proxyDrawWidth,
         proxyDrawHeight,
       );
+      const source = proxyContext.getImageData(0, 0, proxy.width, proxy.height);
+      const output = proxyContext.createImageData(proxy.width, proxy.height);
+      const gray = new Uint8ClampedArray(proxy.width * proxy.height);
+      for (let index = 0; index < gray.length; index += 1) {
+        const offset = index * 4;
+        gray[index] = Math.round(source.data[offset] * 0.299 + source.data[offset + 1] * 0.587 + source.data[offset + 2] * 0.114);
+      }
+      const pixel = (px: number, py: number) => gray[Math.max(0, Math.min(proxy.height - 1, py)) * proxy.width + Math.max(0, Math.min(proxy.width - 1, px))];
+      for (let py = 0; py < proxy.height; py += 1) {
+        for (let px = 0; px < proxy.width; px += 1) {
+          const gx =
+            -pixel(px - 1, py - 1) + pixel(px + 1, py - 1) -
+            2 * pixel(px - 1, py) + 2 * pixel(px + 1, py) -
+            pixel(px - 1, py + 1) + pixel(px + 1, py + 1);
+          const gy =
+            -pixel(px - 1, py - 1) - 2 * pixel(px, py - 1) - pixel(px + 1, py - 1) +
+            pixel(px - 1, py + 1) + 2 * pixel(px, py + 1) + pixel(px + 1, py + 1);
+          const magnitude = Math.min(255, Math.sqrt(gx * gx + gy * gy));
+          const line = magnitude > 34 ? 30 : 246;
+          const offset = (py * proxy.width + px) * 4;
+          output.data[offset] = line;
+          output.data[offset + 1] = line;
+          output.data[offset + 2] = line;
+          output.data[offset + 3] = 255;
+        }
+      }
+      proxyContext.putImageData(output, 0, 0);
       context.save();
       context.beginPath();
       context.roundRect(x, y, cellWidth, cellHeight, 18);
       context.clip();
-      context.fillStyle = "#dbe7f0";
+      context.fillStyle = "#ffffff";
       context.fillRect(x, y, cellWidth, cellHeight);
-      context.imageSmoothingEnabled = false;
-      context.filter = "blur(5px) grayscale(0.9) saturate(0.35) contrast(0.72)";
+      context.imageSmoothingEnabled = true;
+      context.filter = "contrast(1.08)";
       context.drawImage(proxy, x, y, cellWidth, cellHeight);
       context.filter = "none";
-      context.imageSmoothingEnabled = true;
-      context.fillStyle = "rgba(248, 250, 252, 0.42)";
+      context.fillStyle = "rgba(255, 255, 255, 0.12)";
       context.fillRect(x, y, cellWidth, cellHeight);
       context.strokeStyle = "rgba(14, 165, 233, 0.34)";
       context.lineWidth = 1;
@@ -1763,7 +1791,7 @@ export function RecreateVideoPage() {
         .catch(() => sourceSelection?.preview ? captureVideoFrameForCanvas(sourceSelection.preview, frame.time) : null)
         .catch(() => null);
       if (image) {
-        drawPrivacyKeyframeImage(image, x, y, cellWidth, cellHeight);
+        drawMotionStructureKeyframe(image, x, y, cellWidth, cellHeight);
       } else {
         drawKeyframePlaceholder(context, x, y, cellWidth, cellHeight, "关键帧暂不可用");
       }
@@ -1774,13 +1802,13 @@ export function RecreateVideoPage() {
     }
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
     if (!blob) throw new Error("十二宫格参考图导出失败");
-    const file = new File([blob], "recreate-privacy-keyframe-collage.jpg", { type: "image/jpeg" });
+    const file = new File([blob], "recreate-motion-structure-collage.jpg", { type: "image/jpeg" });
     const preview = URL.createObjectURL(file);
     try {
       return await upload({
         file,
         preview,
-        name: "隐私结构十二宫格参考图",
+        name: "动作结构十二宫格参考图",
         byteSize: file.size,
       });
     } finally {
@@ -1796,15 +1824,15 @@ export function RecreateVideoPage() {
 
   const keyframeCollagePrompt = (collageImageIndex: number | null) =>
     collageImageIndex
-      ? `隐私结构十二宫格参考图：第${collageImageIndex}张参考图是一张由已选关键画面拼接而成的模糊结构参考板，已做马赛克、模糊、降饱和和网格处理；请只结合这张图理解镜头顺序、主体位置、景别变化、动作走势和画面氛围，不得把它当作人物脸、商品细节、品牌、Logo、水印或字幕参考。`
+      ? `动作结构十二宫格参考图：第${collageImageIndex}张参考图是一张由已选关键画面转换成边缘轮廓线稿的动作结构板；请按从左到右、从上到下理解每个关键帧的人体姿态、四肢方向、重心变化、站位、景别和镜头节奏，不得把它当作人物脸、商品细节、品牌、Logo、水印或字幕参考。`
       : "十二宫格参考图：当前只有关键画面时间点，未能提交拼接图；请主要参考对标视频的镜头节奏和已确认时间点。";
 
   const builtInRecreatePrompt = (collageImageIndex: number | null) =>
     [
       "【系统内置复刻策略】",
-      "先阅读 reference_video 和隐私结构十二宫格参考图，提取原视频的镜头顺序、景别变化、主体站位、动作节奏、运镜方向、构图重心、光线氛围和剪辑节点；这些内容是本次复刻的结构骨架。",
+      "先阅读 reference_video 和动作结构十二宫格参考图，提取原视频的镜头顺序、景别变化、主体站位、动作节奏、运镜方向、构图重心、光线氛围和剪辑节点；这些内容是本次复刻的结构骨架。",
       collageImageIndex
-        ? `第${collageImageIndex}张参考图是已隐私化的十二宫格关键帧拼图，必须按从左到右、从上到下的顺序理解镜头推进；它只表示结构和动作轮廓，不表示可复制的人脸、商品、品牌或字幕。`
+        ? `第${collageImageIndex}张参考图是已转换成边缘轮廓线稿的十二宫格关键帧拼图，必须按从左到右、从上到下的顺序理解镜头推进；重点复刻每格里四肢方向、身体倾斜、步伐、手势、重心和出镜位置，不表示可复制的人脸、商品、品牌或字幕。`
         : "如果十二宫格拼图不可用，则以 reference_video 和已确认关键帧时间点作为镜头结构依据。",
       "再阅读其余上传图片作为替换素材：人物/模特素材用于替换原视频人物或手部动作主体，商品素材用于替换原视频售卖商品，场景素材用于替换背景氛围，文字/Logo 素材只作为用户新内容参考。",
       "生成时保留原视频的动作参考、镜头节奏、构图、景别、人物/商品出现时机和展示逻辑；但必须重生成原创画面，不复制原人物脸、原商品、原品牌、Logo、水印、字幕或可识别真实身份。",
@@ -1992,7 +2020,7 @@ export function RecreateVideoPage() {
 
   const prepareCompliantReferenceVideoAsset = async (assetId: string) => {
     if (!compliantReferenceVideo) return assetId;
-    setNotice("正在生成轻量合规参考视频");
+    setNotice("正在生成动作结构参考视频");
     const response = await fetch("/api/workflows/recreate-video-sanitize/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2000,7 +2028,7 @@ export function RecreateVideoPage() {
     });
     const body = await response.json().catch(() => null);
     if (!response.ok) throw new Error(body?.message || "合规参考视频生成失败");
-    setNotice("已生成整体模糊合规参考视频，将用于提交给视频模型");
+    setNotice("已生成动作结构参考视频，将用于提交给视频模型");
     window.setTimeout(() => setNotice(""), 2600);
     return body.assetId as string;
   };
@@ -2320,7 +2348,7 @@ export function RecreateVideoPage() {
       const prompt = [
         builtInRecreatePrompt(collageImageIndex),
         compliantReferenceVideo
-          ? "对标视频已先转换为整体模糊合规结构参考视频：去除原音频、模糊真人细节并叠加网格，仅用于参考镜头节奏、运镜、构图和动作轮廓。"
+          ? "对标视频已先转换为动作结构参考视频：去除原音频并转为边缘轮廓线稿，用于参考镜头节奏、运镜、构图、人体姿态和动作轮廓。"
           : "当前直接提交原始对标视频作为 reference_video。",
         selectedKeyframes.length
           ? `已确认关键画面时间点：${selectedKeyframes.map((frame) => `${frame.time.toFixed(1)}s`).join("、")}。请以这些画面作为复刻参考节点，保持原视频镜头节奏但重生成原创内容。`
@@ -3426,7 +3454,7 @@ export function RecreateVideoPage() {
       </label>
       <p className="recreate-test-note">
         {compliantReferenceVideo
-          ? "提交前会先生成整体模糊、去音频、带网格且满足模型最低分辨率的结构参考视频，尽量保留动作节奏并降低真人可识别度。"
+          ? "提交前会先生成去音频、边缘轮廓线稿化且满足模型最低分辨率的动作结构参考视频，保留动作节奏并降低真人可识别度。"
           : "当前会直接提交原始对标视频，含真人时可能被 Ark 拒绝。"}
       </p>
       <label className="recreate-field">

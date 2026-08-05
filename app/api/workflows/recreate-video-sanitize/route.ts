@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
 
   const directory = await mkdtemp(join(tmpdir(), "recreate-video-sanitize-"));
   const inputPath = join(directory, "source.mp4");
-  const outputPath = join(directory, "privacy-structure-reference.mp4");
+  const outputPath = join(directory, "motion-structure-reference.mp4");
   const size = targetSize(body?.aspectRatio);
   try {
     await downloadObjectToFile(source.storage_key, inputPath);
@@ -72,11 +72,14 @@ export async function POST(request: NextRequest) {
         "-vf",
         [
           "fps=15",
-          "scale=360:-2:force_original_aspect_ratio=decrease",
-          "boxblur=16:2",
+          "scale=720:-2:force_original_aspect_ratio=decrease",
+          "format=gray",
+          "edgedetect=low=0.06:high=0.18",
+          "negate",
+          "eq=contrast=1.22:brightness=0.03",
           `scale=${size.width}:${size.height}:force_original_aspect_ratio=decrease`,
-          `pad=${size.width}:${size.height}:(ow-iw)/2:(oh-ih)/2:color=black`,
-          "drawgrid=w=iw/6:h=ih/10:t=1:c=white@0.18",
+          `pad=${size.width}:${size.height}:(ow-iw)/2:(oh-ih)/2:color=white`,
+          "drawgrid=w=iw/6:h=ih/10:t=1:c=black@0.12",
           "format=yuv420p",
         ].join(","),
         "-c:v",
@@ -84,7 +87,7 @@ export async function POST(request: NextRequest) {
         "-preset",
         "ultrafast",
         "-crf",
-        "35",
+        "28",
         "-movflags",
         "+faststart",
         outputPath,
@@ -99,14 +102,14 @@ export async function POST(request: NextRequest) {
         { status: 413 },
       );
     }
-    const storageKey = `users/${user.id}/inputs/${randomUUID()}-privacy-reference.mp4`;
+    const storageKey = `users/${user.id}/inputs/${randomUUID()}-motion-structure-reference.mp4`;
     await uploadLocalObject(storageKey, outputPath, "video/mp4");
     const reviewEnabled = contentReviewEnabled();
     const metadata = {
       durationSeconds: Math.min(15, Number(source.metadata_json?.durationSeconds) || 15),
       sourceAssetId: source.id,
       privacyReference: true,
-      transform: "strong-blur-grid-no-audio-minimum-ark-resolution",
+      transform: "edge-motion-structure-no-audio-minimum-ark-resolution",
       aspectRatio: size.label,
       pixelCount: size.width * size.height,
       generatedAt: new Date().toISOString(),
@@ -123,7 +126,7 @@ export async function POST(request: NextRequest) {
         storageKey,
         outputSize,
         reviewEnabled ? "PENDING_REVIEW" : "READY",
-        `合规结构参考-${source.original_name || "对标视频"}`,
+        `动作结构参考-${source.original_name || "对标视频"}`,
         JSON.stringify(metadata),
       ],
     );
@@ -132,7 +135,7 @@ export async function POST(request: NextRequest) {
       url: await createSignedObjectUrl(storageKey, "GET", 3600),
       byteSize: outputSize,
       durationSeconds: metadata.durationSeconds,
-      message: "已生成整体模糊合规参考视频",
+      message: "已生成动作结构参考视频",
     });
   } catch (error) {
     console.error("recreate video sanitize failed", error);
