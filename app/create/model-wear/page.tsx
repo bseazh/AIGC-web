@@ -6,6 +6,7 @@ import { ArrowLeft, Check, Download, ImagePlus, Plus, Sparkles, Upload, X } from
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { GenerationProgress } from "@/app/components/generation-progress";
+import { ProjectRequiredGate } from "@/app/components/project-required-gate";
 
 type Account = { user: { isAdministrator?: boolean }; wallet: { availablePoints: number } };
 type Uploaded = { file: File; preview: string };
@@ -15,6 +16,10 @@ const scenes = ["简约棚拍", "通勤街拍", "自然居家", "精品店试穿
 const styles = ["自然真实", "轻奢时尚", "清新日常", "电商展示"];
 
 export default function ModelWearPage() {
+  return <ProjectRequiredGate workflowKey="model-wear"><ModelWearWorkspace /></ProjectRequiredGate>;
+}
+
+function ModelWearWorkspace() {
   const router = useRouter();
   const [account, setAccount] = useState<Account | null>(null);
   const [model, setModel] = useState<Uploaded | null>(null);

@@ -1,10 +1,11 @@
 export const dynamic = "force-dynamic";
 
 import { ImageWorkflowPage } from "@/app/components/image-workflow-page";
+import { ProjectRequiredGate } from "@/app/components/project-required-gate";
 import { hdEnhanceWorkflow } from "@/lib/product-config";
 
 export default function HdEnhancePage() {
-  return <ImageWorkflowPage
+  return <ProjectRequiredGate workflowKey="hd-enhance"><ImageWorkflowPage
     title="高清优化"
     description="单张输出，消耗 5 积分"
     submitUrl="/api/tasks/hd-enhance/"
@@ -18,5 +19,5 @@ export default function HdEnhancePage() {
     showAspectRatio={false}
     sceneLabel="放大倍率"
     styleLabel="优化策略"
-  />;
+  /></ProjectRequiredGate>;
 }

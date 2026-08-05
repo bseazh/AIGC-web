@@ -1,9 +1,10 @@
 "use client";
 
 import { ArrowLeft, Check, Download, FolderOpen, ImagePlus, LoaderCircle, Sparkles, Upload, X } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { GenerationProgress } from "@/app/components/generation-progress";
+import { appendProjectId } from "@/lib/project-workflows";
 
 type Props = {
   title: string;
@@ -50,6 +51,8 @@ export function ImageWorkflowPage({
   nextStepLabel,
 }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const projectId = searchParams?.get("projectId") || "";
   const [account, setAccount] = useState<Account | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
@@ -226,7 +229,7 @@ export function ImageWorkflowPage({
           <div className="source-preview-actions">{selectedAsset && <span>已引用资产素材</span>}<button type="button" className="icon-button" aria-label="移除图片" onClick={() => { if (preview.startsWith("blob:")) URL.revokeObjectURL(preview); setFile(null); setSelectedAsset(null); setPreview(""); resetTask(); }}><X size={18} /></button></div>
         </div>}
         {busy && <GenerationProgress phase={phase} taskStatus={task?.status} title={title} outputCount={outputCount} />}
-        {phase === "succeeded" && task && <div className="result-grid">{task.outputs.map((output, index) => <article key={output.assetId}><img src={output.url} alt={`${title}结果 ${index + 1}`} /><a href={output.url} download target="_blank" rel="noreferrer"><Download size={16} />下载</a>{nextStepHref && <button type="button" className="result-next" onClick={() => router.push(`${nextStepHref}?assetId=${output.assetId}`)}>{nextStepLabel || "继续创作"}</button>}</article>)}</div>}
+        {phase === "succeeded" && task && <div className="result-grid">{task.outputs.map((output, index) => <article key={output.assetId}><img src={output.url} alt={`${title}结果 ${index + 1}`} /><a href={output.url} download target="_blank" rel="noreferrer"><Download size={16} />下载</a>{nextStepHref && <button type="button" className="result-next" onClick={() => router.push(appendProjectId(`${nextStepHref}?assetId=${output.assetId}`, projectId))}>{nextStepLabel || "继续创作"}</button>}</article>)}</div>}
       </section>
       <aside className="creator-panel">
         <div className="panel-title"><span><Sparkles size={18} /></span><div><h1>生成设置</h1><p>{account.user.isAdministrator ? `管理员免积分 · 报价 ${pointsPerTask} 积分计入成本审计` : description}</p></div></div>

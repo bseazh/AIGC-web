@@ -1,10 +1,11 @@
 export const dynamic = "force-dynamic";
 
 import { ImageWorkflowPage } from "@/app/components/image-workflow-page";
+import { ProjectRequiredGate } from "@/app/components/project-required-gate";
 import { detailPageWorkflow } from "@/lib/product-config";
 
 export default function ProductDetailPage() {
-  return <ImageWorkflowPage
+  return <ProjectRequiredGate workflowKey="product-detail-page"><ImageWorkflowPage
     title="商品详情长图"
     description="从一张主图拆分生成 5 张商品特性详情长图，消耗 10 积分"
     submitUrl="/api/tasks/product-detail/"
@@ -17,5 +18,5 @@ export default function ProductDetailPage() {
     outputCount={detailPageWorkflow.outputsPerTask}
     showAspectRatio={false}
     defaultRatio="9:16"
-  />;
+  /></ProjectRequiredGate>;
 }

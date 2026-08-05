@@ -592,6 +592,21 @@ const checks = [
     "创建项目并开始",
   ],
   [
+    "Direct image creation pages require a project",
+    "app/create/product-hero/page.tsx",
+    "ProjectRequiredGate",
+  ],
+  [
+    "Direct recreate video page requires a project",
+    "app/create/recreate-video/page.tsx",
+    "ProjectRequiredGate",
+  ],
+  [
+    "Project guard preserves deep-link query params",
+    "app/components/project-required-gate.tsx",
+    "query ? `?${query}` : \"\"",
+  ],
+  [
     "Workflow drafts hide exact duplicate payloads",
     "app/api/workflow-drafts/route.ts",
     "duplicate_rank = 1",

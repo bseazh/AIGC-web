@@ -1,8 +1,9 @@
 export const dynamic = "force-dynamic";
 
 import { ImageWorkflowPage } from "@/app/components/image-workflow-page";
+import { ProjectRequiredGate } from "@/app/components/project-required-gate";
 import { heroImageWorkflow } from "@/lib/product-config";
 
 export default function ProductHeroPage() {
-  return <ImageWorkflowPage title="商品主图" description="一次生成 4 张，消耗 10 积分" submitUrl="/api/tasks/" scenes={heroImageWorkflow.scenes} styles={heroImageWorkflow.styles} sourceTitle="上传商品图片" sourceHint="JPG、PNG、WebP，最大 10MB" submitLabel="生成商品主图" nextStepHref="/create/product-detail" nextStepLabel="用此图生成详情页" />;
+  return <ProjectRequiredGate workflowKey="product-hero-image"><ImageWorkflowPage title="商品主图" description="一次生成 4 张，消耗 10 积分" submitUrl="/api/tasks/" scenes={heroImageWorkflow.scenes} styles={heroImageWorkflow.styles} sourceTitle="上传商品图片" sourceHint="JPG、PNG、WebP，最大 10MB" submitLabel="生成商品主图" nextStepHref="/create/product-detail" nextStepLabel="用此图生成详情页" /></ProjectRequiredGate>;
 }
