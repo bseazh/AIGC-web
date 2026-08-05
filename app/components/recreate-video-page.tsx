@@ -149,8 +149,6 @@ type Draft = {
   productInfo: string;
   special: string;
   polishedPrompt: PolishedRecreatePrompt | null;
-  modelOn: boolean;
-  modelInfo: string;
   ratio: string;
   duration: string;
   resolution: string;
@@ -292,9 +290,6 @@ export function RecreateVideoPage() {
   const [materialAnalysisBusyIndex, setMaterialAnalysisBusyIndex] = useState<number | null>(null);
   const [privacyViewBusyIndex, setPrivacyViewBusyIndex] = useState<number | null>(null);
   const [faceMaskBusyIndex, setFaceMaskBusyIndex] = useState<number | null>(null);
-  const [modelOn, setModelOn] = useState(false);
-  const [modelInfo, setModelInfo] = useState("");
-  const [mp4OnlyTest, setMp4OnlyTest] = useState(false);
   const [compliantReferenceVideo, setCompliantReferenceVideo] = useState(true);
   const [ratio, setRatio] = useState("9:16");
   const [duration, setDuration] = useState("15");
@@ -346,8 +341,6 @@ export function RecreateVideoPage() {
     productInfo,
     special,
     polishedPrompt,
-    modelOn,
-    modelInfo,
     ratio,
     duration,
     resolution,
@@ -362,8 +355,7 @@ export function RecreateVideoPage() {
         draft.referenceImage ||
         draft.productInfo ||
         draft.special ||
-        draft.polishedPrompt ||
-        draft.modelInfo,
+        draft.polishedPrompt,
     );
 
   const applyDraft = (draft: Partial<Draft>) => {
@@ -399,8 +391,6 @@ export function RecreateVideoPage() {
     setProductInfo(draft.productInfo || "");
     setSpecial(draft.special || "");
     setPolishedPrompt(draft.polishedPrompt || null);
-    setModelOn(Boolean(draft.modelOn));
-    setModelInfo(draft.modelInfo || "");
     if (draft.ratio) setRatio(draft.ratio);
     if (draft.duration) setDuration(draft.duration);
     if (draft.resolution) setResolution(draft.resolution);
@@ -531,7 +521,7 @@ export function RecreateVideoPage() {
         replaceable: true,
         priority: 2,
         confidence: 0.45,
-        strategy: "如需要换模特，上传模特参考图或在后续填写模特信息；只参考原视频动作和站位，不复制原人脸。",
+        strategy: "如需要换模特，上传模特参考图；只参考原视频动作和站位，不复制原人脸。",
         promptInstruction: "参考原视频人物动作、姿态和运镜，生成新的模特形象。",
         detectionNote: "未识别关键帧时，人物槽位为可选建议。",
       },
@@ -564,13 +554,13 @@ export function RecreateVideoPage() {
   };
   const slotUploadHint = (slot: { target?: string; slotType?: string; materialKind?: string }) => {
     if (slot.materialKind) return `建议上传：${slot.materialKind}`;
-    if (slot.slotType === "person") return "建议上传模特图，或下一步填写模特信息";
+    if (slot.slotType === "person") return "建议上传模特图";
     if (slot.slotType === "scene") return "建议上传场景参考图或氛围图";
     if (slot.slotType === "text") return "建议填写品牌、卖点、价格，不建议复刻原字幕";
     if (slot.slotType === "style") return "通常无需上传，作为镜头节奏参考";
     if (slot.slotType === "product") return "建议上传商品图或主体参考图";
     const normalized = slot.target || "";
-    if (/模特|人物|手|人脸|动作/.test(normalized)) return "建议上传模特图，或下一步填写模特信息";
+    if (/模特|人物|手|人脸|动作/.test(normalized)) return "建议上传模特图";
     if (/背景|场景|环境|空间/.test(normalized)) return "建议上传场景参考图或氛围图";
     if (/字幕|Logo|水印|品牌/.test(normalized)) return "不建议直接复刻；建议作为避让项处理";
     return "建议上传商品图或主体参考图";
@@ -653,7 +643,7 @@ export function RecreateVideoPage() {
   const clipReady =
     sourceReady &&
     selectedKeyframes.length >= 4;
-  const productReady = mp4OnlyTest || products.length > 0 || Boolean(productInfo.trim()) || Boolean(polishedPrompt?.finalPrompt);
+  const productReady = products.length > 0 || Boolean(productInfo.trim()) || Boolean(polishedPrompt?.finalPrompt);
   const referenceReady = productReady;
   const generateReady =
     sourceReady && clipReady && productReady && referenceReady && usageAuthorized;
@@ -725,8 +715,6 @@ export function RecreateVideoPage() {
     douyinInput,
     douyinStart,
     duration,
-    modelInfo,
-    modelOn,
     phase,
     productInfo,
     products,
@@ -989,8 +977,6 @@ export function RecreateVideoPage() {
     setUsageAuthorized(false);
     setProductInfo("");
     setSpecial("");
-    setModelInfo("");
-    setModelOn(false);
     setVideoSource("douyin");
     setSourceMode("douyin");
     setDouyinInput("");
@@ -1262,7 +1248,7 @@ export function RecreateVideoPage() {
           durationSeconds: sourceSelection?.durationSeconds || douyinAnalysis.durationSeconds || douyinClipDuration,
           replacementGoals: [
             "替换商品",
-            modelOn ? "替换模特" : "",
+            "替换模特",
             "替换背景/场景参考",
           ].filter(Boolean),
         }),
@@ -1963,7 +1949,7 @@ export function RecreateVideoPage() {
   };
 
   const prepareCompliantReferenceVideoAsset = async (assetId: string) => {
-    if (!compliantReferenceVideo || mp4OnlyTest) return assetId;
+    if (!compliantReferenceVideo) return assetId;
     setNotice("正在生成轻量合规参考视频");
     const response = await fetch("/api/workflows/recreate-video-sanitize/", {
       method: "POST",
@@ -2279,40 +2265,31 @@ export function RecreateVideoPage() {
     try {
       const sourceReferenceVideoAssetId = await prepareReferenceVideoAsset(selectedClip || sourceItem!);
       const referenceVideoAssetId = await prepareCompliantReferenceVideoAsset(sourceReferenceVideoAssetId);
-      const keyframeCollageAssetId = mp4OnlyTest ? null : await prepareKeyframeCollageReference();
-      const productAssetIds = mp4OnlyTest ? [] : await Promise.all(products.map(upload));
-      const confirmedReferenceAssetId = !mp4OnlyTest && referenceImage ? await upload(referenceImage) : null;
-      const assetIds = mp4OnlyTest
-        ? [referenceVideoAssetId]
-        : [
-            ...(keyframeCollageAssetId ? [keyframeCollageAssetId] : []),
-            ...productAssetIds,
-            referenceVideoAssetId,
-            ...(confirmedReferenceAssetId ? [confirmedReferenceAssetId] : []),
-          ];
-      const collageImageIndex = !mp4OnlyTest && keyframeCollageAssetId ? 1 : null;
+      const keyframeCollageAssetId = await prepareKeyframeCollageReference();
+      const productAssetIds = await Promise.all(products.map(upload));
+      const confirmedReferenceAssetId = referenceImage ? await upload(referenceImage) : null;
+      const assetIds = [
+        ...(keyframeCollageAssetId ? [keyframeCollageAssetId] : []),
+        ...productAssetIds,
+        referenceVideoAssetId,
+        ...(confirmedReferenceAssetId ? [confirmedReferenceAssetId] : []),
+      ];
+      const collageImageIndex = keyframeCollageAssetId ? 1 : null;
       const prompt = [
-        mp4OnlyTest ? "" : builtInRecreatePrompt(collageImageIndex),
-        mp4OnlyTest
-          ? "当前为仅 MP4 对标视频测试模式：本次只提交对标视频，不提交十二宫格参考图、素材池图片或额外参考图，用于验证 Ark 是否接受该 MP4 reference_video。"
-          : compliantReferenceVideo
-            ? "对标视频已先转换为整体模糊合规结构参考视频：去除原音频、模糊真人细节并叠加网格，仅用于参考镜头节奏、运镜、构图和动作轮廓。"
-            : "当前直接提交原始对标视频作为 reference_video。",
+        builtInRecreatePrompt(collageImageIndex),
+        compliantReferenceVideo
+          ? "对标视频已先转换为整体模糊合规结构参考视频：去除原音频、模糊真人细节并叠加网格，仅用于参考镜头节奏、运镜、构图和动作轮廓。"
+          : "当前直接提交原始对标视频作为 reference_video。",
         selectedKeyframes.length
           ? `已确认关键画面时间点：${selectedKeyframes.map((frame) => `${frame.time.toFixed(1)}s`).join("、")}。请以这些画面作为复刻参考节点，保持原视频镜头节奏但重生成原创内容。`
           : "",
-        mp4OnlyTest ? "" : keyframeCollagePrompt(collageImageIndex),
-        !mp4OnlyTest && products.length
+        keyframeCollagePrompt(collageImageIndex),
+        products.length
           ? `替换素材池：用户上传了 ${products.length} 个通配替换素材，按素材池顺序分别标记为：${materialReferences.map((item, index) => `${item.label}=第${index + 1 + (collageImageIndex ? 1 : 0)}张参考图`).join("；")}。请自动识别素材类型，能匹配到人物、服装、商品、背景、Logo 或字幕的素材优先使用；如果用户口令明确引用某个图片标签，请优先按该引用执行；匹配不上的素材不要强行使用。`
-          : mp4OnlyTest
-            ? ""
-            : "素材池：用户未上传素材，请按复刻口令生成原创内容。",
+          : "素材池：用户未上传素材，请按复刻口令生成原创内容。",
         productInfo.trim() ? `用户复刻口令：${productInfo.trim()}` : "",
         polishedPrompt?.finalPrompt ? `AI润色复刻方案：\n${polishedPrompt.finalPrompt}` : "",
         `补充要求：${special.trim()}`,
-        modelOn && modelInfo.trim()
-          ? `自定义模特信息：${modelInfo.trim()}`
-          : "",
       ]
         .filter((line) => !line.endsWith("："))
         .join("\n");
@@ -3394,23 +3371,6 @@ export function RecreateVideoPage() {
         我确认拥有对标视频、素材池及复刻口令中相关内容的合法使用授权
       </label>
       <label className="recreate-toggle">
-        仅 MP4 测试模式
-        <input
-          type="checkbox"
-          checked={mp4OnlyTest}
-          onChange={(event) => {
-            setMp4OnlyTest(event.target.checked);
-            clearTaskState();
-          }}
-        />
-        <i />
-      </label>
-      {mp4OnlyTest ? (
-        <p className="recreate-test-note">
-          只提交对标 MP4 给 Ark，不提交十二宫格、素材池和多视图图。用于排查当前报错是否由 MP4 本身触发。
-        </p>
-      ) : null}
-      <label className="recreate-toggle">
         轻量合规参考视频
         <input
           type="checkbox"
@@ -3419,40 +3379,14 @@ export function RecreateVideoPage() {
             setCompliantReferenceVideo(event.target.checked);
             clearTaskState();
           }}
-          disabled={mp4OnlyTest}
         />
         <i />
       </label>
       <p className="recreate-test-note">
-        {compliantReferenceVideo && !mp4OnlyTest
+        {compliantReferenceVideo
           ? "提交前会先生成整体模糊、去音频、带网格且满足模型最低分辨率的结构参考视频，尽量保留动作节奏并降低真人可识别度。"
-          : mp4OnlyTest
-            ? "MP4 测试模式会跳过合规处理，用于验证原视频是否被 Ark 接受。"
-            : "当前会直接提交原始对标视频，含真人时可能被 Ark 拒绝。"}
+          : "当前会直接提交原始对标视频，含真人时可能被 Ark 拒绝。"}
       </p>
-      <label className="recreate-toggle">
-        自定义模特信息
-        <input
-          type="checkbox"
-          checked={modelOn}
-          onChange={(event) => {
-            setModelOn(event.target.checked);
-            clearTaskState();
-          }}
-        />
-        <i />
-      </label>
-      {modelOn && (
-        <label className="recreate-field">
-          模特信息（可选）
-          <textarea
-            value={modelInfo}
-            onChange={(event) => setModelInfo(event.target.value)}
-            maxLength={300}
-            placeholder="例如：女性，25 岁，自然亲和，居家穿搭"
-          />
-        </label>
-      )}
       <label className="recreate-field">
         复刻口令（可选）
         <textarea

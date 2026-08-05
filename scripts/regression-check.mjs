@@ -372,16 +372,6 @@ const checks = [
     "setPreviewMedia({ url, name, mimeType: \"image/*\" })",
   ],
   [
-    "Recreate video can submit MP4-only diagnostic tasks",
-    "app/components/recreate-video-page.tsx",
-    "仅 MP4 测试模式",
-  ],
-  [
-    "Recreate video MP4-only mode skips keyframe collage submission",
-    "app/components/recreate-video-page.tsx",
-    "mp4OnlyTest ? null : await prepareKeyframeCollageReference()",
-  ],
-  [
     "Recreate video can create blurred compliant reference videos",
     "app/components/recreate-video-page.tsx",
     "整体模糊合规参考视频",
