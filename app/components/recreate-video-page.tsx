@@ -1702,6 +1702,58 @@ export function RecreateVideoPage() {
     context.font = "24px sans-serif";
     context.textBaseline = "middle";
     context.textAlign = "left";
+    const drawPrivacyKeyframeImage = (
+      image: HTMLImageElement,
+      x: number,
+      y: number,
+      cellWidth: number,
+      cellHeight: number,
+    ) => {
+      const proxy = document.createElement("canvas");
+      proxy.width = 36;
+      proxy.height = 64;
+      const proxyContext = proxy.getContext("2d");
+      if (!proxyContext) return false;
+      const proxyScale = Math.max(proxy.width / image.naturalWidth, proxy.height / image.naturalHeight);
+      const proxyDrawWidth = image.naturalWidth * proxyScale;
+      const proxyDrawHeight = image.naturalHeight * proxyScale;
+      proxyContext.drawImage(
+        image,
+        (proxy.width - proxyDrawWidth) / 2,
+        (proxy.height - proxyDrawHeight) / 2,
+        proxyDrawWidth,
+        proxyDrawHeight,
+      );
+      context.save();
+      context.beginPath();
+      context.roundRect(x, y, cellWidth, cellHeight, 18);
+      context.clip();
+      context.fillStyle = "#dbe7f0";
+      context.fillRect(x, y, cellWidth, cellHeight);
+      context.imageSmoothingEnabled = false;
+      context.filter = "blur(5px) grayscale(0.9) saturate(0.35) contrast(0.72)";
+      context.drawImage(proxy, x, y, cellWidth, cellHeight);
+      context.filter = "none";
+      context.imageSmoothingEnabled = true;
+      context.fillStyle = "rgba(248, 250, 252, 0.42)";
+      context.fillRect(x, y, cellWidth, cellHeight);
+      context.strokeStyle = "rgba(14, 165, 233, 0.34)";
+      context.lineWidth = 1;
+      for (let gridX = x + cellWidth / 3; gridX < x + cellWidth; gridX += cellWidth / 3) {
+        context.beginPath();
+        context.moveTo(gridX, y);
+        context.lineTo(gridX, y + cellHeight);
+        context.stroke();
+      }
+      for (let gridY = y + cellHeight / 4; gridY < y + cellHeight; gridY += cellHeight / 4) {
+        context.beginPath();
+        context.moveTo(x, gridY);
+        context.lineTo(x + cellWidth, gridY);
+        context.stroke();
+      }
+      context.restore();
+      return true;
+    };
     for (const [index, frame] of frames.entries()) {
       const column = index % columns;
       const row = Math.floor(index / columns);
@@ -1711,17 +1763,7 @@ export function RecreateVideoPage() {
         .catch(() => sourceSelection?.preview ? captureVideoFrameForCanvas(sourceSelection.preview, frame.time) : null)
         .catch(() => null);
       if (image) {
-        const scale = Math.max(cellWidth / image.naturalWidth, cellHeight / image.naturalHeight);
-        const drawWidth = image.naturalWidth * scale;
-        const drawHeight = image.naturalHeight * scale;
-        const drawX = x + (cellWidth - drawWidth) / 2;
-        const drawY = y + (cellHeight - drawHeight) / 2;
-        context.save();
-        context.beginPath();
-        context.roundRect(x, y, cellWidth, cellHeight, 18);
-        context.clip();
-        context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
-        context.restore();
+        drawPrivacyKeyframeImage(image, x, y, cellWidth, cellHeight);
       } else {
         drawKeyframePlaceholder(context, x, y, cellWidth, cellHeight, "关键帧暂不可用");
       }
@@ -1732,13 +1774,13 @@ export function RecreateVideoPage() {
     }
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
     if (!blob) throw new Error("十二宫格参考图导出失败");
-    const file = new File([blob], "recreate-keyframe-collage.jpg", { type: "image/jpeg" });
+    const file = new File([blob], "recreate-privacy-keyframe-collage.jpg", { type: "image/jpeg" });
     const preview = URL.createObjectURL(file);
     try {
       return await upload({
         file,
         preview,
-        name: "十二宫格参考图",
+        name: "隐私结构十二宫格参考图",
         byteSize: file.size,
       });
     } finally {
@@ -1754,15 +1796,15 @@ export function RecreateVideoPage() {
 
   const keyframeCollagePrompt = (collageImageIndex: number | null) =>
     collageImageIndex
-      ? `十二宫格参考图：第${collageImageIndex}张参考图是一张由已选关键画面拼接而成的十二宫格参考板，请结合这张图理解镜头顺序、主体位置、景别变化、动作走势和画面氛围；它只用于结构参考，不得复制原人物脸、原商品、原品牌、Logo、水印或原字幕。`
+      ? `隐私结构十二宫格参考图：第${collageImageIndex}张参考图是一张由已选关键画面拼接而成的模糊结构参考板，已做马赛克、模糊、降饱和和网格处理；请只结合这张图理解镜头顺序、主体位置、景别变化、动作走势和画面氛围，不得把它当作人物脸、商品细节、品牌、Logo、水印或字幕参考。`
       : "十二宫格参考图：当前只有关键画面时间点，未能提交拼接图；请主要参考对标视频的镜头节奏和已确认时间点。";
 
   const builtInRecreatePrompt = (collageImageIndex: number | null) =>
     [
       "【系统内置复刻策略】",
-      "先阅读 reference_video 和十二宫格参考图，提取原视频的镜头顺序、景别变化、主体站位、动作节奏、运镜方向、构图重心、光线氛围和剪辑节点；这些内容是本次复刻的结构骨架。",
+      "先阅读 reference_video 和隐私结构十二宫格参考图，提取原视频的镜头顺序、景别变化、主体站位、动作节奏、运镜方向、构图重心、光线氛围和剪辑节点；这些内容是本次复刻的结构骨架。",
       collageImageIndex
-        ? `第${collageImageIndex}张参考图是十二宫格关键帧拼图，必须按从左到右、从上到下的顺序理解镜头推进，不要把它当作普通商品图或海报。`
+        ? `第${collageImageIndex}张参考图是已隐私化的十二宫格关键帧拼图，必须按从左到右、从上到下的顺序理解镜头推进；它只表示结构和动作轮廓，不表示可复制的人脸、商品、品牌或字幕。`
         : "如果十二宫格拼图不可用，则以 reference_video 和已确认关键帧时间点作为镜头结构依据。",
       "再阅读其余上传图片作为替换素材：人物/模特素材用于替换原视频人物或手部动作主体，商品素材用于替换原视频售卖商品，场景素材用于替换背景氛围，文字/Logo 素材只作为用户新内容参考。",
       "生成时保留原视频的动作参考、镜头节奏、构图、景别、人物/商品出现时机和展示逻辑；但必须重生成原创画面，不复制原人物脸、原商品、原品牌、Logo、水印、字幕或可识别真实身份。",

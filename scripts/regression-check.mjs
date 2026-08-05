@@ -432,6 +432,16 @@ const checks = [
     "createKeyframeCollageAsset",
   ],
   [
+    "Recreate video keyframe collage is privacy-obfuscated before Ark",
+    "app/components/recreate-video-page.tsx",
+    "recreate-privacy-keyframe-collage.jpg",
+  ],
+  [
+    "Recreate video keyframe collage uses mosaic blur instead of raw frames",
+    "app/components/recreate-video-page.tsx",
+    "blur(5px) grayscale(0.9) saturate(0.35)",
+  ],
+  [
     "Recreate video submits keyframe collage before replacement assets",
     "app/components/recreate-video-page.tsx",
     "...(keyframeCollageAssetId ? [keyframeCollageAssetId] : [])",
@@ -449,12 +459,17 @@ const checks = [
   [
     "Recreate video prompt identifies the submitted keyframe collage",
     "app/components/recreate-video-page.tsx",
-    "第${collageImageIndex}张参考图是一张由已选关键画面拼接而成的十二宫格参考板",
+    "第${collageImageIndex}张参考图是一张由已选关键画面拼接而成的模糊结构参考板",
   ],
   [
     "Recreate video worker has a backend remake director fallback",
     "scripts/worker.mjs",
     "内置复刻导演指令",
+  ],
+  [
+    "Recreate video worker can drop rejected system collage and retry",
+    "scripts/worker.mjs",
+    "drop_privacy_keyframe_collage_real_person_rejection",
   ],
   [
     "Recreate video task allows one system keyframe collage image",

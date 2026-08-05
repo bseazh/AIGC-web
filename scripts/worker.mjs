@@ -267,13 +267,28 @@ async function createVideoTask(inputUrls, input, workflowKey, taskId) {
     if (mime.startsWith("audio/")) content.push({ type: "audio_url", audio_url: { url }, role: "reference_audio" });
   });
   const requestBody = { model: process.env.ARK_MODEL || "doubao-seedance-2-0-260128", content, generate_audio: true, ratio: input.aspectRatio, duration: input.duration, resolution: input.resolution, watermark: input.promptConfig?.watermark === true };
-  const response = await fetch("https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${process.env.ARK_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify(requestBody),
-  });
-  const payload = await response.json().catch(() => null);
-  await logProviderCall(taskId, "ark", "create_video_task", { model: requestBody.model, ratio: requestBody.ratio, duration: requestBody.duration, resolution: requestBody.resolution, watermark: requestBody.watermark, promptConfig: input.promptConfig ? { id: input.promptConfig.id, version: input.promptConfig.version, variantKey: input.promptConfig.variantKey } : null, assetTypes: mimeTypes }, response.status, payload, response.ok ? null : "ARK_CREATE_FAILED", payload?.id || response.headers.get("x-request-id"));
+  const sendArkRequest = async (body, assetTypes, retryReason = "") => {
+    const response = await fetch("https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.ARK_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const payload = await response.json().catch(() => null);
+    await logProviderCall(taskId, "ark", "create_video_task", { model: body.model, ratio: body.ratio, duration: body.duration, resolution: body.resolution, watermark: body.watermark, retryReason, promptConfig: input.promptConfig ? { id: input.promptConfig.id, version: input.promptConfig.version, variantKey: input.promptConfig.variantKey } : null, assetTypes }, response.status, payload, response.ok ? null : "ARK_CREATE_FAILED", payload?.id || response.headers.get("x-request-id"));
+    return { response, payload };
+  };
+  let { response, payload } = await sendArkRequest(requestBody, mimeTypes);
+  const errorMessage = String(payload?.error?.message || "");
+  const canDropPrivacyCollage =
+    workflowKey === "recreate-video" &&
+    content[1]?.type === "image_url" &&
+    input.prompt?.includes("隐私结构十二宫格") &&
+    /content\[1\].*real person/i.test(errorMessage);
+  if ((!response.ok || !payload?.id) && canDropPrivacyCollage) {
+    const retryContent = [content[0], ...content.slice(2)];
+    const retryBody = { ...requestBody, content: retryContent };
+    ({ response, payload } = await sendArkRequest(retryBody, ["dropped_privacy_keyframe_collage", ...mimeTypes.slice(1)], "drop_privacy_keyframe_collage_real_person_rejection"));
+  }
   if (!response.ok || !payload?.id) throw new Error(`Ark ${response.status}: ${payload?.error?.message || "task creation failed"}`);
   return payload.id;
 }
