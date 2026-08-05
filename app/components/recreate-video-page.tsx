@@ -341,6 +341,7 @@ export function RecreateVideoPage() {
   const restoredLocalDraftRef = useRef(false);
   const restoringServerDraftRef = useRef(false);
   const autoKeyframeSourceRef = useRef<string | null>(null);
+  const restoringTaskRef = useRef<string | null>(null);
   const visibleDrafts = useMemo(() => serverDrafts.slice(0, 8), [serverDrafts]);
   const mergeServerDraft = (draft: ServerDraft) => {
     setServerDrafts((current) =>
@@ -348,6 +349,34 @@ export function RecreateVideoPage() {
         .sort((first, second) => new Date(second.updatedAt).getTime() - new Date(first.updatedAt).getTime())
         .slice(0, 20),
     );
+  };
+
+  const restoreProjectTask = async (taskId: string | null | undefined) => {
+    if (!taskId || restoringTaskRef.current === taskId) return;
+    restoringTaskRef.current = taskId;
+    try {
+      const response = await fetch(`/api/tasks/${taskId}/`, { cache: "no-store" });
+      const task = await response.json().catch(() => null);
+      if (!response.ok || !task?.taskId) throw new Error();
+      setResult(task);
+      if (["SUCCEEDED"].includes(task.status)) {
+        setPhase("succeeded");
+        setStep("generate");
+      } else if (["FAILED", "REJECTED", "CANCELED"].includes(task.status)) {
+        setPhase("failed");
+        setStep("generate");
+        setError(task.errorCode || "任务已结束");
+      } else {
+        setPhase("generating");
+        setStep("generate");
+        await poll(taskId);
+      }
+    } catch {
+      setNotice("项目已恢复，任务状态稍后可在任务中心查看");
+      window.setTimeout(() => setNotice(""), 2200);
+    } finally {
+      restoringTaskRef.current = null;
+    }
   };
 
   useEffect(() => {
@@ -455,6 +484,7 @@ export function RecreateVideoPage() {
         setDraftId(drafts[0].id);
         setDraftTitle(drafts[0].title);
         applyDraft(drafts[0].payload);
+        restoreProjectTask(drafts[0].taskId);
         window.setTimeout(() => {
           restoringServerDraftRef.current = false;
         }, 0);
@@ -476,6 +506,14 @@ export function RecreateVideoPage() {
         setDraftTitle(draft.__serverDraftTitle.slice(0, 80));
       restoredLocalDraftRef.current = draftHasContent(draft);
       applyDraft(draft);
+      if (isUuid(draft.__serverDraftId)) {
+        fetch(`/api/workflow-drafts/${draft.__serverDraftId}/`, { cache: "no-store" })
+          .then(async (response) => (response.ok ? (await response.json()).draft as ServerDraft : null))
+          .then((serverDraft) => {
+            if (serverDraft) restoreProjectTask(serverDraft.taskId);
+          })
+          .catch(() => undefined);
+      }
     } catch {
       localStorage.removeItem(draftStorageKey);
     }
@@ -1003,6 +1041,7 @@ export function RecreateVideoPage() {
     setDraftTitle(draft.title);
     localStorage.setItem(draftStorageKey, JSON.stringify({ ...draft.payload, __serverDraftId: draft.id, __serverDraftTitle: draft.title }));
     applyDraft(draft.payload);
+    restoreProjectTask(draft.taskId);
     setNotice("已恢复项目，可继续生成");
     window.setTimeout(() => {
       restoringServerDraftRef.current = false;
@@ -2138,7 +2177,7 @@ export function RecreateVideoPage() {
     return body.assetId as string;
   };
 
-  const poll = async (taskId: string) => {
+  async function poll(taskId: string) {
     const deadline = Date.now() + 15 * 60 * 1000;
     while (Date.now() < deadline) {
       const response = await fetch(`/api/tasks/${taskId}/`, {
@@ -2156,7 +2195,7 @@ export function RecreateVideoPage() {
       await new Promise((resolve) => setTimeout(resolve, 5000));
     }
     throw new Error("视频仍在生成中，请稍后在任务中心查看");
-  };
+  }
 
   const pollPrivacyViewTask = async (taskId: string, flowId?: string) => {
     const deadline = Date.now() + 10 * 60 * 1000;
@@ -2434,6 +2473,12 @@ export function RecreateVideoPage() {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!generateReady || phase !== "idle") return;
+    if (!draftId) {
+      setError("请先创建项目，再提交生成任务");
+      setNotice("创建项目后，刷新或重新登录都能恢复进度");
+      window.setTimeout(() => setNotice(""), 2200);
+      return;
+    }
     setError("");
     setResult(null);
     setPhase("uploading");
@@ -2498,12 +2543,11 @@ export function RecreateVideoPage() {
       const created = await response.json();
       if (!response.ok)
         throw new Error(created.message || created.code || "创建任务失败");
+      const savedDraft = { ...draftValue(), step: "generate" as WorkflowStep };
+      localStorage.setItem(draftStorageKey, JSON.stringify({ ...savedDraft, __serverDraftId: draftId, __serverDraftTitle: draftTitle }));
       setPhase("generating");
       setStep("generate");
-      if (draftId) setServerDrafts((current) => current.filter((draft) => draft.id !== draftId));
       await poll(created.taskId);
-      localStorage.removeItem(draftStorageKey);
-      setDraftId(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "创建失败");
       setPhase("failed");

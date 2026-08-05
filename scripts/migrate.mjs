@@ -88,6 +88,24 @@ try {
       ON workflow_drafts (user_id, workflow_key, updated_at DESC) WHERE status = 'ACTIVE';
     CREATE INDEX IF NOT EXISTS workflow_drafts_task_idx ON workflow_drafts (task_id) WHERE task_id IS NOT NULL;
 
+    CREATE TABLE IF NOT EXISTS workflow_draft_events (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      draft_id UUID NOT NULL REFERENCES workflow_drafts(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      workflow_key TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      step_key TEXT,
+      field_name TEXT,
+      value_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      payload_json JSONB,
+      task_id UUID REFERENCES generation_tasks(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS workflow_draft_events_draft_created_idx
+      ON workflow_draft_events (draft_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS workflow_draft_events_user_created_idx
+      ON workflow_draft_events (user_id, created_at DESC);
+
     CREATE TABLE IF NOT EXISTS douyin_video_caches (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

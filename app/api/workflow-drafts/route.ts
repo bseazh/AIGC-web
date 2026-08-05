@@ -36,6 +36,10 @@ type DraftRow = {
   updated_at: string;
 };
 
+function draftStep(payload: Record<string, unknown>) {
+  return typeof payload.step === "string" ? payload.step.slice(0, 40) : null;
+}
+
 function presentDraft(draft: DraftRow) {
   return {
     id: draft.id,
@@ -127,6 +131,27 @@ export async function POST(request: NextRequest) {
         [user.id, workflowKey, title, JSON.stringify(payload)],
       )
     ).rows[0];
+  const eventType = draftId || existingResult.rows[0] ? "PROJECT_AUTOSAVED" : "PROJECT_CREATED";
+
+  await db.query(
+    `INSERT INTO workflow_draft_events (draft_id, user_id, workflow_key, event_type, step_key, field_name, value_json, payload_json)
+     VALUES ($1, $2, $3, $4, $5, 'project_payload', $6::jsonb, $7::jsonb)`,
+    [
+      saved.id,
+      user.id,
+      workflowKey,
+      eventType,
+      draftStep(payload),
+      JSON.stringify({
+        title,
+        hasSource: Boolean(payload.sourceItem || payload.douyinInput),
+        productCount: Array.isArray(payload.products) ? payload.products.length : 0,
+        keyframeCount: Array.isArray(payload.selectedKeyframes) ? payload.selectedKeyframes.length : 0,
+        taskId: saved.task_id,
+      }),
+      JSON.stringify(payload),
+    ],
+  );
 
   return NextResponse.json({ draft: presentDraft(saved) });
 }

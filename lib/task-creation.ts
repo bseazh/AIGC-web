@@ -115,6 +115,17 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
          WHERE id = $1 AND user_id = $2 AND workflow_key = $3 AND status IN ('ACTIVE', 'ARCHIVED')`,
         [draftId, user.id, workflow.key, taskId],
       );
+      await client.query(
+        `INSERT INTO workflow_draft_events (draft_id, user_id, workflow_key, event_type, step_key, field_name, value_json, payload_json, task_id)
+         VALUES ($1, $2, $3, 'TASK_SUBMITTED', 'generate', 'generation_task', $4::jsonb, NULL, $5)`,
+        [
+          draftId,
+          user.id,
+          workflow.key,
+          JSON.stringify({ taskId, assetCount: assets.length, duration, resolution, aspectRatio, status: inputsReady ? "QUEUED" : "PENDING_INPUT_REVIEW" }),
+          taskId,
+        ],
+      );
     }
     if (adminExempt) {
       await client.query(

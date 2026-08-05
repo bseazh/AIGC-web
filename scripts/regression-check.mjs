@@ -142,6 +142,16 @@ const checks = [
     "请先填写项目名称",
   ],
   [
+    "Recreate video requires a project before submit",
+    "app/components/recreate-video-page.tsx",
+    "请先创建项目，再提交生成任务",
+  ],
+  [
+    "Recreate video restores project task progress",
+    "app/components/recreate-video-page.tsx",
+    "restoreProjectTask",
+  ],
+  [
     "Recreate video supports previous step navigation",
     "app/components/recreate-video-page.tsx",
     "goPreviousStep",
@@ -567,9 +577,24 @@ const checks = [
     "CREATE TABLE IF NOT EXISTS workflow_drafts",
   ],
   [
+    "Workflow draft events persist project input history",
+    "scripts/migrate.mjs",
+    "CREATE TABLE IF NOT EXISTS workflow_draft_events",
+  ],
+  [
+    "Workflow draft saves write project event logs",
+    "app/api/workflow-drafts/route.ts",
+    "PROJECT_AUTOSAVED",
+  ],
+  [
     "Generated tasks keep source project visible",
     "lib/task-creation.ts",
     "SET status = 'ACTIVE', task_id = $4, archived_at = NULL, updated_at = NOW()",
+  ],
+  [
+    "Generated tasks write project submission logs",
+    "lib/task-creation.ts",
+    "TASK_SUBMITTED",
   ],
   [
     "Assets store content hashes for dedupe",
