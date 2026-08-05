@@ -12,6 +12,7 @@ export {
   getRecreateDraft,
   getTaskStatus,
   listRecreateDrafts,
+  renameRecreateDraft,
   resolveAssetPreviewUrl,
   sanitizeReferenceVideoAsset,
   saveRecreateDraft,

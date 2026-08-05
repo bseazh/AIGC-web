@@ -41,6 +41,18 @@ export async function deleteRecreateDraft(id: string) {
   if (!response.ok) throw new Error("项目删除失败");
 }
 
+export async function renameRecreateDraft(id: string, title: string) {
+  const response = await fetch(`/api/workflow-drafts/${id}/`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !body?.draft)
+    throw new Error(body?.message || "项目重命名失败");
+  return body.draft as ServerDraft;
+}
+
 export async function uploadRecreateItem(item: Item) {
   if (item.assetId) return item.assetId;
   if (!item.file) throw new Error("素材未找到");

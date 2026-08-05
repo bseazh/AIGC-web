@@ -577,6 +577,16 @@ const checks = [
     "DUPLICATE_PROJECT_TITLE",
   ],
   [
+    "Workflow draft rename endpoint keeps duplicate title guard",
+    "app/api/workflow-drafts/[id]/route.ts",
+    "PROJECT_RENAMED",
+  ],
+  [
+    "Project gate list exposes rename actions",
+    "app/create/project/page.tsx",
+    "重命名项目",
+  ],
+  [
     "Creation tools enter through the project gate",
     "app/tools/page.tsx",
     "projectGateHref(tool.workflowKey)",
@@ -600,6 +610,16 @@ const checks = [
     "Direct recreate video page requires a project",
     "app/create/recreate-video/page.tsx",
     "ProjectRequiredGate",
+  ],
+  [
+    "Recreate video header replaces manual save with rename",
+    "app/components/recreate-video-page.tsx",
+    "renameCurrentProject",
+  ],
+  [
+    "Recreate video sidebar shows current project instead of archive list",
+    "app/features/recreate-video/components/recreate-workspace-sidebar.tsx",
+    "recreate-current-project",
   ],
   [
     "Project guard preserves deep-link query params",

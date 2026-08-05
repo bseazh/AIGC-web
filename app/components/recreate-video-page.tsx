@@ -3,11 +3,10 @@
 import {
   ArrowLeft,
   Film,
-  Save,
+  Pencil,
   Sparkles,
   Video,
 } from "lucide-react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
@@ -31,6 +30,7 @@ import {
   loadImageForCanvas,
   MaterialsPanel,
   materialLabel,
+  renameRecreateDraft,
   RecreatePreviewModal,
   RecreateProjectGate,
   RecreateWorkspaceSidebar,
@@ -572,39 +572,6 @@ export function RecreateVideoPage() {
     );
   }, [sourceMode]);
 
-  const saveDraft = async () => {
-    if (!draftId) {
-      await createProject();
-      return;
-    }
-    const draft = draftValue();
-    localStorage.setItem(draftStorageKey, JSON.stringify(storedDraftValue(draft, draftId, draftTitle)));
-    if (!draftTitle.trim()) {
-      setNotice("请先填写项目名称");
-      window.setTimeout(() => setNotice(""), 1800);
-      return;
-    }
-    if (!draftHasContent(draft)) {
-      setNotice("当前还没有可保存的项目内容");
-      window.setTimeout(() => setNotice(""), 1800);
-      return;
-    }
-    try {
-      setDraftSyncState("saving");
-      const savedDraft = await saveRecreateDraft({ id: draftId, title: draftTitle, payload: draft });
-      setDraftId(savedDraft.id);
-      setDraftTitle(savedDraft.title);
-      localStorage.setItem(draftStorageKey, JSON.stringify({ ...draft, __serverDraftId: savedDraft.id, __serverDraftTitle: savedDraft.title }));
-      setDraftSyncState("saved");
-      mergeServerDraft(savedDraft);
-      setNotice("项目已保存到账户");
-    } catch {
-      setDraftSyncState("error");
-      setNotice("服务器项目保存失败，已先保留到当前浏览器");
-    }
-    window.setTimeout(() => setNotice(""), 1800);
-  };
-
   const createProject = async () => {
     const title = draftTitle.trim();
     if (!title) {
@@ -653,6 +620,30 @@ export function RecreateVideoPage() {
       setNotice("项目已删除");
     } catch {
       setNotice("项目删除失败，请稍后再试");
+    }
+    window.setTimeout(() => setNotice(""), 1800);
+  };
+
+  const renameCurrentProject = async () => {
+    if (!draftId) return;
+    const nextTitle = window.prompt("重命名项目", draftTitle)?.trim();
+    if (!nextTitle || nextTitle === draftTitle) return;
+    if (serverDrafts.some((draft) => draft.id !== draftId && draft.title.trim().toLowerCase() === nextTitle.toLowerCase())) {
+      setNotice("同名项目已存在，请换一个项目名称");
+      window.setTimeout(() => setNotice(""), 1800);
+      return;
+    }
+    try {
+      setDraftSyncState("saving");
+      const renamed = await renameRecreateDraft(draftId, nextTitle);
+      setDraftTitle(renamed.title);
+      setDraftSyncState("saved");
+      setServerDrafts((items) => items.map((item) => (item.id === renamed.id ? renamed : item)));
+      localStorage.setItem(draftStorageKey, JSON.stringify(storedDraftValue(draftValue(), renamed.id, renamed.title)));
+      setNotice("项目已重命名");
+    } catch (caught) {
+      setDraftSyncState("error");
+      setNotice(caught instanceof Error ? caught.message : "项目重命名失败");
     }
     window.setTimeout(() => setNotice(""), 1800);
   };
@@ -1558,17 +1549,11 @@ export function RecreateVideoPage() {
     return (
       <main className="recreate-flow-shell">
         <header className="recreate-flow-header">
-          <button type="button" onClick={() => router.push("/create/product-video")}>
-            <ArrowLeft size={19} />
-            返回一站式视频带货
-          </button>
-          <div className="recreate-flow-header-actions">
-            <Link href="/tasks">
-              <Film size={16} />
-              同步任务中心
-            </Link>
-          </div>
-        </header>
+        <button type="button" onClick={() => router.push("/create/product-video")}>
+          <ArrowLeft size={19} />
+          返回一站式视频带货
+        </button>
+      </header>
         <RecreateProjectGate
           draftTitle={draftTitle}
           draftsLoading={draftsLoading}
@@ -1591,14 +1576,10 @@ export function RecreateVideoPage() {
           返回一站式视频带货
         </button>
         <div className="recreate-flow-header-actions">
-          <button type="button" onClick={saveDraft}>
-            <Save size={16} />
-            保存项目
+          <button type="button" onClick={renameCurrentProject}>
+            <Pencil size={16} />
+            重命名项目
           </button>
-          <Link href="/tasks">
-            <Film size={16} />
-            同步任务中心
-          </Link>
         </div>
       </header>
       <form className="recreate-flow-card" onSubmit={submit}>
@@ -1606,22 +1587,14 @@ export function RecreateVideoPage() {
           activeStep={step}
           clipReady={clipReady}
           completedCount={completedCount}
-          draftId={draftId}
           draftSyncState={draftSyncState}
           draftTitle={draftTitle}
-          draftsLoading={draftsLoading}
-          onDeleteDraft={deleteDraft}
-          onLoadDraft={continueDraft}
-          onNewProject={startNewDraft}
-          onRefreshDrafts={() => refreshDrafts(false)}
           onStepChange={setStep}
-          onTitleChange={setDraftTitle}
           phaseSucceeded={phase === "succeeded"}
           productReady={productReady}
           referenceReady={referenceReady}
           sourceReady={sourceReady}
           unlockedIndex={unlockedIndex}
-          visibleDrafts={visibleDrafts}
         />
         <section className="recreate-flow-main">
           <header className="recreate-stage-header">

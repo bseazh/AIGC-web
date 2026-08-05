@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { ArrowLeft, ChevronRight, LoaderCircle, Plus, RefreshCw } from "lucide-react";
+import { ArrowLeft, ChevronRight, LoaderCircle, Pencil, Plus, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -110,6 +110,30 @@ export default function ProjectGatePage() {
     router.push(appendProjectId(next, draft.id));
   };
 
+  const renameProject = async (draft: ProjectDraft) => {
+    const nextTitle = window.prompt("重命名项目", draft.title)?.trim();
+    if (!nextTitle || nextTitle === draft.title) return;
+    if (drafts.some((item) => item.id !== draft.id && item.title.trim().toLowerCase() === nextTitle.toLowerCase())) {
+      setMessage("同名项目已存在，请换一个项目名称");
+      return;
+    }
+    setMessage("");
+    try {
+      const response = await fetch(`/api/workflow-drafts/${draft.id}/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: nextTitle }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok || !body?.draft) throw new Error(body?.message || "项目重命名失败");
+      setDrafts((items) => items.map((item) => (item.id === draft.id ? body.draft : item)));
+      setMessage("项目已重命名");
+      window.setTimeout(() => setMessage(""), 1600);
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "项目重命名失败");
+    }
+  };
+
   const createProject = async () => {
     const normalizedTitle = title.trim();
     if (!normalizedTitle) {
@@ -198,16 +222,21 @@ export default function ProjectGatePage() {
             ) : drafts.length ? (
               <div className="project-list">
                 {drafts.map((draft) => (
-                  <button type="button" key={draft.id} onClick={() => openProject(draft)}>
-                    <span className="record-thumb">
-                      <WorkflowIcon workflowKey={draft.workflowKey} />
-                    </span>
-                    <span>
-                      <strong>{draft.title}</strong>
-                      <small>最近编辑 {new Date(draft.updatedAt).toLocaleString("zh-CN")}</small>
-                    </span>
-                    <ChevronRight size={17} />
-                  </button>
+                  <article key={draft.id}>
+                    <button type="button" onClick={() => openProject(draft)}>
+                      <span className="record-thumb">
+                        <WorkflowIcon workflowKey={draft.workflowKey} />
+                      </span>
+                      <span>
+                        <strong>{draft.title}</strong>
+                        <small>最近编辑 {new Date(draft.updatedAt).toLocaleString("zh-CN")}</small>
+                      </span>
+                      <ChevronRight size={17} />
+                    </button>
+                    <button type="button" aria-label="重命名项目" title="重命名" onClick={() => renameProject(draft)}>
+                      <Pencil size={15} />
+                    </button>
+                  </article>
                 ))}
               </div>
             ) : (
