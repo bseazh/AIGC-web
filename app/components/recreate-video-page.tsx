@@ -73,8 +73,20 @@ type RecreateFrameAnalysis = {
     time?: number;
     scene?: string;
     shotType?: string;
+    cameraMovement?: string;
+    people?: unknown;
     replaceableParts?: string[];
     riskNotes?: string[];
+  }>;
+  actionTimeline?: Array<{
+    time?: number;
+    pose?: string;
+    hands?: string;
+    feet?: string;
+    bodyWeight?: string;
+    camera?: string;
+    transitionToNext?: string;
+    replicationInstruction?: string;
   }>;
   replacementPlan?: Array<{
     target?: string;
@@ -1236,7 +1248,20 @@ export function RecreateVideoPage() {
     setDouyinError("");
     setDouyinCacheExpired(false);
     try {
-      const response = await fetch("/api/workflows/recreate-video-analysis/", {
+      const body = await requestReferenceFrameAnalysis();
+      applyReferenceFrameAnalysis(body);
+      setNotice("AI 已识别关键帧，并生成基础复刻方案");
+      window.setTimeout(() => setNotice(""), 2200);
+    } catch (caught) {
+      setDouyinError(caught instanceof Error ? caught.message : "关键帧识别失败");
+    } finally {
+      setFrameAnalysisBusy(false);
+    }
+  };
+
+  const requestReferenceFrameAnalysis = async () => {
+    if (!douyinAnalysis?.cacheId) throw new Error("请先获取对标视频");
+    const response = await fetch("/api/workflows/recreate-video-analysis/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1262,8 +1287,12 @@ export function RecreateVideoPage() {
         }
         throw new Error(body?.message || body?.code || "关键帧识别失败");
       }
-      setFrameAnalysis(body.analysis || null);
-      const extractedFrames = (body.frames || []).map((frame: { time: number; url: string }) => ({
+    return body as { analysis?: RecreateFrameAnalysis; frames?: Array<{ time: number; url: string }> };
+  };
+
+  const applyReferenceFrameAnalysis = (body: { analysis?: RecreateFrameAnalysis; frames?: Array<{ time: number; url: string }> }) => {
+    setFrameAnalysis(body.analysis || null);
+    const extractedFrames = (body.frames || []).map((frame: { time: number; url: string }) => ({
           time: frame.time,
           url: frame.url,
         }));
@@ -1275,23 +1304,17 @@ export function RecreateVideoPage() {
             label: `AI关键画面 ${index + 1}`,
           })),
         );
-      if (body.analysis?.prompt) {
+      const analysisPrompt = body.analysis?.prompt;
+      if (analysisPrompt) {
         setPolishedPrompt((current) => current || {
           summary: body.analysis?.summary || "已根据关键帧生成基础复刻方案",
           preserve: ["镜头节奏", "构图", "动作走势", "光线氛围"],
           replace: ["按复刻口令和上传素材做通配替换"],
           materialUse: ["能匹配上的素材优先使用，匹配不上的素材不强行使用"],
           avoid: ["原人物脸", "原商品", "原品牌", "Logo", "水印", "原字幕"],
-          finalPrompt: body.analysis.prompt,
+          finalPrompt: analysisPrompt,
         });
       }
-      setNotice("AI 已识别关键帧，并生成基础复刻方案");
-      window.setTimeout(() => setNotice(""), 2200);
-    } catch (caught) {
-      setDouyinError(caught instanceof Error ? caught.message : "关键帧识别失败");
-    } finally {
-      setFrameAnalysisBusy(false);
-    }
   };
 
   const polishRecreateCommand = async () => {
@@ -1841,6 +1864,42 @@ export function RecreateVideoPage() {
       "用户不需要写专业提示词；即使用户口令为空，也按以上内置策略自动完成镜头复刻和素材替换。",
     ].join("\n");
 
+  const actionDirectorPrompt = (analysis: RecreateFrameAnalysis | null | undefined) => {
+    const timeline = (analysis?.actionTimeline || []).filter((item) => typeof item?.time === "number");
+    if (timeline.length) {
+      return [
+        "【逐帧动作导演脚本】",
+        "必须按以下时间顺序连续复刻动作走势，不要生成无关走路、站立摆拍或随机展示镜头；每个关键动作之间要平滑过渡。",
+        ...timeline.slice(0, 12).map((item, index) => [
+          `动作 ${index + 1}｜${Number(item.time).toFixed(1)}s：`,
+          item.pose ? `姿态：${item.pose}` : "",
+          item.hands ? `手部：${item.hands}` : "",
+          item.feet ? `脚步：${item.feet}` : "",
+          item.bodyWeight ? `重心：${item.bodyWeight}` : "",
+          item.camera ? `镜头：${item.camera}` : "",
+          item.transitionToNext ? `衔接：${item.transitionToNext}` : "",
+          item.replicationInstruction ? `执行：${item.replicationInstruction}` : "",
+        ].filter(Boolean).join(" ")),
+      ].join("\n");
+    }
+    if (analysis?.frames?.length) {
+      return [
+        "【逐帧动作导演脚本】",
+        "根据关键帧分析按时间顺序复刻动作走势，重点保持主体站位、姿态、手脚方向、重心变化、景别和镜头节奏。",
+        ...analysis.frames.slice(0, 12).map((frame, index) =>
+          `动作 ${index + 1}｜${Number(frame.time || 0).toFixed(1)}s：${frame.shotType || "参考该帧景别"}；${frame.cameraMovement || "保持该帧镜头关系"}；${frame.scene || "按该帧主体姿态和构图重演"}。`,
+        ),
+      ].join("\n");
+    }
+    return selectedKeyframes.length
+      ? [
+          "【逐帧动作导演脚本】",
+          "按已选关键帧时间点连续复刻动作：逐格读取动作结构十二宫格中的人体姿态、手脚方向、重心变化、站位和景别，生成时让新模特/新商品在相同时间节点完成对应动作，不要只生成普通走路或随机停顿。",
+          `关键帧时间：${selectedKeyframes.map((frame) => `${frame.time.toFixed(1)}s`).join(" -> ")}。`,
+        ].join("\n")
+      : "";
+  };
+
   const analyzeFaceMaskRegions = async (assetId?: string) => {
     if (!assetId) return [];
     const response = await fetch("/api/workflows/recreate-face-mask-analysis/", {
@@ -2333,6 +2392,13 @@ export function RecreateVideoPage() {
     setResult(null);
     setPhase("uploading");
     try {
+      let submitFrameAnalysis = frameAnalysis;
+      if (!submitFrameAnalysis && douyinAnalysis?.cacheId) {
+        setNotice("正在分析关键帧动作连续性");
+        const analysisBody = await requestReferenceFrameAnalysis();
+        applyReferenceFrameAnalysis(analysisBody);
+        submitFrameAnalysis = analysisBody.analysis || null;
+      }
       const sourceReferenceVideoAssetId = await prepareReferenceVideoAsset(selectedClip || sourceItem!);
       const referenceVideoAssetId = await prepareCompliantReferenceVideoAsset(sourceReferenceVideoAssetId);
       const keyframeCollageAssetId = await prepareKeyframeCollageReference();
@@ -2347,6 +2413,7 @@ export function RecreateVideoPage() {
       const collageImageIndex = keyframeCollageAssetId ? 1 : null;
       const prompt = [
         builtInRecreatePrompt(collageImageIndex),
+        actionDirectorPrompt(submitFrameAnalysis),
         compliantReferenceVideo
           ? "对标视频已先转换为动作结构参考视频：去除原音频并转为边缘轮廓线稿，用于参考镜头节奏、运镜、构图、人体姿态和动作轮廓。"
           : "当前直接提交原始对标视频作为 reference_video。",
@@ -2969,6 +3036,14 @@ export function RecreateVideoPage() {
         {frameAnalysis ? (
           <div className="recreate-command-insight">
             {frameAnalysis.summary ? <p>{frameAnalysis.summary}</p> : null}
+            {frameAnalysis.actionTimeline?.length ? (
+              <p>
+                动作脚本：
+                {frameAnalysis.actionTimeline.slice(0, 4).map((item, index) =>
+                  `${index + 1}. ${Number(item.time || 0).toFixed(1)}s ${item.pose || item.replicationInstruction || "按该帧姿态复刻"}`,
+                ).join("；")}
+              </p>
+            ) : null}
             <div>
               {replacementSlots.slice(0, 5).map((slot, index) => (
                 <span key={`${slot.target || "元素"}-${index}`}>
@@ -3340,6 +3415,7 @@ export function RecreateVideoPage() {
           value={
             [
               builtInRecreatePrompt(selectedKeyframes.some((frame) => frame.url) ? 1 : null),
+              actionDirectorPrompt(frameAnalysis),
               polishedPrompt?.finalPrompt ? `AI润色补充方案：\n${polishedPrompt.finalPrompt}` : "",
               productInfo.trim() ? `用户补充要求：${productInfo.trim()}` : "",
             ].filter(Boolean).join("\n\n") ||

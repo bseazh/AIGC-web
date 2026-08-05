@@ -462,6 +462,21 @@ const checks = [
     "第${collageImageIndex}张参考图是一张由已选关键画面转换成边缘轮廓线稿的动作结构板",
   ],
   [
+    "Recreate video analysis asks for frame-by-frame action timeline",
+    "app/api/workflows/recreate-video-analysis/route.ts",
+    "actionTimeline 是给视频生成模型看的逐帧动作导演脚本",
+  ],
+  [
+    "Recreate video submit auto-analyzes action continuity before generation",
+    "app/components/recreate-video-page.tsx",
+    "正在分析关键帧动作连续性",
+  ],
+  [
+    "Recreate video final prompt includes the action director script",
+    "app/components/recreate-video-page.tsx",
+    "【逐帧动作导演脚本】",
+  ],
+  [
     "Recreate video worker has a backend remake director fallback",
     "scripts/worker.mjs",
     "内置复刻导演指令",

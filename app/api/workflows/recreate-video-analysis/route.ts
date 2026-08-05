@@ -54,8 +54,11 @@ function analysisPrompt(options: Record<string, unknown>) {
     "你是电商短视频复刻工作台的视觉分析助手。请阅读多张关键帧，输出严格 JSON，不要输出 Markdown。",
     "目标：识别对标视频中哪些内容适合替换，哪些只能作为节奏/镜头参考，并生成可用于视频生成模型的中文提示词。",
     `用户关注的替换方向：${replacementGoals || "换商品、换模特、换背景的可能性"}。`,
-    "JSON 结构必须包含：summary、frames、replacementPlan、risks、prompt。",
+    "JSON 结构必须包含：summary、frames、actionTimeline、replacementPlan、risks、prompt。",
     "frames 每项包含：time、scene、shotType、cameraMovement、mainSubjects、people、background、textAndLogo、replaceableParts、riskNotes。",
+    "actionTimeline 是给视频生成模型看的逐帧动作导演脚本，必须按时间顺序覆盖所有关键帧；每项包含 time、pose、hands、feet、bodyWeight、camera、transitionToNext、replicationInstruction。",
+    "actionTimeline 必须具体描述人体姿态、四肢方向、步伐、重心、手势、面向、画面位置和下一帧衔接，不要只写“跳舞/走动/展示商品”这种泛泛描述。",
+    "prompt 必须内置 actionTimeline 的连续动作要求，要求生成视频按关键帧顺序复刻动作走势和转场节奏。",
     "replacementPlan 是给用户看的“近似替换槽位清单”，最多 5 项，只保留最明显、最有商业价值、用户最容易上传素材替换的对象；不要列出零碎小物件。",
     "replacementPlan 每项包含：target、slotType、materialKind、replaceable、priority、confidence、sourceFrameTimes、strategy、promptInstruction、detectionNote。",
     "slotType 只能是 product、person、scene、text、style 之一；priority 为 1-5，1 最优先；confidence 为 0-1。",
@@ -80,6 +83,16 @@ function fallbackAnalysis(frames: Frame[], durationSeconds: number) {
       textAndLogo: { hasSubtitle: null, hasWatermark: null, action: "不要复刻字幕、水印、Logo" },
       replaceableParts: ["商品", "模特", "背景"],
       riskNotes: ["需要配置 SophNet Chat 视觉模型后获得准确识别结果"],
+    })),
+    actionTimeline: frames.map((frame, index) => ({
+      time: frame.time,
+      pose: `关键帧 ${index + 1}：按该画面的主体姿态、站位和身体朝向作为动作节点。`,
+      hands: "参考该帧手臂高低、伸展方向和手势轮廓，不复制人脸或文字细节。",
+      feet: "参考该帧脚步开合、左右脚位置和移动方向。",
+      bodyWeight: "参考该帧身体重心、倾斜方向和出镜位置。",
+      camera: "参考该帧景别、构图重心和主体在画面中的位置。",
+      transitionToNext: index < frames.length - 1 ? `从 ${frame.time.toFixed(1)}s 平滑过渡到 ${frames[index + 1].time.toFixed(1)}s 的姿态。` : "作为结尾动作节点自然收束。",
+      replicationInstruction: "生成时以新模特/新商品重演此动作节点，保持动作连续，不要变成无关走路镜头。",
     })),
     replacementPlan: [
       {
@@ -108,7 +121,7 @@ function fallbackAnalysis(frames: Frame[], durationSeconds: number) {
       },
     ],
     risks: ["未接入视觉模型时无法判断遮挡、字幕、水印和具体替换区域。"],
-    prompt: `参考对标视频 ${durationSeconds.toFixed(1)} 秒内的镜头节奏、景别变化和主体展示方式，使用用户素材重生成原创视频。不得复制原商品、人物脸、品牌、字幕、Logo 或水印。`,
+    prompt: `参考对标视频 ${durationSeconds.toFixed(1)} 秒内的镜头节奏、景别变化、人体姿态、手脚动作、重心变化和主体展示方式，按关键帧时间顺序连续重演动作。使用用户素材重生成原创视频。不得复制原商品、人物脸、品牌、字幕、Logo 或水印。`,
   };
 }
 
