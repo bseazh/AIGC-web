@@ -294,7 +294,8 @@ async function createVideoTask(inputUrls, input, workflowKey, taskId) {
 }
 
 async function waitForVideo(taskId, generationTaskId) {
-  const deadline = Date.now() + 15 * 60 * 1000;
+  const timeoutMs = Number(process.env.ARK_VIDEO_TIMEOUT_MS || 25 * 60 * 1000);
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const response = await fetch(`https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks/${taskId}`, { headers: { Authorization: `Bearer ${process.env.ARK_API_KEY}` } });
     const payload = await response.json().catch(() => null);
@@ -579,14 +580,16 @@ async function settleFailure(taskId, message) {
 }
 
 async function reconcileStaleTasks() {
-  // The longest provider poll is 15 minutes. A 30-minute grace period avoids
+  // The longest provider poll is configurable. A grace period avoids
   // reclaiming normal work while returning reservations stranded by a crash.
+  const staleAfterMinutes = Math.max(45, Math.ceil(Number(process.env.ARK_VIDEO_TIMEOUT_MS || 25 * 60 * 1000) / 60_000) + 15);
   const stale = await pool.query(
     `SELECT id FROM generation_tasks
      WHERE status IN ('QUEUED', 'RUNNING')
-       AND updated_at < NOW() - INTERVAL '30 minutes'
+       AND updated_at < NOW() - ($1::int * INTERVAL '1 minute')
      ORDER BY updated_at ASC
      LIMIT 100`,
+    [staleAfterMinutes],
   );
   for (const task of stale.rows) {
     await settleFailure(task.id, "TASK_TIMEOUT");
@@ -599,7 +602,7 @@ const worker = new Worker("generation", async (job) => {
   const task = taskResult.rows[0];
   if (!task) throw new Error("Task not found");
   log("info", "task_started", { requestId: task.request_id, taskId: task.id, userId: task.user_id, workflowKey: task.workflow_key });
-  const claimed = await pool.query("UPDATE generation_tasks SET status = 'RUNNING', updated_at = NOW() WHERE id = $1 AND status = 'QUEUED' RETURNING id", [task.id]);
+  const claimed = await pool.query("UPDATE generation_tasks SET status = 'RUNNING', updated_at = NOW() WHERE id = $1 AND status IN ('QUEUED', 'RUNNING') RETURNING id", [task.id]);
   if (!claimed.rowCount) return { skipped: true };
   const savedKeys = [];
   let temporaryKeys = [];

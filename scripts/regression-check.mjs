@@ -617,6 +617,16 @@ const checks = [
     "mixUploads",
   ],
   [
+    "Video worker can resume running tasks after restart",
+    "scripts/worker.mjs",
+    "status IN ('QUEUED', 'RUNNING')",
+  ],
+  [
+    "Ark video timeout is configurable",
+    "scripts/worker.mjs",
+    "ARK_VIDEO_TIMEOUT_MS",
+  ],
+  [
     "Video center exposes the model spokesperson module",
     "app/components/video-center-page.tsx",
     "/create/model-spokesperson-video",
