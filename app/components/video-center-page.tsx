@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell, LoadingScreen } from "@/app/components/app-shell";
 import { videoModules, type VideoCenterTab } from "@/app/features/video-center/modules";
+import { projectGateHref } from "@/lib/project-workflows";
 
 type Account = { user: { displayName: string }; wallet: { availablePoints: number } };
 
@@ -72,7 +73,7 @@ export function VideoCenterPage() {
             {activeModule.items.map((item) => {
               const Icon = item.icon;
               return (
-                <Link className="video-template-card" href={item.href} key={item.title}>
+                <Link className="video-template-card" href={projectGateHref(item.workflowKey)} key={item.title}>
                   <span className={`video-template-icon ${item.tone}`}>
                     <Icon size={25} />
                   </span>

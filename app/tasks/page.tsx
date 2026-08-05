@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppShell, LoadingScreen } from "@/app/components/app-shell";
 import { WorkflowIcon } from "@/app/components/workflow-icon";
+import { projectGateHref } from "@/lib/project-workflows";
 
 type Account = { user: { displayName: string; isAdministrator?: boolean }; wallet: { availablePoints: number } };
 type Task = {
@@ -79,7 +80,7 @@ export default function TasksPage() {
         </section>
         <section className="records-panel">
           {loading ? <div className="records-loading"><LoaderCircle size={22} />正在刷新任务</div> : tasks.length === 0 ? (
-            <div className="page-empty"><span><Clock3 size={26} /></span><strong>暂无任务记录</strong><p>完成一次商品主图创作后，任务进度和结果会保存在这里。</p><Link href="/create/product-hero">开始创作</Link></div>
+            <div className="page-empty"><span><Clock3 size={26} /></span><strong>暂无任务记录</strong><p>完成一次商品主图创作后，任务进度和结果会保存在这里。</p><Link href={projectGateHref("product-hero-image")}>开始创作</Link></div>
           ) : <div className="task-records">{tasks.map((task) => (
             <Link href={`/tasks/${task.id}`} className="task-record" key={task.id}>
               <div className="record-thumb"><WorkflowIcon workflowKey={task.workflowKey} /></div>

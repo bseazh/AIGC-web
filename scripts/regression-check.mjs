@@ -572,6 +572,26 @@ const checks = [
     "status IN ('ACTIVE', 'ARCHIVED')",
   ],
   [
+    "Workflow drafts reject duplicate project titles",
+    "app/api/workflow-drafts/route.ts",
+    "DUPLICATE_PROJECT_TITLE",
+  ],
+  [
+    "Creation tools enter through the project gate",
+    "app/tools/page.tsx",
+    "projectGateHref(tool.workflowKey)",
+  ],
+  [
+    "Project gate keeps existing query params when opening projects",
+    "lib/project-workflows.ts",
+    "appendProjectId",
+  ],
+  [
+    "Project gate page creates named projects before entering workflows",
+    "app/create/project/page.tsx",
+    "创建项目并开始",
+  ],
+  [
     "Workflow drafts hide exact duplicate payloads",
     "app/api/workflow-drafts/route.ts",
     "duplicate_rank = 1",

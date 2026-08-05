@@ -8,7 +8,7 @@ import {
   Video,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -62,6 +62,8 @@ import {
 
 export function RecreateVideoPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const projectIdParam = searchParams?.get("projectId") || null;
   const refs = {
     video: useRef<HTMLInputElement>(null),
     product: useRef<HTMLInputElement>(null),
@@ -323,6 +325,26 @@ export function RecreateVideoPage() {
   };
 
   useEffect(() => {
+    if (isUuid(projectIdParam)) {
+      restoringServerDraftRef.current = true;
+      getRecreateDraft(projectIdParam)
+        .then((serverDraft) => {
+          if (!serverDraft) return;
+          setDraftId(serverDraft.id);
+          setDraftTitle(serverDraft.title);
+          localStorage.setItem(draftStorageKey, JSON.stringify({ ...serverDraft.payload, __serverDraftId: serverDraft.id, __serverDraftTitle: serverDraft.title }));
+          applyDraft(serverDraft.payload);
+          restoreProjectTask(serverDraft.taskId);
+          restoredLocalDraftRef.current = true;
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          window.setTimeout(() => {
+            restoringServerDraftRef.current = false;
+          }, 0);
+        });
+      return;
+    }
     const stored = localStorage.getItem(draftStorageKey);
     if (!stored) return;
     try {

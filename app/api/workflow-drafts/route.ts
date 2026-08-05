@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { isProjectWorkflowKey } from "@/lib/project-workflows";
 import { authenticatedUser } from "@/lib/session";
 
-const allowedWorkflows = new Set(["recreate-video"]);
-
 function normalizeWorkflow(value: unknown) {
-  return typeof value === "string" && allowedWorkflows.has(value) ? value : "";
+  return isProjectWorkflowKey(value) ? value : "";
 }
 
 function normalizeTitle(value: unknown) {
@@ -57,22 +56,30 @@ export async function GET(request: NextRequest) {
   const user = await authenticatedUser(request);
   if (!user) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401 });
 
-  const workflowKey = normalizeWorkflow(request.nextUrl.searchParams.get("workflowKey") || "recreate-video");
-  if (!workflowKey) return NextResponse.json({ code: "INVALID_WORKFLOW" }, { status: 400 });
+  const workflowKeyParam = request.nextUrl.searchParams.get("workflowKey");
+  const workflowKey = workflowKeyParam ? normalizeWorkflow(workflowKeyParam) : "";
+  if (workflowKeyParam && !workflowKey) return NextResponse.json({ code: "INVALID_WORKFLOW" }, { status: 400 });
   const limit = Math.min(Math.max(Number(request.nextUrl.searchParams.get("limit") || 20), 1), 50);
+  const params: Array<string | number> = [user.id];
+  let workflowFilter = "";
+  if (workflowKey) {
+    params.push(workflowKey);
+    workflowFilter = `AND workflow_key = $${params.length}`;
+  }
+  params.push(limit);
   const result = await db.query<DraftRow>(
     `WITH ranked AS (
        SELECT id, title, workflow_key, status, payload_json, task_id, created_at, updated_at,
-              ROW_NUMBER() OVER (PARTITION BY encode(digest(payload_json::text, 'sha256'), 'hex') ORDER BY updated_at DESC, created_at DESC) AS duplicate_rank
+              ROW_NUMBER() OVER (PARTITION BY workflow_key, encode(digest(payload_json::text, 'sha256'), 'hex') ORDER BY updated_at DESC, created_at DESC) AS duplicate_rank
        FROM workflow_drafts
-       WHERE user_id = $1 AND workflow_key = $2 AND status IN ('ACTIVE', 'ARCHIVED')
+       WHERE user_id = $1 ${workflowFilter} AND status IN ('ACTIVE', 'ARCHIVED')
      )
      SELECT id, title, workflow_key, status, payload_json, task_id, created_at, updated_at
      FROM ranked
      WHERE duplicate_rank = 1
      ORDER BY updated_at DESC
-     LIMIT $3`,
-    [user.id, workflowKey, limit],
+     LIMIT $${params.length}`,
+    params,
   );
 
   return NextResponse.json({ drafts: result.rows.map(presentDraft) });
@@ -89,6 +96,20 @@ export async function POST(request: NextRequest) {
   if (!workflowKey || !payload) return NextResponse.json({ code: "INVALID_DRAFT" }, { status: 400 });
   const title = normalizeTitle(body.title);
   const draftId = validUuid(body.id) ? body.id : null;
+
+  const duplicateTitle = await db.query<{ id: string }>(
+    `SELECT id
+     FROM workflow_drafts
+     WHERE user_id = $1
+       AND workflow_key = $2
+       AND lower(title) = lower($3)
+       AND status IN ('ACTIVE', 'ARCHIVED')
+       AND ($4::uuid IS NULL OR id <> $4::uuid)
+     LIMIT 1`,
+    [user.id, workflowKey, title, draftId],
+  );
+  if (duplicateTitle.rows[0])
+    return NextResponse.json({ code: "DUPLICATE_PROJECT_TITLE", message: "同名项目已存在，请换一个项目名称" }, { status: 409 });
 
   const result = draftId
     ? await db.query<DraftRow>(

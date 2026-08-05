@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { projectGateHref } from "@/lib/project-workflows";
 
 const features: Array<{
   title: string;
@@ -34,7 +35,7 @@ const features: Array<{
     description: "聚焦卖点与构图，生成适配电商首屏的商品视觉。",
     image: "https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&w=900&q=88",
     icon: ImageIcon,
-    href: "/create/product-hero",
+    href: projectGateHref("product-hero-image"),
   },
   {
     title: "模特穿搭",
@@ -42,7 +43,7 @@ const features: Array<{
     description: "保留服装细节，快速获得自然真实的上身效果。",
     image: "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?auto=format&fit=crop&w=900&q=88",
     icon: Shirt,
-    href: "/create/model-wear",
+    href: projectGateHref("model-wear"),
   },
   {
     title: "场景延展",
@@ -50,7 +51,7 @@ const features: Array<{
     description: "为商品匹配居家、户外和商业棚拍等营销场景。",
     image: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=900&q=88",
     icon: WandSparkles,
-    href: "/create/scene-image",
+    href: projectGateHref("scene-image"),
   },
   {
     title: "详情页套图",
@@ -58,7 +59,7 @@ const features: Array<{
     description: "围绕商品卖点生成结构统一的详情页视觉素材。",
     image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=88",
     icon: Layers3,
-    href: "/create/product-detail",
+    href: projectGateHref("product-detail-page"),
   },
   {
     title: "视频创作中心",
@@ -74,7 +75,7 @@ const features: Array<{
     description: "修复细节并提升分辨率，满足店铺和投放需求。",
     image: "https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=900&q=88",
     icon: Sparkles,
-    href: "/create/hd-enhance",
+    href: projectGateHref("hd-enhance"),
   },
   {
     title: "内容资产",

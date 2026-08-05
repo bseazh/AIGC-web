@@ -29,6 +29,7 @@ const workflowIcons: Record<string, WorkflowIconDefinition> = {
   "product-ad-video": { color: "blue", icon: Clapperboard },
   "recreate-video": { color: "violet", icon: Video },
   "recreate-reference-image": { color: "violet", icon: Sparkles },
+  "model-spokesperson-script": { color: "violet", icon: Video },
   "seedance-video": { color: "cyan", icon: Film },
   "video-mix": { color: "cyan", icon: Layers3 },
 };
