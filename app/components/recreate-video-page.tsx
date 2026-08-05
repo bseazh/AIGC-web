@@ -334,7 +334,7 @@ export function RecreateVideoPage() {
   const [previewMedia, setPreviewMedia] = useState<PreviewMedia | null>(null);
   const [notice, setNotice] = useState("");
   const [draftId, setDraftId] = useState<string | null>(null);
-  const [draftTitle, setDraftTitle] = useState("复刻视频项目");
+  const [draftTitle, setDraftTitle] = useState("");
   const [serverDrafts, setServerDrafts] = useState<ServerDraft[]>([]);
   const [draftsLoading, setDraftsLoading] = useState(false);
   const [draftSyncState, setDraftSyncState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -728,7 +728,7 @@ export function RecreateVideoPage() {
       if (phase === "succeeded") return;
       const draft = draftValue();
       localStorage.setItem(draftStorageKey, JSON.stringify(storedDraftValue(draft)));
-      if (!account || !draftHasContent(draft) || phase !== "idle" || restoringServerDraftRef.current)
+      if (!account || !draftId || !draftHasContent(draft) || phase !== "idle" || restoringServerDraftRef.current)
         return;
       setDraftSyncState("saving");
       fetch("/api/workflow-drafts/", {
@@ -960,6 +960,11 @@ export function RecreateVideoPage() {
   const saveDraft = async () => {
     const draft = draftValue();
     localStorage.setItem(draftStorageKey, JSON.stringify(storedDraftValue(draft)));
+    if (!draftTitle.trim()) {
+      setNotice("请先填写项目名称");
+      window.setTimeout(() => setNotice(""), 1800);
+      return;
+    }
     if (!draftHasContent(draft)) {
       setNotice("当前还没有可保存的项目内容");
       window.setTimeout(() => setNotice(""), 1800);
@@ -1021,7 +1026,7 @@ export function RecreateVideoPage() {
   const startNewDraft = () => {
     localStorage.removeItem(draftStorageKey);
     setDraftId(null);
-    setDraftTitle("复刻视频项目");
+    setDraftTitle("");
     setSourceItem(null);
     setClips([]);
     setProducts([]);
@@ -3658,7 +3663,7 @@ export function RecreateVideoPage() {
         <div className="recreate-flow-header-actions">
           <button type="button" onClick={saveDraft}>
             <Save size={16} />
-            保存项目
+            {draftId ? "保存项目" : "创建项目"}
           </button>
           <Link href="/tasks">
             <Film size={16} />
@@ -3685,13 +3690,15 @@ export function RecreateVideoPage() {
               <div>
                 <strong>项目存档</strong>
                 <small>
-                  {draftSyncState === "saving"
-                    ? "正在自动保存"
-                    : draftSyncState === "saved"
-                      ? "已同步到账户"
-                      : draftSyncState === "error"
-                        ? "同步失败，本地已兜底"
-                        : "跨设备恢复"}
+                  {!draftId
+                    ? "本地临时编辑"
+                    : draftSyncState === "saving"
+                      ? "正在保存"
+                      : draftSyncState === "saved"
+                        ? "已同步到账户"
+                        : draftSyncState === "error"
+                          ? "同步失败，本地已兜底"
+                          : "跨设备恢复"}
                 </small>
               </div>
               <button type="button" onClick={() => refreshDrafts(false)} disabled={draftsLoading}>
@@ -3708,7 +3715,7 @@ export function RecreateVideoPage() {
               />
             </label>
             <button type="button" className="recreate-new-draft" onClick={startNewDraft}>
-              新建空项目
+              新建临时项目
             </button>
             <div className="recreate-draft-list">
               {visibleDrafts.length ? (
@@ -3760,7 +3767,7 @@ export function RecreateVideoPage() {
                 <ArrowLeft size={14} />
                 上一步
               </button>
-              <span>当前步骤会自动保存到项目</span>
+              <span>{draftId ? "当前项目会自动保存" : "创建项目后可跨设备恢复"}</span>
             </div>
           </div>
           {step === "source" && sourcePanel}

@@ -132,6 +132,16 @@ const checks = [
     "__serverDraftId",
   ],
   [
+    "Recreate video does not auto-create server projects",
+    "app/components/recreate-video-page.tsx",
+    "!account || !draftId || !draftHasContent(draft)",
+  ],
+  [
+    "Recreate video requires a user project name before saving",
+    "app/components/recreate-video-page.tsx",
+    "请先填写项目名称",
+  ],
+  [
     "Recreate video supports previous step navigation",
     "app/components/recreate-video-page.tsx",
     "goPreviousStep",
