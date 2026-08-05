@@ -2,15 +2,16 @@
 
 export const dynamic = "force-dynamic";
 
-import { AlertCircle, CheckCircle2, ChevronRight, Clock3, ImageIcon, LoaderCircle, RefreshCw } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronRight, Clock3, LoaderCircle, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppShell, LoadingScreen } from "@/app/components/app-shell";
+import { WorkflowIcon } from "@/app/components/workflow-icon";
 
 type Account = { user: { displayName: string; isAdministrator?: boolean }; wallet: { availablePoints: number } };
 type Task = {
-  id: string; workflowName: string; status: string; statusLabel: string; points: number; adminExempt?: boolean;
+  id: string; workflowKey: string; workflowName: string; status: string; statusLabel: string; points: number; adminExempt?: boolean;
   params: { aspectRatio: string | null; scene: string | null; style: string | null };
   outputCount: number; thumbnailUrl: string | null; errorCode: string | null; createdAt: string;
 };
@@ -81,7 +82,7 @@ export default function TasksPage() {
             <div className="page-empty"><span><Clock3 size={26} /></span><strong>暂无任务记录</strong><p>完成一次商品主图创作后，任务进度和结果会保存在这里。</p><Link href="/create/product-hero">开始创作</Link></div>
           ) : <div className="task-records">{tasks.map((task) => (
             <Link href={`/tasks/${task.id}`} className="task-record" key={task.id}>
-              <div className="record-thumb">{task.thumbnailUrl ? <img src={task.thumbnailUrl} alt="" /> : <ImageIcon size={22} />}</div>
+              <div className="record-thumb"><WorkflowIcon workflowKey={task.workflowKey} /></div>
               <div className="record-main"><strong>{task.workflowName}</strong><span>{[task.params.scene, task.params.style, task.params.aspectRatio].filter(Boolean).join(" · ") || "默认生成设置"}</span><time>{new Date(task.createdAt).toLocaleString("zh-CN")}</time></div>
               <span className={`record-status status-${task.status.toLowerCase()}`}>{statusIcon(task.status)}{task.statusLabel}</span>
               <span className="record-points">{pointsLabel(task)}</span>
