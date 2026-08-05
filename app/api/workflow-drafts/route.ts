@@ -57,9 +57,15 @@ export async function GET(request: NextRequest) {
   if (!workflowKey) return NextResponse.json({ code: "INVALID_WORKFLOW" }, { status: 400 });
   const limit = Math.min(Math.max(Number(request.nextUrl.searchParams.get("limit") || 20), 1), 50);
   const result = await db.query<DraftRow>(
-    `SELECT id, title, workflow_key, status, payload_json, task_id, created_at, updated_at
-     FROM workflow_drafts
-     WHERE user_id = $1 AND workflow_key = $2 AND status IN ('ACTIVE', 'ARCHIVED')
+    `WITH ranked AS (
+       SELECT id, title, workflow_key, status, payload_json, task_id, created_at, updated_at,
+              ROW_NUMBER() OVER (PARTITION BY encode(digest(payload_json::text, 'sha256'), 'hex') ORDER BY updated_at DESC, created_at DESC) AS duplicate_rank
+       FROM workflow_drafts
+       WHERE user_id = $1 AND workflow_key = $2 AND status IN ('ACTIVE', 'ARCHIVED')
+     )
+     SELECT id, title, workflow_key, status, payload_json, task_id, created_at, updated_at
+     FROM ranked
+     WHERE duplicate_rank = 1
      ORDER BY updated_at DESC
      LIMIT $3`,
     [user.id, workflowKey, limit],
@@ -90,8 +96,29 @@ export async function POST(request: NextRequest) {
       )
     : { rows: [] as DraftRow[] };
 
+  const existingResult = result.rows[0]
+    ? result
+    : await db.query<DraftRow>(
+        `WITH matching AS (
+           SELECT id
+           FROM workflow_drafts
+           WHERE user_id = $1
+             AND workflow_key = $2
+             AND status IN ('ACTIVE', 'ARCHIVED')
+             AND digest(payload_json::text, 'sha256') = digest($4::jsonb::text, 'sha256')
+           ORDER BY updated_at DESC
+           LIMIT 1
+         )
+         UPDATE workflow_drafts draft
+         SET title = $3, payload_json = $4::jsonb, status = 'ACTIVE', archived_at = NULL, updated_at = NOW()
+         FROM matching
+         WHERE draft.id = matching.id
+         RETURNING draft.id, draft.title, draft.workflow_key, draft.status, draft.payload_json, draft.task_id, draft.created_at, draft.updated_at`,
+        [user.id, workflowKey, title, JSON.stringify(payload)],
+      );
+
   const saved =
-    result.rows[0] ||
+    existingResult.rows[0] ||
     (
       await db.query<DraftRow>(
         `INSERT INTO workflow_drafts (user_id, workflow_key, title, payload_json)

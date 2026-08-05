@@ -127,6 +127,11 @@ const checks = [
     "visibleDrafts = useMemo(() => serverDrafts.slice(0, 8)",
   ],
   [
+    "Recreate video local draft preserves server id across refresh",
+    "app/components/recreate-video-page.tsx",
+    "__serverDraftId",
+  ],
+  [
     "Recreate video supports previous step navigation",
     "app/components/recreate-video-page.tsx",
     "goPreviousStep",
@@ -535,6 +540,11 @@ const checks = [
     "Workflow drafts list active saved projects",
     "app/api/workflow-drafts/route.ts",
     "status IN ('ACTIVE', 'ARCHIVED')",
+  ],
+  [
+    "Workflow drafts hide exact duplicate payloads",
+    "app/api/workflow-drafts/route.ts",
+    "duplicate_rank = 1",
   ],
   [
     "Workflow drafts restore archived projects on save",

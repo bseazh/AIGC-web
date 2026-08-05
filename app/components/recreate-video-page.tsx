@@ -175,6 +175,10 @@ type ServerDraft = {
   createdAt: string;
   updatedAt: string;
 };
+type StoredDraft = Partial<Draft> & {
+  __serverDraftId?: string | null;
+  __serverDraftTitle?: string;
+};
 
 const imageAccept = "image/jpeg,image/png,image/webp";
 const draftStorageKey = "aigc-recreate-flow-draft";
@@ -233,6 +237,13 @@ function restoreItem(raw: unknown): Item | null {
     clipEndSeconds:
       typeof item.clipEndSeconds === "number" ? item.clipEndSeconds : undefined,
   };
+}
+
+function isUuid(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  );
 }
 
 async function sha256Hex(blob: Blob) {
@@ -386,6 +397,12 @@ export function RecreateVideoPage() {
         draft.polishedPrompt,
     );
 
+  const storedDraftValue = (draft: Draft): StoredDraft => ({
+    ...draft,
+    __serverDraftId: draftId,
+    __serverDraftTitle: draftTitle,
+  });
+
   const applyDraft = (draft: Partial<Draft>) => {
     if (draft.step) setStep(draft.step);
     if (draft.sourceMode) setSourceMode(draft.sourceMode);
@@ -453,7 +470,10 @@ export function RecreateVideoPage() {
     const stored = localStorage.getItem(draftStorageKey);
     if (!stored) return;
     try {
-      const draft = JSON.parse(stored) as Partial<Draft>;
+      const draft = JSON.parse(stored) as StoredDraft;
+      if (isUuid(draft.__serverDraftId)) setDraftId(draft.__serverDraftId);
+      if (typeof draft.__serverDraftTitle === "string" && draft.__serverDraftTitle.trim())
+        setDraftTitle(draft.__serverDraftTitle.slice(0, 80));
       restoredLocalDraftRef.current = draftHasContent(draft);
       applyDraft(draft);
     } catch {
@@ -707,7 +727,7 @@ export function RecreateVideoPage() {
     const timer = window.setTimeout(() => {
       if (phase === "succeeded") return;
       const draft = draftValue();
-      localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+      localStorage.setItem(draftStorageKey, JSON.stringify(storedDraftValue(draft)));
       if (!account || !draftHasContent(draft) || phase !== "idle" || restoringServerDraftRef.current)
         return;
       setDraftSyncState("saving");
@@ -726,6 +746,7 @@ export function RecreateVideoPage() {
           if (!response.ok || !body?.draft) throw new Error();
           setDraftId(body.draft.id);
           setDraftTitle(body.draft.title);
+          localStorage.setItem(draftStorageKey, JSON.stringify({ ...draft, __serverDraftId: body.draft.id, __serverDraftTitle: body.draft.title }));
           setDraftSyncState("saved");
           mergeServerDraft(body.draft);
         })
@@ -938,7 +959,7 @@ export function RecreateVideoPage() {
 
   const saveDraft = async () => {
     const draft = draftValue();
-    localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+    localStorage.setItem(draftStorageKey, JSON.stringify(storedDraftValue(draft)));
     if (!draftHasContent(draft)) {
       setNotice("当前还没有可保存的项目内容");
       window.setTimeout(() => setNotice(""), 1800);
@@ -960,6 +981,7 @@ export function RecreateVideoPage() {
       if (!response.ok || !body?.draft) throw new Error();
       setDraftId(body.draft.id);
       setDraftTitle(body.draft.title);
+      localStorage.setItem(draftStorageKey, JSON.stringify({ ...draft, __serverDraftId: body.draft.id, __serverDraftTitle: body.draft.title }));
       setDraftSyncState("saved");
       mergeServerDraft(body.draft);
       setNotice("项目已保存到账户");
@@ -974,6 +996,7 @@ export function RecreateVideoPage() {
     restoringServerDraftRef.current = true;
     setDraftId(draft.id);
     setDraftTitle(draft.title);
+    localStorage.setItem(draftStorageKey, JSON.stringify({ ...draft.payload, __serverDraftId: draft.id, __serverDraftTitle: draft.title }));
     applyDraft(draft.payload);
     setNotice("已恢复项目，可继续生成");
     window.setTimeout(() => {
@@ -996,6 +1019,7 @@ export function RecreateVideoPage() {
   };
 
   const startNewDraft = () => {
+    localStorage.removeItem(draftStorageKey);
     setDraftId(null);
     setDraftTitle("复刻视频项目");
     setSourceItem(null);
