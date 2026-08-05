@@ -88,12 +88,12 @@ const checks = [
   ],
   [
     "recreate video shows staged progress",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/components/panels/generate-panel.tsx",
     "<VideoGenerationProgress",
   ],
   [
     "recreate video accepts Douyin links",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/hooks/use-recreate-source.ts",
     'fetch("/api/imports/douyin/"',
   ],
   [
@@ -118,7 +118,7 @@ const checks = [
   ],
   [
     "Recreate video saves account drafts",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/api.ts",
     'fetch("/api/workflow-drafts/"',
   ],
   [
@@ -147,6 +147,16 @@ const checks = [
     "请先创建项目，再提交生成任务",
   ],
   [
+    "Recreate video starts from an explicit project gate",
+    "app/components/recreate-video-page.tsx",
+    "RecreateProjectGate",
+  ],
+  [
+    "Recreate video drops anonymous local drafts",
+    "app/components/recreate-video-page.tsx",
+    "!isUuid(draft.__serverDraftId)",
+  ],
+  [
     "Recreate video restores project task progress",
     "app/components/recreate-video-page.tsx",
     "restoreProjectTask",
@@ -163,12 +173,12 @@ const checks = [
   ],
   [
     "Recreate video clip step exposes keyframe picker",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/components/panels/keyframe-panel.tsx",
     "recreate-keyframe-picker",
   ],
   [
     "Recreate video supports fast keyframe extraction without AI",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/components/panels/keyframe-panel.tsx",
     "快速抽取关键画面",
   ],
   [
@@ -178,62 +188,62 @@ const checks = [
   ],
   [
     "Recreate video product step shows recreate command workflow",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/components/panels/materials-panel.tsx",
     "复刻口令与素材",
   ],
   [
     "Recreate video product step polishes recreate commands",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/components/panels/materials-panel.tsx",
     "AI润色口令",
   ],
   [
     "Recreate video includes a built-in remake prompt",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/prompts.ts",
     "builtInRecreatePrompt",
   ],
   [
     "Recreate video built-in prompt maps uploaded models to original actions",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/prompts.ts",
     "必须用该新模特替换原视频中的真人主体",
   ],
   [
     "Recreate video fourth step is an automatic strategy review",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/components/panels/strategy-panel.tsx",
     "内置复刻策略",
   ],
   [
     "Recreate video material tags can be referenced in commands",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/components/panels/materials-panel.tsx",
     "recreate-material-tags",
   ],
   [
     "Recreate video material tags support @ mentions",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/components/panels/materials-panel.tsx",
     "recreate-mention-menu",
   ],
   [
     "Recreate video can convert portraits to privacy multi-view references",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/components/panels/materials-panel.tsx",
     "生成隐私化人物多视图",
   ],
   [
     "Recreate video exposes a clear material processing module",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/components/panels/materials-panel.tsx",
     "素材智能处理",
   ],
   [
     "Recreate video material module identifies uploaded assets",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/components/panels/materials-panel.tsx",
     "智能识别素材",
   ],
   [
     "Recreate video lets users actively tag material kind",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/components/panels/materials-panel.tsx",
     "主动标识",
   ],
   [
     "Recreate video material kind selector includes model product and scene",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/components/panels/materials-panel.tsx",
     "<option value=\"scene\">场景",
   ],
   [
@@ -383,12 +393,12 @@ const checks = [
   ],
   [
     "Recreate video material module supports product multi-view references",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/components/panels/materials-panel.tsx",
     "生成商品多视图",
   ],
   [
     "Recreate video material module supports scene multi-view references",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/components/panels/materials-panel.tsx",
     "生成场景多视图",
   ],
   [
@@ -403,7 +413,7 @@ const checks = [
   ],
   [
     "Recreate video compliant reference mode calls the sanitize endpoint",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/api.ts",
     "/api/workflows/recreate-video-sanitize/",
   ],
   [
@@ -458,17 +468,17 @@ const checks = [
   ],
   [
     "Recreate video submits keyframe collage as a reference image",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/hooks/use-recreate-keyframes.ts",
     "createKeyframeCollageAsset",
   ],
   [
     "Recreate video keyframe collage is converted to a motion structure board before Ark",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/hooks/use-recreate-keyframes.ts",
     "recreate-motion-structure-collage.jpg",
   ],
   [
     "Recreate video keyframe collage uses Sobel edges instead of raw frames",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/hooks/use-recreate-keyframes.ts",
     "Math.sqrt(gx * gx + gy * gy)",
   ],
   [
@@ -493,7 +503,7 @@ const checks = [
   ],
   [
     "Recreate video keyframe collage falls back to video capture",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/hooks/use-recreate-keyframes.ts",
     "captureVideoFrameForCanvas(sourceSelection.preview, frame.time)",
   ],
   [
@@ -503,7 +513,7 @@ const checks = [
   ],
   [
     "Recreate video prompt identifies the submitted keyframe collage",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/prompts.ts",
     "第${collageImageIndex}张参考图是一张由已选关键画面转换成边缘轮廓线稿的动作结构板",
   ],
   [
@@ -518,12 +528,12 @@ const checks = [
   ],
   [
     "Recreate video final prompt includes the action director script",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/prompts.ts",
     "【逐帧动作导演脚本】",
   ],
   [
     "Recreate video hides internal prompt details from the review step",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/components/panels/strategy-panel.tsx",
     "内置策略状态",
   ],
   [
@@ -608,7 +618,7 @@ const checks = [
   ],
   [
     "Recreate uploads send SHA-256 content hashes",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/api.ts",
     "const contentHash = await sha256Hex(item.file)",
   ],
   [
@@ -628,12 +638,12 @@ const checks = [
   ],
   [
     "Video center exposes the model spokesperson module",
-    "app/components/video-center-page.tsx",
+    "app/features/video-center/modules.ts",
     "/create/model-spokesperson-video",
   ],
   [
     "Video center exposes recreate as a dedicated tab",
-    "app/components/video-center-page.tsx",
+    "app/features/video-center/modules.ts",
     'key: "recreate"',
   ],
   [
@@ -678,12 +688,12 @@ const checks = [
   ],
   [
     "Recreate video previews cached Douyin source",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/components/panels/source-panel.tsx",
     "原视频临时预览",
   ],
   [
     "Recreate video shows multi-frame reference prompt",
-    "app/components/recreate-video-page.tsx",
+    "app/features/recreate-video/components/panels/source-panel.tsx",
     "十二宫格参考策略",
   ],
   [
