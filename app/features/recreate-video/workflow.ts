@@ -18,18 +18,11 @@ export function getRecreateWorkflowState({
   sourceReady,
   step,
 }: RecreateWorkflowReadiness) {
-  const completedCount = [sourceReady, clipReady, productReady, referenceReady, phaseSucceeded].filter(Boolean).length;
-  const unlockedIndex = sourceReady
-    ? clipReady
-      ? productReady
-        ? referenceReady
-          ? 4
-          : 3
-        : 2
-      : 1
-    : 0;
+  const normalizedStep: WorkflowStep = step === "clip" ? "product" : step === "reference" ? "generate" : step;
+  const completedCount = [sourceReady, productReady, phaseSucceeded].filter(Boolean).length;
+  const unlockedIndex = sourceReady ? (productReady && referenceReady ? 2 : 1) : 0;
   const currentIndex = Math.min(
-    Math.max(0, workflowSteps.findIndex((item) => item.key === step)),
+    Math.max(0, workflowSteps.findIndex((item) => item.key === normalizedStep)),
     unlockedIndex,
   );
   return {

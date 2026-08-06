@@ -264,7 +264,7 @@ export function useRecreateKeyframes({
     const hasOnlyTimePoints =
       selectedKeyframes.length > 0 && selectedKeyframes.every((frame) => !frame.url);
     if (
-      step !== "clip" ||
+      !["clip", "product"].includes(step) ||
       !sourceSelection ||
       !sourceKey ||
       frameExtractionBusy ||

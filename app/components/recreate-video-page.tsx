@@ -24,7 +24,6 @@ import {
   getTaskStatus,
   GeneratePanel,
   isUuid,
-  KeyframePanel,
   keyframeCollagePrompt,
   listRecreateDrafts,
   loadImageForCanvas,
@@ -39,7 +38,6 @@ import {
   saveRecreateDraft,
   SourcePanel,
   storedDraftValue,
-  StrategyPanel,
   uploadRecreateItem,
   useRecreateMaterials,
   useRecreateSource,
@@ -511,10 +509,25 @@ export function RecreateVideoPage() {
   };
 
   useEffect(() => {
+    if (step === "clip") {
+      setStep("product");
+      return;
+    }
+    if (step === "reference") {
+      setStep("generate");
+      return;
+    }
     const next = workflowSteps[Math.max(0, unlockedIndex)].key;
     if (workflowSteps.findIndex((item) => item.key === step) > unlockedIndex)
       setStep(next);
   }, [step, unlockedIndex]);
+
+  const prepareSourceReferenceAndContinue = async () => {
+    if (!sourceReady || frameExtractionBusy) return;
+    const hasRealKeyframeImages = frameAnalysisFrames.length > 0 || selectedKeyframes.some((frame) => Boolean(frame.url));
+    if (!hasRealKeyframeImages) await quickExtractKeyframes();
+    setStep("product");
+  };
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -1369,7 +1382,7 @@ export function RecreateVideoPage() {
       douyinError={douyinError}
       douyinInput={douyinInput}
       libraryKind={libraryKind}
-      onNext={() => setStep("clip")}
+      onNext={prepareSourceReferenceAndContinue}
       openVideoLibrary={() => openLibrary("video")}
       returnToSourceForExpiredCache={returnToSourceForExpiredCache}
       selectAsset={selectAsset}
@@ -1386,36 +1399,6 @@ export function RecreateVideoPage() {
       sourceSelection={sourceSelection}
       videoInputRef={refs.video}
       videoSource={videoSource}
-    />
-  );
-
-  const clipPanel = (
-    <KeyframePanel
-      activeClipId={activeClipId}
-      allCandidateKeyframesSelected={allCandidateKeyframesSelected}
-      analyzeReplaceableFrames={analyzeReplaceableFrames}
-      clipReady={clipReady}
-      douyinAnalysis={douyinAnalysis}
-      douyinClips={douyinClips}
-      frameAnalysis={frameAnalysis}
-      frameAnalysisBusy={frameAnalysisBusy}
-      frameAnalysisFrames={frameAnalysisFrames}
-      frameExtractionBusy={frameExtractionBusy}
-      goToVideoMix={goToVideoMix}
-      keyframeFallbackVisual={keyframeFallbackVisual}
-      moveClip={moveClip}
-      onNext={() => setStep("product")}
-      quickExtractKeyframes={quickExtractKeyframes}
-      removeClip={removeClip}
-      selectableKeyframes={selectableKeyframes}
-      selectedKeyframeKeys={selectedKeyframeKeys}
-      selectedKeyframes={selectedKeyframes}
-      setActiveClipId={setActiveClipId}
-      setSourceItem={setSourceItem}
-      sourceSelection={sourceSelection}
-      toggleAllKeyframes={toggleAllKeyframes}
-      toggleKeyframe={toggleKeyframe}
-      useDefaultKeyframes={useDefaultKeyframes}
     />
   );
 
@@ -1465,7 +1448,7 @@ export function RecreateVideoPage() {
       materialReferences={materialReferences}
       mentionMaterials={mentionMaterials}
       normalizeProductName={normalizeProductName}
-      onNext={() => setStep("reference")}
+      onNext={() => setStep("generate")}
       openProductLibrary={() => openLibrary("product")}
       polishRecreateCommand={polishRecreateCommand}
       polishedPrompt={polishedPrompt}
@@ -1488,19 +1471,6 @@ export function RecreateVideoPage() {
       setMaterialMentionQuery={setMaterialMentionQuery}
       slotTypeLabel={slotTypeLabel}
       strengthenFaceMask={strengthenFaceMask}
-    />
-  );
-
-  const referencePanel = (
-    <StrategyPanel
-      actionTimelineCount={frameAnalysis?.actionTimeline?.length || 0}
-      keyframeFallbackVisual={keyframeFallbackVisual}
-      materialReferences={materialReferences}
-      onNext={() => setStep("generate")}
-      previewImageButton={previewImageButton}
-      products={products}
-      ready={referenceReady}
-      selectedKeyframes={selectedKeyframes}
     />
   );
 
@@ -1587,7 +1557,7 @@ export function RecreateVideoPage() {
       </header>
       <form className="recreate-flow-card" onSubmit={submit}>
         <RecreateWorkspaceSidebar
-          activeStep={step}
+          activeStep={activeStep.key}
           clipReady={clipReady}
           completedCount={completedCount}
           onStepChange={setStep}
@@ -1604,11 +1574,10 @@ export function RecreateVideoPage() {
               <strong>{activeStep.title}</strong>
               <small>{activeStep.subtitle}</small>
             </div>
-            <span>离开时可保存</span>
           </header>
           <div className="recreate-flow-toolbar">
             <div>
-              <strong>{activeStep.number} / 5</strong>
+              <strong>{activeStep.number} / {workflowSteps.length}</strong>
               <small>{activeStep.title}</small>
             </div>
             <div className="recreate-flow-toolbar-actions">
@@ -1616,13 +1585,10 @@ export function RecreateVideoPage() {
                 <ArrowLeft size={14} />
                 上一步
               </button>
-              <span>当前项目会自动保存</span>
             </div>
           </div>
           {step === "source" && sourcePanel}
-          {step === "clip" && clipPanel}
           {step === "product" && productPanel}
-          {step === "reference" && referencePanel}
           {step === "generate" && generatePanel}
           {notice && <p className="creator-success">{notice}</p>}
           {douyinError && step !== "source" && (

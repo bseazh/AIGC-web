@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronDown, Download, Film, LoaderCircle, Sparkles } from "lucide-react";
+import { ArrowLeft, ChevronDown, Download, Film, LoaderCircle, Maximize2, Sparkles } from "lucide-react";
 
 import { VideoGenerationProgress } from "@/app/components/video-generation-progress";
 import type { PreviewMedia, Result } from "../../types";
@@ -77,10 +77,10 @@ export function GeneratePanel({
           <strong>当前步骤</strong>
           <h2>生成复刻视频</h2>
         </div>
-        <span>5 / 5</span>
+        <span>3 / 3</span>
       </header>
       <p className="recreate-panel-copy">
-        这里会把当前复刻链路提交到任务中心，并显示加载进度和预计时间。
+        确认生成参数后提交任务。提示词、素材和参考画面会自动合并到生成请求中。
       </p>
       <div className="recreate-meta-grid">
         <label>
@@ -144,40 +144,6 @@ export function GeneratePanel({
           ? "提交前会先生成去音频、边缘轮廓线稿化且满足模型最低分辨率的动作结构参考视频，保留动作节奏并降低真人可识别度。"
           : "当前会直接提交原始对标视频，含真人时可能被 Ark 拒绝。"}
       </p>
-      <label className="recreate-field">
-        复刻口令（可选）
-        <textarea
-          value={productInfo}
-          onChange={(event) => handleCommandInput(event.target.value)}
-          onBlur={() => window.setTimeout(() => setMaterialMentionOpen(false), 140)}
-          maxLength={800}
-          placeholder="例如：动作和节奏参考原视频，把服装换成 @图片一，背景保持干净明亮。"
-        />
-        {materialMentionOpen && mentionMaterials.length ? (
-          <div className="recreate-mention-menu">
-            {mentionMaterials.map((material, index) => (
-              <button
-                type="button"
-                key={`${material.label}-generate-mention-${index}`}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => insertMaterialReference(material.label)}
-              >
-                <img src={material.preview} alt={`${material.label}预览`} />
-                <span>@{material.label}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </label>
-      <label className="recreate-field">
-        补充要求（可选）
-        <textarea
-          value={special}
-          onChange={(event) => setSpecial(event.target.value)}
-          maxLength={600}
-          placeholder="例如：突出金属质感、镜头缓慢推进、电影级光影"
-        />
-      </label>
       <p className="recreate-credit">
         <Sparkles size={16} />
         预计积分：{generateReady ? "40 积分" : "待补全前置步骤"}
@@ -197,15 +163,25 @@ export function GeneratePanel({
       )}
       {phase === "succeeded" && result?.outputs[0] && (
         <div className="recreate-result">
-          <video src={result.outputs[0].url} controls playsInline />
-          <a href={`/api/assets/${result.outputs[0].assetId}/download/`}>
-            <Download size={16} />
-            下载视频
-          </a>
-          <button type="button" onClick={goToVideoMix}>
-            <Film size={16} />
-            前往智能混剪
-          </button>
+          <div className="recreate-result-preview">
+            <video src={result.outputs[0].url} controls playsInline />
+          </div>
+          <div className="recreate-result-actions">
+            <strong>视频已生成</strong>
+            <p>结果已保存到内容资产，可下载或继续带入智能混剪。</p>
+            <button type="button" onClick={() => window.open(result.outputs[0].url, "_blank", "noopener,noreferrer")}>
+              <Maximize2 size={16} />
+              全屏预览
+            </button>
+            <a href={`/api/assets/${result.outputs[0].assetId}/download/`}>
+              <Download size={16} />
+              下载视频
+            </a>
+            <button type="button" onClick={goToVideoMix}>
+              <Film size={16} />
+              前往智能混剪
+            </button>
+          </div>
         </div>
       )}
       <div className="recreate-actions">

@@ -172,14 +172,14 @@ const checks = [
     "selectedKeyframes.length >= 4",
   ],
   [
-    "Recreate video clip step exposes keyframe picker",
-    "app/features/recreate-video/components/panels/keyframe-panel.tsx",
-    "recreate-keyframe-picker",
+    "Recreate video has a simplified three-step workflow",
+    "app/features/recreate-video/constants.ts",
+    "素材与提示词",
   ],
   [
-    "Recreate video supports fast keyframe extraction without AI",
-    "app/features/recreate-video/components/panels/keyframe-panel.tsx",
-    "快速抽取关键画面",
+    "Recreate video auto-extracts keyframes after source selection",
+    "app/components/recreate-video-page.tsx",
+    "prepareSourceReferenceAndContinue",
   ],
   [
     "Recreate video frame endpoint can skip AI analysis",
@@ -187,14 +187,14 @@ const checks = [
     'body.mode === "frames"',
   ],
   [
-    "Recreate video product step shows recreate command workflow",
+    "Recreate video product step shows prompt and material workflow",
     "app/features/recreate-video/components/panels/materials-panel.tsx",
-    "复刻口令与素材",
+    "素材与提示词",
   ],
   [
-    "Recreate video product step polishes recreate commands",
+    "Recreate video product step optimizes prompts",
     "app/features/recreate-video/components/panels/materials-panel.tsx",
-    "AI润色口令",
+    "优化提示词",
   ],
   [
     "Recreate video includes a built-in remake prompt",
@@ -207,9 +207,9 @@ const checks = [
     "必须用该新模特替换原视频中的真人主体",
   ],
   [
-    "Recreate video fourth step is an automatic strategy review",
-    "app/features/recreate-video/components/panels/strategy-panel.tsx",
-    "内置复刻策略",
+    "Recreate video keeps internal strategy out of visible steps",
+    "app/components/recreate-video-page.tsx",
+    'step === "generate" && generatePanel',
   ],
   [
     "Recreate video material tags can be referenced in commands",
@@ -222,24 +222,24 @@ const checks = [
     "recreate-mention-menu",
   ],
   [
-    "Recreate video can convert portraits to privacy multi-view references",
+    "Recreate video can convert portraits to per-material multi-view references",
     "app/features/recreate-video/components/panels/materials-panel.tsx",
-    "生成隐私化人物多视图",
+    "人物多视图",
   ],
   [
-    "Recreate video exposes a clear material processing module",
+    "Recreate video keeps material processing on each uploaded item",
     "app/features/recreate-video/components/panels/materials-panel.tsx",
-    "素材智能处理",
+    "recreate-selected-images",
   ],
   [
-    "Recreate video material module identifies uploaded assets",
+    "Recreate video material cards can create reusable references",
     "app/features/recreate-video/components/panels/materials-panel.tsx",
-    "智能识别素材",
+    "素材多视图",
   ],
   [
     "Recreate video lets users actively tag material kind",
     "app/features/recreate-video/components/panels/materials-panel.tsx",
-    "主动标识",
+    "recreate-material-kind-select",
   ],
   [
     "Recreate video material kind selector includes model product and scene",
@@ -394,12 +394,12 @@ const checks = [
   [
     "Recreate video material module supports product multi-view references",
     "app/features/recreate-video/components/panels/materials-panel.tsx",
-    "生成商品多视图",
+    "素材多视图",
   ],
   [
     "Recreate video material module supports scene multi-view references",
     "app/features/recreate-video/components/panels/materials-panel.tsx",
-    "生成场景多视图",
+    "场景多视图",
   ],
   [
     "Recreate video material images open a zoom preview",
@@ -532,9 +532,9 @@ const checks = [
     "【逐帧动作导演脚本】",
   ],
   [
-    "Recreate video hides internal prompt details from the review step",
-    "app/features/recreate-video/components/panels/strategy-panel.tsx",
-    "内置策略状态",
+    "Recreate video final step hides duplicate prompt fields",
+    "app/features/recreate-video/components/panels/generate-panel.tsx",
+    "提示词、素材和参考画面会自动合并",
   ],
   [
     "Recreate video worker has a backend remake director fallback",
@@ -747,9 +747,9 @@ const checks = [
     "原视频临时预览",
   ],
   [
-    "Recreate video shows multi-frame reference prompt",
+    "Recreate video hides multi-frame extraction details from source step",
     "app/features/recreate-video/components/panels/source-panel.tsx",
-    "十二宫格参考策略",
+    "下一步会自动准备参考画面",
   ],
   [
     "Recreate video analysis extracts frames",

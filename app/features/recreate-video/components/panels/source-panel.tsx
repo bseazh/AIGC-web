@@ -70,7 +70,7 @@ export function SourcePanel({
           <strong>当前步骤</strong>
           <h2>添加对标视频</h2>
         </div>
-        <span>1 / 5</span>
+        <span>1 / 3</span>
       </header>
       <p className="recreate-panel-copy">
         视频来源可通过链接解析，也可以直接上传或从素材库挑选。
@@ -141,7 +141,7 @@ export function SourcePanel({
             </div>
             {!douyinAnalysis && (
               <p className="recreate-hint">
-                支持完整分享文案；解析后右侧会临时缓存并预览原视频，系统会自动抽取十二宫格参考画面。
+                支持完整分享文案；解析后右侧会临时缓存并预览原视频，下一步会自动准备参考画面。
               </p>
             )}
             {douyinAnalysis && (
@@ -153,21 +153,11 @@ export function SourcePanel({
                   </div>
                   <span>已缓存</span>
                 </header>
-                {douyinAnalysis.keyframeSeconds?.length ? (
-                  <div className="recreate-reference-plan">
-                    <strong>十二宫格参考策略</strong>
-                    <small>
-                      系统会自动查看这些关键时间点：
-                      {douyinAnalysis.keyframeSeconds.map((second) => `${second.toFixed(1)}s`).join(" / ")}
-                    </small>
-                    {douyinAnalysis.referencePrompt && <p>{douyinAnalysis.referencePrompt}</p>}
-                  </div>
-                ) : null}
                 <button type="button" onClick={onNext} disabled={!sourceSelection}>
                   <Film size={17} />
-                  生成十二宫格参考
+                  下一步
                 </button>
-                <p>不需要手动截取；长视频会按整体内容抽取十二宫格。最终生成仍建议控制在 15 秒以内，稳定性更高。</p>
+                <p>不需要手动截取；系统会在后台准备参考画面。最终生成建议控制在 15 秒以内，稳定性更高。</p>
               </div>
             )}
           </div>
@@ -292,7 +282,7 @@ export function SourcePanel({
       )}
       <div className="recreate-source-footer">
         <button type="button" className="primary" onClick={onNext} disabled={!sourceReady}>
-          下一步：选择关键画面
+          下一步
         </button>
       </div>
     </section>

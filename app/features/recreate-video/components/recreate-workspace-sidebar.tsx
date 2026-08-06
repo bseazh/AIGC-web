@@ -1,4 +1,5 @@
 import type { WorkflowStep } from "../types";
+import { workflowSteps } from "../constants";
 import { RecreateStepList } from "./recreate-step-list";
 
 type RecreateWorkspaceSidebarProps = {
@@ -40,7 +41,7 @@ export function RecreateWorkspaceSidebar({
       </button>
       <div className="recreate-flow-summary">
         <strong>制作流程</strong>
-        <span>{completedCount}/5</span>
+        <span>{completedCount}/{workflowSteps.length}</span>
       </div>
       <RecreateStepList
         activeStep={activeStep}

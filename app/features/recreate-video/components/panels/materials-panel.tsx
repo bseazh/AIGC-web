@@ -109,35 +109,25 @@ export function MaterialsPanel({
       <header className="recreate-panel-head">
         <div>
           <strong>当前步骤</strong>
-          <h2>复刻口令与素材</h2>
+          <h2>素材与提示词</h2>
         </div>
-        <span>3 / 5</span>
+        <span>2 / 3</span>
       </header>
       <p className="recreate-panel-copy">
-        不用逐个指定“换哪一块”。先看十二宫格参考画面，再写一句复刻口令并上传素材池；系统会自动把能匹配上的人物、服装、商品、背景或字幕写进生成方案，匹配不上的素材不强行使用。
+        上传要替换的人物、商品或场景素材，再用一句话说明想改成什么效果；动作和镜头参考会在后台自动整理。
       </p>
       <section className="recreate-replacement-guide">
         <header>
           <div>
-            <strong>十二宫格画面理解</strong>
+            <strong>参考画面</strong>
             <small>
               {frameAnalysis
-                ? "已根据关键帧识别人物、场景、动作和可替换元素"
+                ? "已准备动作、场景和可替换元素参考"
                 : douyinHasCache
-                  ? "可先让 AI 理解画面，再润色复刻口令"
-                  : "本地视频可先使用十二宫格作为视觉参考"}
+                  ? "系统会在提交前自动理解画面"
+                  : "本地视频已准备为视觉参考"}
             </small>
           </div>
-          {douyinHasCache ? (
-            <button type="button" onClick={analyzeReplaceableFrames} disabled={frameAnalysisBusy}>
-              {frameAnalysisBusy ? (
-                <LoaderCircle className="generation-spinner" size={15} />
-              ) : (
-                <Sparkles size={15} />
-              )}
-              {frameAnalysisBusy ? "正在处理" : frameAnalysis ? "重新分析参考" : "分析十二宫格"}
-            </button>
-          ) : null}
         </header>
         {(frameAnalysisFrames.length || selectedKeyframes.length) ? (
           <div className="recreate-replacement-frames recreate-frame-collage compact">
@@ -152,7 +142,7 @@ export function MaterialsPanel({
         {frameAnalysis ? (
           <div className="recreate-command-insight">
             {frameAnalysis.summary ? <p>{frameAnalysis.summary}</p> : null}
-            {frameAnalysis.actionTimeline?.length ? <p>已生成内部动作连续性指引，会在提交时自动用于模型生成。</p> : null}
+            {frameAnalysis.actionTimeline?.length ? <p>动作连续性已准备，提交时会自动用于生成。</p> : null}
             <div>
               {replacementSlots.slice(0, 5).map((slot, index) => (
                 <span key={`${slot.target || "元素"}-${index}`}>
@@ -169,8 +159,8 @@ export function MaterialsPanel({
       <section className="recreate-command-card">
         <header>
           <div>
-            <strong>写一句复刻口令</strong>
-            <small>你可以说得很随意，AI 会帮你润色成生成提示词。</small>
+            <strong>提示词</strong>
+            <small>简单说明替换方向即可，可以用 @ 引用素材。</small>
           </div>
           <button type="button" onClick={polishRecreateCommand} disabled={frameAnalysisBusy}>
             {frameAnalysisBusy ? (
@@ -178,7 +168,7 @@ export function MaterialsPanel({
             ) : (
               <Sparkles size={15} />
             )}
-            {frameAnalysisBusy ? "正在润色" : "AI润色口令"}
+            {frameAnalysisBusy ? "正在优化" : "优化提示词"}
           </button>
         </header>
         {materialReferences.length ? (
@@ -202,7 +192,7 @@ export function MaterialsPanel({
             setMaterialMentionQuery(match?.[2] || "");
           }}
           maxLength={800}
-          placeholder="例如：动作和镜头节奏参考原视频，把人物服装替换为图片一，背景参考图片二，字幕改成夏季显瘦穿搭。"
+          placeholder="例如：动作和镜头节奏参考原视频，把人物服装替换为 @图片一，背景参考 @图片二，字幕改成夏季显瘦穿搭。"
         />
         {materialMentionOpen && mentionMaterials.length ? (
           <div className="recreate-mention-menu">
@@ -262,98 +252,6 @@ export function MaterialsPanel({
           <small>已上传 {products.length}/8 个</small>
         </button>
       )}
-      <section className={`recreate-portrait-reference ${portraitCandidate?.materialKind ? "ready" : ""}`}>
-        <header>
-          <div>
-            <strong>素材智能处理</strong>
-            <small>先识别素材类型：真人走隐私化遮挡多视图，商品/场景走普通多视图参考。</small>
-          </div>
-          <span>{portraitCandidate?.materialKind ? materialKindLabel(portraitCandidate.materialKind) : products.length ? "待识别" : "待上传"}</span>
-        </header>
-        {portraitCandidate ? (
-          <div className="recreate-portrait-reference-body">
-            {previewImageButton(portraitCandidate.preview, portraitCandidate.name || "待处理素材预览")}
-            <div>
-              <strong>{privacyReference ? "@虚拟模特参考" : `当前候选：@${portraitCandidate.name.trim() || materialLabel(portraitCandidateIndex)}`}</strong>
-              <p>
-                {portraitCandidate.materialSummary ||
-                  (privacyReference
-                    ? "这张图已经替换原真人素材，会作为人物 reference 提交给模型。"
-                    : "先识别它是人物、商品、场景还是文字素材，再生成更适合复刻的多视图 reference。")}
-              </p>
-              <div className="recreate-portrait-actions">
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => analyzeMaterial(portraitCandidateIndex)}
-                  disabled={materialAnalysisBusyIndex !== null || privacyViewBusyIndex !== null}
-                >
-                  {materialAnalysisBusyIndex === portraitCandidateIndex ? (
-                    <LoaderCircle className="generation-spinner" size={14} />
-                  ) : (
-                    <Sparkles size={14} />
-                  )}
-                  {materialAnalysisBusyIndex === portraitCandidateIndex ? "正在识别素材" : "智能识别素材"}
-                </button>
-                <label className="recreate-kind-select">
-                  主动标识
-                  <select
-                    value={portraitCandidate.materialKind && ["person", "product", "scene"].includes(portraitCandidate.materialKind) ? portraitCandidate.materialKind : ""}
-                    onChange={(event) => setMaterialKind(portraitCandidateIndex, event.target.value as MaterialKind)}
-                    disabled={privacyViewBusyIndex !== null || materialAnalysisBusyIndex !== null}
-                  >
-                    <option value="">请选择类型</option>
-                    <option value="person">模特/人物</option>
-                    <option value="product">商品/物体</option>
-                    <option value="scene">场景/背景</option>
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  className="privacy-view"
-                  onClick={() => createPrivacyMultiView(portraitCandidateIndex)}
-                  disabled={privacyViewBusyIndex !== null || materialAnalysisBusyIndex !== null}
-                >
-                  {privacyViewBusyIndex === portraitCandidateIndex ? (
-                    <LoaderCircle className="generation-spinner" size={14} />
-                  ) : (
-                    <Sparkles size={14} />
-                  )}
-                  {privacyViewBusyIndex === portraitCandidateIndex
-                    ? "正在生成多视图参考"
-                    : portraitCandidate.materialKind === "person"
-                      ? "生成隐私化人物多视图"
-                      : portraitCandidate.materialKind === "scene"
-                        ? "生成场景多视图"
-                        : portraitCandidate.materialKind && portraitCandidate.materialKind !== "unknown"
-                          ? "生成商品多视图"
-                          : "生成通用多视图参考"}
-                </button>
-                {portraitCandidate.materialKind === "person" ? (
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => strengthenFaceMask(portraitCandidateIndex)}
-                    disabled={faceMaskBusyIndex !== null || privacyViewBusyIndex !== null || materialAnalysisBusyIndex !== null}
-                  >
-                    {faceMaskBusyIndex === portraitCandidateIndex ? (
-                      <LoaderCircle className="generation-spinner" size={14} />
-                    ) : (
-                      <Sparkles size={14} />
-                    )}
-                    {faceMaskBusyIndex === portraitCandidateIndex ? "正在强化遮盖" : "强化脸部遮盖"}
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <button type="button" className="recreate-portrait-empty" onClick={() => productInputRef.current?.click()}>
-            <ImagePlus size={18} />
-            先上传真人/模特图片
-          </button>
-        )}
-      </section>
       {products.length > 0 && (
         <div className="recreate-selected-images">
           {products.map((product, index) => (
@@ -435,7 +333,7 @@ export function MaterialsPanel({
       )}
       <div className="recreate-source-footer">
         <button type="button" className="primary" onClick={onNext} disabled={!productReady}>
-          下一步：查看内置策略
+          下一步
         </button>
       </div>
       <input ref={productInputRef} type="file" accept={imageAccept} multiple onChange={(event) => chooseProduct(event.target.files)} hidden />
