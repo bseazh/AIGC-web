@@ -70,136 +70,156 @@ export function GeneratePanel({
   special,
   usageAuthorized,
 }: GeneratePanelProps) {
+  const generatedVideo = result?.outputs[0];
+  const isGenerating = phase === "uploading" || phase === "generating";
+
   return (
-    <section className="recreate-panel">
-      <header className="recreate-panel-head">
-        <div>
-          <strong>当前步骤</strong>
-          <h2>生成复刻视频</h2>
-        </div>
-        <span>3 / 3</span>
-      </header>
-      <p className="recreate-panel-copy">
-        确认生成参数后提交任务。提示词、素材和参考画面会自动合并到生成请求中。
-      </p>
-      <div className="recreate-meta-grid">
-        <label>
-          视频比例
-          <span className="recreate-select">
-            <select value={ratio} onChange={(event) => setRatio(event.target.value)}>
-              <option value="9:16">竖屏（9:16）</option>
-              <option value="16:9">横屏（16:9）</option>
-            </select>
-            <ChevronDown size={16} />
-          </span>
-        </label>
-        <label>
-          视频时长
-          <span className="recreate-select">
-            <select value={duration} onChange={(event) => setDuration(event.target.value)}>
-              <option value="5">5 秒</option>
-              <option value="10">10 秒</option>
-              <option value="15">15 秒</option>
-            </select>
-            <ChevronDown size={16} />
-          </span>
-        </label>
-        <label>
-          视频分辨率
-          <span className="recreate-select">
-            <select value={resolution} onChange={(event) => setResolution(event.target.value)}>
-              <option>480p</option>
-              <option>720p</option>
-              <option>1080p</option>
-            </select>
-            <ChevronDown size={16} />
-          </span>
-        </label>
-      </div>
-      <label className="recreate-consent">
-        <input
-          type="checkbox"
-          checked={usageAuthorized}
-          onChange={(event) => {
-            setUsageAuthorized(event.target.checked);
-            clearTaskState();
-          }}
-        />
-        我确认拥有对标视频、素材池及复刻口令中相关内容的合法使用授权
-      </label>
-      <label className="recreate-toggle">
-        轻量合规参考视频
-        <input
-          type="checkbox"
-          checked={compliantReferenceVideo}
-          onChange={(event) => {
-            setCompliantReferenceVideo(event.target.checked);
-            clearTaskState();
-          }}
-        />
-        <i />
-      </label>
-      <p className="recreate-test-note">
-        {compliantReferenceVideo
-          ? "提交前会先生成去音频、边缘轮廓线稿化且满足模型最低分辨率的动作结构参考视频，保留动作节奏并降低真人可识别度。"
-          : "当前会直接提交原始对标视频，含真人时可能被 Ark 拒绝。"}
-      </p>
-      <p className="recreate-credit">
-        <Sparkles size={16} />
-        预计积分：{generateReady ? "40 积分" : "待补全前置步骤"}
-      </p>
-      {phase === "uploading" || phase === "generating" ? (
-        <VideoGenerationProgress
-          phase={phase}
-          taskStatus={result?.status}
-          title="复刻带货视频"
-          durationSeconds={durationSeconds}
-        />
-      ) : null}
-      {error && (
-        <p className="creator-error" role="alert">
-          {error}
-        </p>
-      )}
-      {phase === "succeeded" && result?.outputs[0] && (
-        <div className="recreate-result">
-          <div className="recreate-result-preview">
-            <video src={result.outputs[0].url} controls playsInline />
+    <section className="recreate-panel recreate-generate-panel">
+      <div className="recreate-generate-workbench">
+        <div className="recreate-generate-config">
+          <header className="recreate-panel-head">
+            <div>
+              <strong>当前步骤</strong>
+              <h2>生成复刻视频</h2>
+            </div>
+            <span>3 / 3</span>
+          </header>
+          <p className="recreate-panel-copy">
+            确认生成参数后提交任务。提示词、素材和参考画面会自动合并到生成请求中。
+          </p>
+          <div className="recreate-meta-grid">
+            <label>
+              视频比例
+              <span className="recreate-select">
+                <select value={ratio} onChange={(event) => setRatio(event.target.value)}>
+                  <option value="9:16">竖屏（9:16）</option>
+                  <option value="16:9">横屏（16:9）</option>
+                </select>
+                <ChevronDown size={16} />
+              </span>
+            </label>
+            <label>
+              视频时长
+              <span className="recreate-select">
+                <select value={duration} onChange={(event) => setDuration(event.target.value)}>
+                  <option value="5">5 秒</option>
+                  <option value="10">10 秒</option>
+                  <option value="15">15 秒</option>
+                </select>
+                <ChevronDown size={16} />
+              </span>
+            </label>
+            <label>
+              视频分辨率
+              <span className="recreate-select">
+                <select value={resolution} onChange={(event) => setResolution(event.target.value)}>
+                  <option>480p</option>
+                  <option>720p</option>
+                  <option>1080p</option>
+                </select>
+                <ChevronDown size={16} />
+              </span>
+            </label>
           </div>
-          <div className="recreate-result-actions">
-            <strong>视频已生成</strong>
-            <p>结果已保存到内容资产，可下载或继续带入智能混剪。</p>
-            <button type="button" onClick={() => window.open(result.outputs[0].url, "_blank", "noopener,noreferrer")}>
-              <Maximize2 size={16} />
-              全屏预览
-            </button>
-            <a href={`/api/assets/${result.outputs[0].assetId}/download/`}>
-              <Download size={16} />
-              下载视频
-            </a>
-            <button type="button" onClick={goToVideoMix}>
-              <Film size={16} />
-              前往智能混剪
-            </button>
-          </div>
-        </div>
-      )}
-      <div className="recreate-actions">
-        <button className="secondary" type="button" onClick={onGoPrevious} disabled={!canGoPrevious}>
-          <ArrowLeft size={16} />
-          上一步
-        </button>
-        <button className="primary" type="submit" disabled={!generateReady || phase !== "idle"}>
-          {phase === "uploading" || phase === "generating" ? (
-            <LoaderCircle className="generation-spinner" size={18} />
-          ) : (
-            <Film size={18} />
+          <label className="recreate-consent">
+            <input
+              type="checkbox"
+              checked={usageAuthorized}
+              onChange={(event) => {
+                setUsageAuthorized(event.target.checked);
+                clearTaskState();
+              }}
+            />
+            我确认拥有对标视频、素材池及复刻口令中相关内容的合法使用授权
+          </label>
+          <label className="recreate-toggle">
+            轻量合规参考视频
+            <input
+              type="checkbox"
+              checked={compliantReferenceVideo}
+              onChange={(event) => {
+                setCompliantReferenceVideo(event.target.checked);
+                clearTaskState();
+              }}
+            />
+            <i />
+          </label>
+          <p className="recreate-test-note">
+            {compliantReferenceVideo
+              ? "提交前会先生成去音频、边缘轮廓线稿化且满足模型最低分辨率的动作结构参考视频，保留动作节奏并降低真人可识别度。"
+              : "当前会直接提交原始对标视频，含真人时可能被 Ark 拒绝。"}
+          </p>
+          <p className="recreate-credit">
+            <Sparkles size={16} />
+            预计积分：{generateReady ? "40 积分" : "待补全前置步骤"}
+          </p>
+          {error && (
+            <p className="creator-error" role="alert">
+              {error}
+            </p>
           )}
-          {phase === "uploading" || phase === "generating" ? "任务处理中" : "生成复刻视频"}
-        </button>
-        <button className="secondary" type="button" onClick={onReset}>
-          重置
-        </button>
+          <div className="recreate-actions">
+            <button className="secondary" type="button" onClick={onGoPrevious} disabled={!canGoPrevious}>
+              <ArrowLeft size={16} />
+              上一步
+            </button>
+            <button className="primary" type="submit" disabled={!generateReady || phase !== "idle"}>
+              {isGenerating ? <LoaderCircle className="generation-spinner" size={18} /> : <Film size={18} />}
+              {isGenerating ? "任务处理中" : "生成复刻视频"}
+            </button>
+            <button className="secondary" type="button" onClick={onReset}>
+              重置
+            </button>
+          </div>
+        </div>
+
+        <aside className="recreate-generate-output" aria-label="生成结果">
+          <header>
+            <div>
+              <strong>生成结果</strong>
+              <p>提交后在右侧直接查看视频结果。</p>
+            </div>
+            <span>{phase === "succeeded" ? "已完成" : isGenerating ? "生成中" : "待生成"}</span>
+          </header>
+          {isGenerating ? (
+            <VideoGenerationProgress
+              phase={phase}
+              taskStatus={result?.status}
+              title="复刻带货视频"
+              durationSeconds={durationSeconds}
+            />
+          ) : phase === "succeeded" && generatedVideo ? (
+            <div className="recreate-result">
+              <div className="recreate-result-preview">
+                <video src={generatedVideo.url} controls playsInline />
+              </div>
+              <div className="recreate-result-actions">
+                <strong>视频已生成</strong>
+                <p>结果已保存到内容资产，可下载或继续带入智能混剪。</p>
+                <div>
+                  <button type="button" onClick={() => window.open(generatedVideo.url, "_blank", "noopener,noreferrer")}>
+                    <Maximize2 size={16} />
+                    全屏预览
+                  </button>
+                  <a href={`/api/assets/${generatedVideo.assetId}/download/`}>
+                    <Download size={16} />
+                    下载视频
+                  </a>
+                  <button type="button" onClick={goToVideoMix}>
+                    <Film size={16} />
+                    前往智能混剪
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="recreate-result-empty">
+              <Film size={30} />
+              <strong>等待生成视频</strong>
+              <p>左侧补全授权和生成参数后，点击生成即可在这里预览结果。</p>
+            </div>
+          )}
+        </aside>
       </div>
     </section>
   );
