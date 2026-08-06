@@ -1,7 +1,7 @@
-import { Clapperboard, Film, Layers3, MicVocal, Repeat2, Sparkles, Video } from "lucide-react";
+import { Clapperboard, Film, Layers3, MicVocal, Repeat2, Video } from "lucide-react";
 import type { ProjectWorkflowKey } from "@/lib/project-workflows";
 
-export type VideoCenterTab = "commerce" | "recreate" | "ad" | "mix" | "seedance" | "spokesperson";
+export type VideoCenterTab = "commerce" | "smart-commerce" | "seedance";
 export type VideoTemplate = {
   title: string;
   text: string;
@@ -9,6 +9,8 @@ export type VideoTemplate = {
   workflowKey: ProjectWorkflowKey;
   icon: typeof Repeat2;
   tone: string;
+  cover: string;
+  badge: string;
   sourceFile: string;
 };
 export type VideoModule = {
@@ -23,46 +25,10 @@ export type VideoModule = {
 export const videoModules: VideoModule[] = [
   {
     key: "commerce",
-    title: "视频带货",
+    title: "带货视频生成",
     caption: "COMMERCE VIDEO",
-    summary: "商品素材、卖点脚本和案例模板组成的一站式带货视频入口。",
+    summary: "从商品图、模特素材和卖点信息出发，快速生成可投放的带货短视频。",
     sourceFile: "app/create/product-video/page.tsx",
-    items: [
-      {
-        title: "视频创作中心",
-        text: "从商品和素材出发，统一进入广告大片、复刻和高级视频工作流。",
-        href: "/create/product-video",
-        workflowKey: "product-ad-video",
-        icon: Video,
-        tone: "blue",
-        sourceFile: "app/components/video-center-page.tsx",
-      },
-    ],
-  },
-  {
-    key: "recreate",
-    title: "复刻带货视频",
-    caption: "REFERENCE REPLICA",
-    summary: "项目化管理对标视频、十二宫格、替换素材和生成任务。",
-    sourceFile: "app/create/recreate-video/page.tsx",
-    items: [
-      {
-        title: "复刻带货视频",
-        text: "参考镜头节奏、动作走势与运镜，替换商品或模特生成原创带货内容。",
-        href: "/create/recreate-video",
-        workflowKey: "recreate-video",
-        icon: Repeat2,
-        tone: "violet",
-        sourceFile: "app/components/recreate-video-page.tsx",
-      },
-    ],
-  },
-  {
-    key: "ad",
-    title: "产品广告大片",
-    caption: "PRODUCT AD",
-    summary: "从单张商品图组织卖点、细节、氛围与收束镜头。",
-    sourceFile: "app/create/product-ad-video/page.tsx",
     items: [
       {
         title: "产品广告大片",
@@ -71,32 +37,69 @@ export const videoModules: VideoModule[] = [
         workflowKey: "product-ad-video",
         icon: Clapperboard,
         tone: "blue",
+        cover: "https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=900&q=86",
+        badge: "广告大片",
         sourceFile: "app/create/product-ad-video/page.tsx",
+      },
+      {
+        title: "模特对镜自拍",
+        text: "围绕商品、穿搭或妆容生成自然的模特自拍带货视频。",
+        href: "/create/model-spokesperson-video",
+        workflowKey: "model-spokesperson-script",
+        icon: Video,
+        tone: "violet",
+        cover: "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=900&q=86",
+        badge: "模特自拍",
+        sourceFile: "app/create/model-spokesperson-video/page.tsx",
       },
     ],
   },
   {
-    key: "mix",
-    title: "智能混剪",
-    caption: "SMART MIX",
-    summary: "将已授权素材片段按顺序合成为可投放视频。",
-    sourceFile: "app/create/video-mix/page.tsx",
+    key: "smart-commerce",
+    title: "智能带货视频",
+    caption: "SMART COMMERCE",
+    summary: "从爆款参考、素材片段和口播脚本出发，沉淀可复用的电商视频流程。",
+    sourceFile: "app/create/recreate-video/page.tsx",
     items: [
       {
-        title: "智能混剪",
-        text: "至少两段已授权视频，保留原音频合成为长视频。",
+        title: "复刻爆款带货视频-新版",
+        text: "参考镜头节奏、动作走势与运镜，替换商品或模特生成原创带货内容。",
+        href: "/create/recreate-video",
+        workflowKey: "recreate-video",
+        icon: Repeat2,
+        tone: "violet",
+        cover: "https://images.unsplash.com/photo-1492724441997-5dc865305da7?auto=format&fit=crop&w=900&q=86",
+        badge: "爆款复刻",
+        sourceFile: "app/components/recreate-video-page.tsx",
+      },
+      {
+        title: "智能混剪带货视频",
+        text: "将已授权素材片段按顺序合成为可投放视频。",
         href: "/create/video-mix",
         workflowKey: "video-mix",
         icon: Layers3,
         tone: "cyan",
+        cover: "https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?auto=format&fit=crop&w=900&q=86",
+        badge: "素材混剪",
         sourceFile: "app/create/video-mix/page.tsx",
+      },
+      {
+        title: "口播带货视频",
+        text: "先生成可编辑的分镜口播稿，后续直接衔接口型、配音与视频生成。",
+        href: "/create/model-spokesperson-video",
+        workflowKey: "model-spokesperson-script",
+        icon: MicVocal,
+        tone: "blue",
+        cover: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?auto=format&fit=crop&w=900&q=86",
+        badge: "口播脚本",
+        sourceFile: "app/create/model-spokesperson-video/page.tsx",
       },
     ],
   },
   {
     key: "seedance",
-    title: "Seedance 高级视频",
-    caption: "ADVANCED CREATION",
+    title: "Seedance2-视频",
+    caption: "SEEDANCE2 VIDEO",
     summary: "组合图片、视频、音频和自由脚本，完成高级视频创作。",
     sourceFile: "app/create/seedance-video/page.tsx",
     items: [
@@ -107,34 +110,9 @@ export const videoModules: VideoModule[] = [
         workflowKey: "seedance-video",
         icon: Film,
         tone: "cyan",
+        cover: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=900&q=86",
+        badge: "高级视频",
         sourceFile: "app/create/seedance-video/page.tsx",
-      },
-    ],
-  },
-  {
-    key: "spokesperson",
-    title: "模特口播脚本",
-    caption: "SPOKESPERSON SCRIPT",
-    summary: "先沉淀可编辑脚本，再衔接口播视频链路。",
-    sourceFile: "app/create/model-spokesperson-video/page.tsx",
-    items: [
-      {
-        title: "模特口播文案",
-        text: "先生成可编辑的分镜口播稿，后续直接衔接口型、配音与视频生成。",
-        href: "/create/model-spokesperson-video",
-        workflowKey: "model-spokesperson-script",
-        icon: MicVocal,
-        tone: "violet",
-        sourceFile: "app/create/model-spokesperson-video/page.tsx",
-      },
-      {
-        title: "口播视频链路",
-        text: "后续接入口型、配音与人物视频生成，当前先完成脚本管理。",
-        href: "/create/model-spokesperson-video",
-        workflowKey: "model-spokesperson-script",
-        icon: Sparkles,
-        tone: "blue",
-        sourceFile: "app/create/model-spokesperson-video/page.tsx",
       },
     ],
   },

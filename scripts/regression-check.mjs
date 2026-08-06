@@ -112,6 +112,30 @@ const checks = [
     "<VideoGenerationProgress",
   ],
   [
+    "product ad video exposes right-side video case references",
+    "app/components/product-ad-video-page.tsx",
+    "ad-case-board",
+    "做同款",
+  ],
+  [
+    "product ad video same-style cases refill generation parameters",
+    "app/components/product-ad-video-page.tsx",
+    "applyCase",
+    "setSpecialRequirements",
+  ],
+  [
+    "product ad video case media opens a detail dialog",
+    "app/components/product-ad-video-page.tsx",
+    "ad-case-dialog",
+    "setDetailCase(item)",
+  ],
+  [
+    "product ad video same-style cases include a hidden internal prompt",
+    "app/components/product-ad-video-page.tsx",
+    "internalPrompt",
+    "内置策略",
+  ],
+  [
     "video workflows show staged progress",
     "app/components/video-workflow-page.tsx",
     "<VideoGenerationProgress",
@@ -809,9 +833,10 @@ const checks = [
     "/create/model-spokesperson-video",
   ],
   [
-    "Video center exposes recreate as a dedicated tab",
+    "Video center exposes recreate inside the smart commerce group",
     "app/features/video-center/modules.ts",
-    'key: "recreate"',
+    'key: "smart-commerce"',
+    "复刻爆款带货视频-新版",
   ],
   [
     "Model spokesperson starts with an editable script workflow",

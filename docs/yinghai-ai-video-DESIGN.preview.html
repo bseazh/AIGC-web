@@ -1,0 +1,1521 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Yinghai AI Video Reference Preview</title>
+    <meta name="color-scheme" content="light" />
+    <style>
+      :root {
+        --page-bg: #090c12;
+        --page-bg-muted: rgb(14, 17, 25);
+        --surface-bg: rgba(18,22,32,.82);
+        --surface-bg-muted: rgb(14, 17, 25);
+        --surface-border: rgba(255,255,255,.12);
+        --surface-border-strong: rgb(10, 13, 20);
+        --surface-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 2px rgba(0, 0, 0, 0.04), 0 8px 8px -8px rgba(0, 0, 0, 0.04);
+        --surface-shadow-soft: 0 0 0 1px rgba(255,255,255,.12);
+        --ink: rgba(18,22,32,.82);
+        --muted: #9aa6ba;
+        --subtle: rgb(13, 17, 24);
+        --accent: #9aa6ba;
+        --font-body: "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+        --font-display: "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+        --font-mono: "task codes", ui-monospace, "SFMono-Regular", "SF Mono", Menlo, monospace;
+        --body-size: 18px;
+        --body-line: 20px;
+        --body-weight: 900;
+        --label-size: 13px;
+        --label-line: 20px;
+        --label-track: 0.04em;
+        --title-size: 24px;
+        --title-line: 32px;
+        --title-track: -0.03em;
+        --section-size: 20px;
+        --section-line: 32px;
+        --section-track: -0.02em;
+        --source-size: 13px;
+        --source-line: 20px;
+        --space-1: 4px;
+        --space-2: 6px;
+        --space-3: 8px;
+        --space-4: 12px;
+        --space-5: 16px;
+        --space-6: 20px;
+        --radius-panel: 8px;
+        --radius-card: 8px;
+        --radius-micro: 6px;
+        --radius-pill: 999px;
+        --button-height: 40px;
+        --button-font-size: 13px;
+        --button-weight: 500;
+        --button-radius: 999px;
+        --secondary-button-radius: 999px;
+        --layout-gap: 12px;
+        --page-padding: 12px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        color: var(--ink);
+        font-family: var(--font-body);
+        font-size: var(--body-size);
+        font-weight: var(--body-weight);
+        line-height: var(--body-line);
+        background:
+          radial-gradient(circle at top, color-mix(in srgb, var(--accent) 8%, transparent), transparent 30%),
+          linear-gradient(180deg, var(--page-bg) 0%, var(--page-bg-muted) 100%);
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        background-image:
+          linear-gradient(color-mix(in srgb, var(--surface-border) 56%, transparent) 1px, transparent 1px),
+          linear-gradient(90deg, color-mix(in srgb, var(--surface-border) 56%, transparent) 1px, transparent 1px);
+        background-size: 100% calc(24px), calc(24px) 100%;
+        mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.3), transparent 88%);
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      button {
+        font: inherit;
+      }
+
+      .shell {
+        width: min(1440px, calc(100vw - (var(--page-padding) * 2)));
+        margin: 0 auto;
+        padding: var(--page-padding) 0 calc(var(--page-padding) * 1.2);
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(340px, 0.92fr) minmax(420px, 1fr);
+        gap: var(--layout-gap);
+        align-items: start;
+      }
+
+      .stack {
+        display: grid;
+        gap: var(--space-4);
+      }
+
+      .panel {
+        overflow: hidden;
+        border: 1px solid var(--surface-border);
+        border-radius: var(--radius-panel);
+        background: linear-gradient(180deg, color-mix(in srgb, var(--surface-bg) 88%, white) 0%, var(--surface-bg) 100%);
+        box-shadow: var(--surface-shadow);
+      }
+
+      .panel-inner {
+        padding: var(--space-4);
+      }
+
+      .hero-card {
+        position: relative;
+      }
+
+      .hero-card::before {
+        content: "";
+        position: absolute;
+        left: var(--space-4);
+        right: var(--space-4);
+        top: 0;
+        height: 3px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #18dcd5 0%, #24e4dc 33%, #090c12 67%, rgba(18,22,32,.82) 100%);
+      }
+
+      .eyebrow {
+        margin-bottom: var(--space-2);
+        color: var(--muted);
+        font-size: var(--label-size);
+        line-height: var(--label-line);
+        letter-spacing: var(--label-track);
+        text-transform: uppercase;
+      }
+
+      .site-title,
+      .section-title {
+        margin: 0;
+        color: var(--ink);
+        font-family: var(--font-display);
+        font-weight: 600;
+      }
+
+      .site-title {
+        font-size: var(--title-size);
+        line-height: var(--title-line);
+        letter-spacing: var(--title-track);
+      }
+
+      .descriptor {
+        margin: var(--space-2) 0 0;
+        max-width: 42ch;
+        color: var(--muted);
+        font-size: var(--body-size);
+        line-height: var(--body-line);
+      }
+
+      .summary {
+        margin: var(--space-3) 0 0;
+        max-width: 56ch;
+        color: var(--muted);
+        font-size: var(--body-size);
+        line-height: var(--body-line);
+      }
+
+      .chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+        margin: var(--space-3) 0 0;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        min-height: calc(4px * 3);
+        padding: 0 var(--space-2);
+        border: 1px solid var(--surface-border);
+        border-radius: var(--radius-pill);
+        background: var(--surface-bg);
+        color: var(--ink);
+        font-size: var(--label-size);
+        line-height: var(--label-line);
+        box-shadow: var(--surface-shadow-soft);
+      }
+
+      .observed-link {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+        margin-top: var(--space-4);
+        padding-top: var(--space-3);
+        border-top: 1px solid var(--surface-border);
+        color: var(--muted);
+        font-size: var(--label-size);
+        overflow-wrap: anywhere;
+      }
+
+      .observed-link::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--accent);
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent);
+      }
+
+      .section-title {
+        font-size: var(--section-size);
+        line-height: var(--section-line);
+        letter-spacing: var(--section-track);
+      }
+
+      .section-subtitle {
+        margin: var(--space-2) 0 var(--space-4);
+        color: var(--muted);
+        font-size: var(--body-size);
+        line-height: var(--body-line);
+      }
+
+      .palette-grid,
+      .theme-mode-grid,
+      .type-list,
+      .component-card,
+      .prompt-list,
+      .mini-grid,
+      .token-table {
+        display: grid;
+        gap: var(--space-2);
+      }
+
+      .palette-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--space-2);
+      }
+
+      .palette-row.neutral-row {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .theme-mode-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-3);
+      }
+
+      .theme-mode-card {
+        display: grid;
+        gap: var(--space-2);
+        padding: var(--space-3);
+        border: 1px solid var(--surface-border);
+        border-radius: var(--radius-card);
+        background: color-mix(in srgb, var(--surface-bg) 92%, white);
+      }
+
+      .theme-mode-card.is-dark {
+        background: #111111;
+        color: #f4f4f4;
+        border-color: rgba(255, 255, 255, 0.12);
+      }
+
+      .theme-mode-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+      }
+
+      .theme-mode-label {
+        color: var(--subtle);
+        font-size: var(--label-size);
+        line-height: var(--label-line);
+        letter-spacing: var(--label-track);
+        text-transform: uppercase;
+      }
+
+      .theme-mode-card.is-dark .theme-mode-label {
+        color: rgba(255, 255, 255, 0.7);
+      }
+
+      .theme-mode-note {
+        margin: 0;
+        color: var(--muted);
+        font-size: calc(var(--body-size) - 1px);
+        line-height: calc(var(--body-line) - 4px);
+      }
+
+      .theme-mode-card.is-dark .theme-mode-note {
+        color: rgba(255, 255, 255, 0.82);
+      }
+
+      .theme-swatch-row {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: var(--space-2);
+      }
+
+      .theme-swatch {
+        display: grid;
+        gap: 6px;
+      }
+
+      .theme-swatch-box {
+        height: 72px;
+        border-radius: calc(var(--radius-card) - 4px);
+        border: 1px solid color-mix(in srgb, var(--surface-border-strong) 75%, transparent);
+      }
+
+      .theme-mode-card.is-dark .theme-swatch-box {
+        border-color: rgba(255, 255, 255, 0.14);
+      }
+
+      .theme-swatch-name {
+        color: inherit;
+        font-size: 12px;
+        line-height: 1.3;
+      }
+
+      .theme-swatch-value {
+        color: var(--subtle);
+        font-size: 11px;
+        line-height: 1.3;
+      }
+
+      .theme-mode-card.is-dark .theme-swatch-value {
+        color: rgba(255, 255, 255, 0.62);
+      }
+
+      .swatch {
+        display: grid;
+        gap: var(--space-2);
+      }
+
+      .swatch-box {
+        min-height: calc(4px * 12);
+        border-radius: var(--radius-card);
+        border: 1px solid color-mix(in srgb, var(--surface-border-strong) 75%, transparent);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 4%, transparent);
+      }
+
+      .swatch-label,
+      .token-heading,
+      .prompt-card strong,
+      .card-preview h4 {
+        color: var(--ink);
+        font-family: var(--font-display);
+        font-size: var(--body-size);
+        line-height: var(--body-line);
+        font-weight: 600;
+      }
+
+      .swatch-meta,
+      .type-metrics,
+      .mini-label,
+      .copy-state,
+      .file-tab,
+      .ghost-button,
+      .segmented button {
+        color: var(--muted);
+        font-size: var(--label-size);
+        line-height: var(--label-line);
+      }
+
+      .type-row {
+        display: grid;
+        grid-template-columns: 72px minmax(0, 1fr) auto;
+        gap: var(--space-2);
+        align-items: baseline;
+        padding: var(--space-2) 0;
+        border-top: 1px solid var(--surface-border);
+      }
+
+      .type-row:first-child,
+      .mini-row:first-child,
+      .token-row:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+
+      .type-role {
+        color: var(--muted);
+        font-size: var(--label-size);
+        line-height: var(--label-line);
+        letter-spacing: var(--label-track);
+        text-transform: uppercase;
+      }
+
+      .type-sample {
+        color: var(--ink);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .split-card {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-4);
+      }
+
+      .token-row,
+      .mini-row {
+        display: grid;
+        gap: var(--space-2);
+        align-items: start;
+        padding-top: var(--space-2);
+        border-top: 1px solid var(--surface-border);
+      }
+
+      .token-row {
+        grid-template-columns: 1fr auto;
+      }
+
+      .mini-row {
+        grid-template-columns: 88px minmax(0, 1fr);
+      }
+
+      .mini-content,
+      .prompt-card p,
+      .card-preview p {
+        color: var(--muted);
+        font-size: var(--body-size);
+        line-height: var(--body-line);
+      }
+
+      .radius-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-2);
+      }
+
+      .radius-card,
+      .prompt-card {
+        padding: var(--space-3);
+        border: 1px solid var(--surface-border);
+        border-radius: var(--radius-card);
+        background: var(--surface-bg-muted);
+        box-shadow: var(--surface-shadow-soft);
+      }
+
+      .radius-demo {
+        aspect-ratio: 1;
+        width: 100%;
+        border: 1px solid var(--surface-border-strong);
+        background: var(--surface-bg);
+      }
+
+      .radius-name {
+        margin-top: var(--space-2);
+        color: var(--ink);
+        font-size: var(--body-size);
+        line-height: var(--body-line);
+        font-weight: 600;
+      }
+
+      .radius-value {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: var(--label-size);
+      }
+
+      .button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+      }
+
+      .cta {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: var(--button-height);
+        padding: 0 var(--space-3);
+        border-radius: var(--button-radius);
+        font-family: var(--font-body);
+        font-size: var(--button-font-size);
+        font-weight: var(--button-weight);
+        line-height: 1;
+        letter-spacing: normal;
+      }
+
+      .cta-primary {
+        border: 1px solid transparent;
+        background: #171717;
+        color: #ffffff;
+        border-radius: 999px;
+      }
+
+      .cta-secondary {
+        border: 1px solid #171717;
+        background: #ffffff;
+        color: #171717;
+        border-radius: 999px;
+        box-shadow: var(--surface-shadow-soft);
+      }
+
+      .card-preview {
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid color-mix(in srgb, var(--surface-border-strong) 72%, transparent);
+        background: var(--surface-bg);
+        color: var(--ink);
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 2px rgba(0, 0, 0, 0.04), 0 8px 8px -8px rgba(0, 0, 0, 0.04);
+      }
+
+      .card-preview h4 {
+        margin: 0 0 var(--space-1);
+      }
+
+      .source-shell {
+        position: sticky;
+        top: var(--page-padding);
+      }
+
+      .source-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+        padding: var(--space-3) var(--space-4) var(--space-2);
+        border-bottom: 1px solid var(--surface-border);
+      }
+
+      .file-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px var(--space-3);
+      }
+
+      .file-tab {
+        padding: 0 0 var(--space-2);
+        border-bottom: 2px solid transparent;
+      }
+
+      .file-tab.active {
+        color: var(--ink);
+        border-bottom-color: var(--ink);
+        font-weight: 600;
+      }
+
+      .source-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--space-2);
+        padding: var(--space-2) var(--space-4);
+        border-bottom: 1px solid var(--surface-border);
+      }
+
+      .segmented {
+        display: inline-flex;
+        padding: 3px;
+        border: 1px solid var(--surface-border);
+        border-radius: var(--radius-pill);
+        background: var(--surface-bg-muted);
+      }
+
+      .segmented button {
+        border: 0;
+        border-radius: var(--radius-pill);
+        background: transparent;
+        padding: 6px 12px;
+        cursor: pointer;
+      }
+
+      .segmented button.is-active {
+        background: var(--surface-bg);
+        color: var(--ink);
+        box-shadow: var(--surface-shadow-soft);
+      }
+
+      .toolbar-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+        margin-left: auto;
+      }
+
+      .ghost-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        border: 1px solid var(--surface-border);
+        border-radius: 6px;
+        background: var(--surface-bg);
+        box-shadow: var(--surface-shadow-soft);
+        cursor: pointer;
+      }
+
+      .source-body {
+        max-height: calc(100vh - (var(--page-padding) * 2) - 120px);
+        overflow: auto;
+      }
+
+      .source-view,
+      .rendered-view {
+        margin: 0;
+        padding: var(--space-4);
+      }
+
+      .source-view {
+        color: var(--ink);
+        font-family: var(--font-mono);
+        font-size: var(--source-size);
+        line-height: var(--source-line);
+        white-space: pre-wrap;
+        word-break: break-word;
+        background: var(--surface-bg);
+      }
+
+      .rendered-view {
+        color: var(--ink);
+        font-family: var(--font-body);
+        font-size: var(--body-size);
+        line-height: var(--body-line);
+        background: var(--surface-bg);
+      }
+
+      .rendered-view[hidden],
+      .source-view[hidden] {
+        display: none;
+      }
+
+      .rendered-view h2,
+      .rendered-view h3 {
+        margin: var(--space-4) 0 var(--space-2);
+        color: var(--ink);
+        font-family: var(--font-display);
+        font-weight: 600;
+      }
+
+      .rendered-view h2 {
+        font-size: var(--section-size);
+        line-height: var(--section-line);
+        letter-spacing: var(--section-track);
+      }
+
+      .rendered-view h2:first-child {
+        margin-top: 0;
+      }
+
+      .rendered-view h3 {
+        color: var(--muted);
+        font-size: calc(24px - 4px);
+        line-height: calc(32px - 4px);
+      }
+
+      .rendered-view p,
+      .rendered-view li {
+        color: var(--muted);
+      }
+
+      .rendered-view ul,
+      .rendered-view ol {
+        margin: 0 0 var(--space-3) 20px;
+        padding: 0;
+      }
+
+      .rendered-view table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: var(--space-2) 0 var(--space-4);
+      }
+
+      .rendered-view th,
+      .rendered-view td {
+        padding: var(--space-2) var(--space-2);
+        border: 1px solid var(--surface-border);
+        text-align: left;
+        vertical-align: top;
+        font-size: var(--label-size);
+        line-height: var(--label-line);
+      }
+
+      .rendered-view th {
+        color: var(--ink);
+        background: var(--surface-bg-muted);
+      }
+
+      .rendered-view code {
+        padding: 0.14em 0.4em;
+        border-radius: 6px;
+        background: var(--surface-bg-muted);
+        color: var(--ink);
+        font-family: var(--font-mono);
+        font-size: 0.92em;
+      }
+
+      @media (max-width: 1120px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+
+        .source-shell {
+          position: relative;
+          top: 0;
+        }
+
+        .source-body {
+          max-height: none;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .shell {
+          width: min(100vw - (6px * 2), 100%);
+          padding-top: 6px;
+        }
+
+        .panel-inner,
+        .source-view,
+        .rendered-view {
+          padding-left: var(--space-3);
+          padding-right: var(--space-3);
+        }
+
+        .palette-row,
+        .palette-row.neutral-row,
+        .theme-mode-grid,
+        .theme-swatch-row,
+        .split-card,
+        .radius-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .type-row,
+        .mini-row {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <div class="layout">
+        <section class="stack">
+          <article class="panel hero-card">
+            <div class="panel-inner">
+              <div class="eyebrow">Design Preview</div>
+              <h1 class="site-title">Yinghai AI Video Reference</h1>
+              <p class="descriptor">Yinghai AI Video uses a dark commerce-workbench style: compact creation controls, visible me...</p>
+              <div class="chip-row"><span class="chip">Dark mode is the strongest visua...</span><span class="chip">Tool cards are directly visible...</span><span class="chip">Case references are first-class...</span><span class="chip">Creation pages pair parameter fo...</span></div>
+              <p class="summary">It should feel like a practical e-commerce production console: fast to scan, confident, and media-led.</p>
+              <a class="observed-link" href="https://yinghai.xin/ai-video" target="_blank" rel="noreferrer">https://yinghai.xin/ai-video</a>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-inner">
+              <h2 class="section-title">Palette</h2>
+              <p class="section-subtitle">Roles and neutrals rendered using the extracted design system rather than a separate display theme.</p>
+              <div class="palette-grid"><div class="palette-row"><div class="swatch">
+    <div class="swatch-box" style="background:#18dcd5;"></div>
+    <div class="swatch-label">Electric Cyan Gradient</div>
+    <div class="swatch-meta">
+      <span>linear-gradient(90deg,#18dcd5,#1bd3fd)</span>
+      <span>Primary action</span>
+    </div>
+  </div><div class="swatch">
+    <div class="swatch-box" style="background:#24e4dc;"></div>
+    <div class="swatch-label">Bright Cyan Gradient</div>
+    <div class="swatch-meta">
+      <span>linear-gradient(90deg,#24e4dc,#26dcff)</span>
+      <span>Primary action hover</span>
+    </div>
+  </div><div class="swatch">
+    <div class="swatch-box" style="background:#090c12;"></div>
+    <div class="swatch-label">Night Canvas</div>
+    <div class="swatch-meta">
+      <span>#090c12</span>
+      <span>Dark background</span>
+    </div>
+  </div></div><div class="palette-row neutral-row"><div class="swatch">
+    <div class="swatch-box" style="background:rgba(18,22,32,.82);"></div>
+    <div class="swatch-label">Ink Glass</div>
+    <div class="swatch-meta">
+      <span>rgba(18,22,32,.82) / #121620</span>
+      <span>Dark surface</span>
+    </div>
+  </div><div class="swatch">
+    <div class="swatch-box" style="background:#eef5ff;"></div>
+    <div class="swatch-label">Frost White</div>
+    <div class="swatch-meta">
+      <span>#eef5ff</span>
+      <span>Dark text</span>
+    </div>
+  </div><div class="swatch">
+    <div class="swatch-box" style="background:#9aa6ba;"></div>
+    <div class="swatch-label">Blue Gray</div>
+    <div class="swatch-meta">
+      <span>#9aa6ba</span>
+      <span>Dark muted text</span>
+    </div>
+  </div><div class="swatch">
+    <div class="swatch-box" style="background:rgba(255,255,255,.12);"></div>
+    <div class="swatch-label">White Hairline</div>
+    <div class="swatch-meta">
+      <span>rgba(255,255,255,.12)</span>
+      <span>Dark border</span>
+    </div>
+  </div></div></div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-inner">
+              <h2 class="section-title">Theme Modes</h2>
+              <p class="section-subtitle">If the product supports light and dark themes, both modes should stay visible in the exported design system and preview.</p>
+              <div class="prompt-card"><strong>Single mode detected</strong><p>No explicit <code>Theme Modes</code> section was detected in the markdown. If the product supports both light and dark themes, document both so the preview can render them side by side.</p></div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-inner">
+              <h2 class="section-title">Typography</h2>
+              <p class="section-subtitle">The preview shell itself now uses the extracted typography stack, sizes, line heights, and tracking.</p>
+              <div class="type-list"><div class="type-row">
+        <div class="type-role">Featured workflow headline</div>
+        <div
+          class="type-sample"
+          style="font-size:28px; line-height:28px; font-weight:700; letter-spacing:normal; font-family:&quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Arial, sans-serif;"
+        >
+          The quick brown fox jumps
+        </div>
+        <div class="type-metrics">clamp(28px,3.2vw,41px) • 900 • 1.08</div>
+      </div><div class="type-row">
+        <div class="type-role">Section heading</div>
+        <div
+          class="type-sample"
+          style="font-size:20px; line-height:32px; font-weight:700; letter-spacing:normal; font-family:&quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Arial, sans-serif;"
+        >
+          The quick brown fox jumps
+        </div>
+        <div class="type-metrics">20px-24px • 700 • 32px</div>
+      </div><div class="type-row">
+        <div class="type-role">Tool card title</div>
+        <div
+          class="type-sample"
+          style="font-size:18px; line-height:18px; font-weight:600; letter-spacing:normal; font-family:&quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Arial, sans-serif;"
+        >
+          The quick brown fox jumps
+        </div>
+        <div class="type-metrics">18px-20px • 600 • 1.25</div>
+      </div><div class="type-row">
+        <div class="type-role">Form label</div>
+        <div
+          class="type-sample"
+          style="font-size:13px; line-height:20px; font-weight:500; letter-spacing:normal; font-family:&quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Arial, sans-serif;"
+        >
+          The quick brown fox jumps
+        </div>
+        <div class="type-metrics">13px-14px • 500-600 • 20px</div>
+      </div><div class="type-row">
+        <div class="type-role">Case card title</div>
+        <div
+          class="type-sample"
+          style="font-size:12px; line-height:16px; font-weight:600; letter-spacing:normal; font-family:&quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Arial, sans-serif;"
+        >
+          The quick brown fox jumps
+        </div>
+        <div class="type-metrics">12px • 600 • 16px</div>
+      </div><div class="type-row">
+        <div class="type-role">Case description</div>
+        <div
+          class="type-sample"
+          style="font-size:12px; line-height:16px; font-weight:400; letter-spacing:normal; font-family:&quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Arial, sans-serif;"
+        >
+          The quick brown fox jumps
+        </div>
+        <div class="type-metrics">11px • 400 • 16px</div>
+      </div><div class="type-row">
+        <div class="type-role">Button label</div>
+        <div
+          class="type-sample"
+          style="font-size:12px; line-height:16px; font-weight:500; letter-spacing:normal; font-family:&quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Arial, sans-serif;"
+        >
+          The quick brown fox jumps
+        </div>
+        <div class="type-metrics">12px-14px • 500-600 • 16px-20px</div>
+      </div></div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-inner">
+              <h2 class="section-title">Spacing &amp; Shape</h2>
+              <p class="section-subtitle">Spacing, panel padding, and radius tokens are mapped directly from the layout rules in the markdown.</p>
+              <div class="split-card">
+    <div>
+      <h3 class="token-heading">Spacing</h3>
+      <div class="token-table"><div class="token-row">
+        <span>Base unit</span>
+        <span>4px</span>
+      </div><div class="token-row">
+        <span>Step 2</span>
+        <span>6px</span>
+      </div><div class="token-row">
+        <span>Step 3</span>
+        <span>8px</span>
+      </div><div class="token-row">
+        <span>Step 4</span>
+        <span>12px</span>
+      </div><div class="token-row">
+        <span>Step 5</span>
+        <span>16px</span>
+      </div></div>
+    </div>
+    <div>
+      <h3 class="token-heading">Border Radius</h3>
+      <div class="radius-grid"><div class="radius-card">
+        <div class="radius-demo" style="border-radius:6px;"></div>
+        <div class="radius-name">Micro utility</div>
+        <div class="radius-value">6px</div>
+      </div><div class="radius-card">
+        <div class="radius-demo" style="border-radius:8px;"></div>
+        <div class="radius-name">Standard module</div>
+        <div class="radius-value">8px</div>
+      </div><div class="radius-card">
+        <div class="radius-demo" style="border-radius:999px;"></div>
+        <div class="radius-name">Category rail</div>
+        <div class="radius-value">999px</div>
+      </div><div class="radius-card">
+        <div class="radius-demo" style="border-radius:999px;"></div>
+        <div class="radius-name">CTA pill</div>
+        <div class="radius-value">999px</div>
+      </div></div>
+    </div>
+  </div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-inner">
+              <h2 class="section-title">Components</h2>
+              <p class="section-subtitle">Buttons and cards use the documented height, weight, radius, colors, and surface treatment.</p>
+              <div class="component-card">
+    <div class="button-row">
+      <span class="cta cta-primary">Start Deploying</span>
+      <span class="cta cta-secondary">Get a Demo</span>
+    </div>
+    <div class="card-preview">
+      <h4>System Card Preview</h4>
+      <p>semi-transparent dark glass or clean white in light mode.</p>
+    </div>
+  </div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-inner">
+              <h2 class="section-title">System Notes</h2>
+              <p class="section-subtitle">Responsive behavior and depth rules stay visible while keeping the overall proportions calm and readable.</p>
+              <div class="split-card">
+    <div>
+      <h3 class="token-heading">Breakpoints</h3>
+      <div class="mini-grid"><div class="mini-row">
+            <div class="mini-label">Mobile</div>
+            <div class="mini-content"><strong>~390px</strong><br />Main content width around 366px; creation page stacks; cards remain square; padding around 12px</div>
+          </div><div class="mini-row">
+            <div class="mini-label">Tablet</div>
+            <div class="mini-content"><strong>~768px</strong><br />Main width around 736px; creation page still compact/stacked where needed</div>
+          </div><div class="mini-row">
+            <div class="mini-label">Desktop</div>
+            <div class="mini-content"><strong>&gt;=1024px</strong><br />Two-column creation workspace; right 案例参考 remains visible</div>
+          </div></div>
+    </div>
+    <div>
+      <h3 class="token-heading">Elevation</h3>
+      <div class="mini-grid"><div class="mini-row">
+            <div class="mini-label">Flat</div>
+            <div class="mini-content"><strong>Transparent or page background</strong><br />Page bands and simple sections</div>
+          </div><div class="mini-row">
+            <div class="mini-label">Ring</div>
+            <div class="mini-content"><strong>1px hairline border</strong><br />Inputs, cards, panels</div>
+          </div><div class="mini-row">
+            <div class="mini-label">Card</div>
+            <div class="mini-content"><strong>Hairline + low shadow</strong><br />Tool cards and case cards</div>
+          </div><div class="mini-row">
+            <div class="mini-label">Focus</div>
+            <div class="mini-content"><strong>Border highlight + faint cyan ring</strong><br />Keyboard focus and active controls</div>
+          </div></div>
+    </div>
+  </div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-inner">
+              <h2 class="section-title">Prompt Guide</h2>
+              <p class="section-subtitle">Prompt snippets are shown in the same typography and spacing language as the extracted design system.</p>
+              <div class="prompt-list"><div class="prompt-card"><strong>Prompt guide</strong><p>No example prompts detected.</p></div></div>
+              <div class="split-card" style="margin-top:var(--space-4);">
+    <div>
+      <h3 class="token-heading">Do</h3>
+      <div class="mini-grid"><div class="mini-row"><div class="mini-label">Do</div><div class="mini-content">Use owned or generated media for every visible case cover.</div></div><div class="mini-row"><div class="mini-label">Do</div><div class="mini-content">Make 做同款 fill all relevant parameters, not just text.</div></div><div class="mini-row"><div class="mini-label">Do</div><div class="mini-content">Keep internal prompts hidden from the user.</div></div><div class="mini-row"><div class="mini-label">Do</div><div class="mini-content">Put case references beside the form on desktop.</div></div></div>
+    </div>
+    <div>
+      <h3 class="token-heading">Don't</h3>
+      <div class="mini-grid"><div class="mini-row"><div class="mini-label">Don't</div><div class="mini-content">Do not copy source-site videos or images into our project without authorization.</div></div><div class="mini-row"><div class="mini-label">Don't</div><div class="mini-content">Do not make AI Video modules a cramped tab-only experience.</div></div><div class="mini-row"><div class="mini-label">Don't</div><div class="mini-content">Do not show internal action-director or replication strategy prompts in the frontend.</div></div><div class="mini-row"><div class="mini-label">Don't</div><div class="mini-content">Do not let generated task outputs automatically become permanent library assets.</div></div></div>
+    </div>
+  </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="source-shell">
+          <article class="panel">
+            <div class="source-header">
+              <div class="file-tabs">
+                <span class="file-tab">design-system.md</span>
+                <span class="file-tab active">yinghai-ai-video-DESIGN.md</span>
+                <span class="file-tab">Design JSON</span>
+                <span class="file-tab">CSS Variables</span>
+                <span class="file-tab">Design Tokens</span>
+              </div>
+            </div>
+            <div class="source-toolbar">
+              <div class="segmented" role="tablist" aria-label="View Switcher">
+                <button class="is-active" data-view="source" type="button">Source</button>
+                <button data-view="preview" type="button">Preview</button>
+              </div>
+              <div class="toolbar-actions">
+                <button class="ghost-button" id="copyButton" type="button">Copy</button>
+                <a class="ghost-button" href="yinghai-ai-video-DESIGN.md" download>Open .md</a>
+                <span class="copy-state" id="copyState"></span>
+              </div>
+            </div>
+            <div class="source-body">
+              <pre class="source-view" id="sourceView"># Design System: Yinghai AI Video Reference
+
+Source inspected: `https://yinghai.xin/ai-video` and `https://yinghai.xin/ai-video/product-ad-film`
+
+This document captures the visual system and interaction structure needed to build a similar AI video creation center in our own product. Real media from the source site must not be copied into our repository or rehosted unless separately authorized; use owned uploads, licensed stock, generated images, or video frame captures from assets we own.
+
+## 1. Visual Theme &amp; Atmosphere
+
+Yinghai AI Video uses a dark commerce-workbench style: compact creation controls, visible media references, and bright cyan actions that guide users from example browsing to parameterized generation.
+
+It should feel like a practical e-commerce production console: fast to scan, confident, and media-led.
+
+- Overall feeling: polished AI commerce workstation, dark-first, glassy surfaces, high contrast text, cyan action accents.
+- Visual density: medium-high. The home page exposes many tools at once; task pages use a two-column creation workspace with a form on the left and example references on the right.
+- Brand posture: practical and conversion-focused rather than decorative. The UI should feel like a production tool for e-commerce video creation.
+- Signature motifs: cyan-to-blue gradient CTAs, rounded glass cards, black media previews, subtle radial page background, compact Chinese labels.
+
+### Key Characteristics
+
+- Dark mode is the strongest visual identity: deep navy page background, semi-transparent panels, white text, cyan gradients.
+- Tool cards are directly visible in expanded sections; do not hide the primary modules inside secondary tabs.
+- Case references are first-class controls: each card has preview, title, short prompt/description, and a prominent `做同款` action.
+- Creation pages pair parameter forms with a persistent right-side example gallery.
+
+## 2. Color Palette &amp; Roles
+
+| Role | Semantic Name | Value | Usage |
+| --- | --- | --- | --- |
+| Primary action | Electric Cyan Gradient | `linear-gradient(90deg,#18dcd5,#1bd3fd)` | Main buttons, `做同款`, submit actions |
+| Primary action hover | Bright Cyan Gradient | `linear-gradient(90deg,#24e4dc,#26dcff)` | CTA hover state |
+| Dark background | Night Canvas | `#090c12` | Dark page background |
+| Dark surface | Ink Glass | `rgba(18,22,32,.82)` / `#121620` | Cards, panels, drawers |
+| Dark text | Frost White | `#eef5ff` | Main text on dark backgrounds |
+| Dark muted text | Blue Gray | `#9aa6ba` | Hints, descriptions, disabled labels |
+| Dark border | White Hairline | `rgba(255,255,255,.12)` | Card borders, panel separators |
+| Light background | Soft Cloud | `#f4f6f6` | Light page background |
+| Light surface | White | `#ffffff` | Light cards and panels |
+| Light text | Carbon | `#252b35` | Main text in light mode |
+| Light muted text | Slate Muted | `#69778d` | Supporting copy in light mode |
+| Light border | Pale Blue Line | `#d8e3f7` | Light card borders |
+
+### Primary
+
+- Use cyan/blue only for high-value actions and selected states.
+- Avoid making the entire interface blue. Let surfaces stay neutral and let the CTA carry the brand energy.
+
+### Interactive
+
+- Button hover raises the surface slightly: `translateY(-1px)`.
+- Primary hover increases glow: `0 20px 42px rgba(27,211,253,.30)`.
+- Media hover adds a black translucent overlay and reveals a centered play icon.
+- Case cards should feel clickable through shadow, hover overlay, and cursor changes.
+
+### Theme Modes
+
+#### Light Mode
+
+- Background: `linear-gradient(135deg,#fff,#faf8f6,#f0edf8)` over `#f4f6f6`.
+- Surface: `#fff`.
+- Text: `#252b35`.
+- Accent: `#1478ff`, `#24d6c8`, `#20c8ff`.
+- Notes: keep shadows soft and borders visible.
+
+#### Dark Mode
+
+- Background: radial deep blue/cyan highlights over `#090c12`.
+- Surface: `rgba(18,22,32,.82)` and `#101521`.
+- Text: `#eef5ff`.
+- Accent: `#18dcd5` to `#1bd3fd`.
+- Notes: cards use white hairlines; black media wells give video thumbnails a clean frame.
+
+### Shadows &amp; Depth
+
+- Main panel shadow: `0 24px 70px rgba(20,120,255,.12)` in light mode.
+- Dark card shadow: `0 10px 22px rgba(0,0,0,.22)`.
+- CTA shadow: `0 16px 34px rgba(27,211,253,.22)`.
+- Hover CTA shadow: `0 20px 42px rgba(27,211,253,.30)`.
+
+## 3. Typography Rules
+
+### Font Family
+
+- Primary: `&quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, ui-sans-serif, system-ui, -apple-system, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, sans-serif`
+- Monospace: use the product default only for ids, task codes, logs, and debug details.
+- OpenType Features: normal tracking for most UI; avoid negative tracking except large marketing-style titles copied from the reference hero.
+
+### Hierarchy
+
+| Role | Font | Size | Weight | Line Height | Letter Spacing | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| Featured workflow headline | Primary | `clamp(28px,3.2vw,41px)` | 900 | `1.08` | tight only for hero | Used for `爆款视频换品复刻` |
+| Section heading | Primary | `20px-24px` | 700 | `32px` | `0` | Tool groups such as `带货视频生成` |
+| Tool card title | Primary | `18px-20px` | 600 | `1.25` | `0` | Two-line clamp on module cards |
+| Form label | Primary | `13px-14px` | 500-600 | `20px` | `0` | Compact and direct |
+| Case card title | Primary | `12px` | 600 | `16px` | `0` | One-line clamp |
+| Case description | Primary | `11px` | 400 | `16px` | `0` | One-line clamp |
+| Button label | Primary | `12px-14px` | 500-600 | `16px-20px` | `0` | Center aligned |
+
+### Principles
+
+- Keep creation forms compact. Labels should be short and scannable.
+- Use one-line truncation for case-card title and description to maintain card rhythm.
+- Do not explain internal strategy prompts in the UI; expose only the user-facing fields.
+
+## 4. Component Stylings
+
+### Buttons and Links
+
+- Primary CTA: cyan-to-blue gradient, dark text `#071014`, 16px radius, 44px minimum height on compact cards.
+- Secondary CTA: translucent surface, hairline border, muted text; reserve for non-destructive navigation.
+- Text links: inherit text color with subtle opacity change.
+- Hover and active feel: `translateY(-1px)` plus brighter gradient for primary actions.
+
+### Cards and Containers
+
+- Surface style: semi-transparent dark glass or clean white in light mode.
+- Radius: source cards commonly use 16px; our product may reduce repeated utility cards to 8px if matching existing app conventions, but the right-side case cards should keep the rounded media style.
+- Border: `1px solid rgba(255,255,255,.12)` dark, `1px solid #d8e3f7` light.
+- Shadow or elevation: low shadow for resting cards, stronger cyan glow only for CTAs.
+- Internal spacing: compact, usually 10px-16px in cards and 16px-24px in panels.
+
+### Inputs and Interactive Controls
+
+- Inputs should sit on quiet surfaces with clear labels above.
+- Select controls should display current choices such as ratio, model, duration, and resolution.
+- Upload controls should behave like dropzones but not dominate the page once media exists.
+- Filled-by-case values should be visible in the form immediately after `做同款`.
+
+### Navigation
+
+- Structure: global header with logo, primary nav items, task center, asset library, theme toggle, account menu.
+- Background treatment: sticky glass header with border in light mode; dark gradient header in dark mode.
+- Link style: active video entry is more prominent and can include a `HOT NOW` motif.
+- Page structure: AI Video is a top-level section; modules are shown as expanded grouped cards, not compressed into an inner tab strip.
+
+### Image and Video Treatment
+
+- Case preview media sits in a black well.
+- Use `object-contain` for case previews to avoid cropping product/video frames.
+- Add top-left media badges such as `视频案例`.
+- On hover, overlay `rgba(0,0,0,.15)` and reveal a play button with translucent black background.
+
+### Distinctive Components
+
+- AI video home module grid.
+- Featured `爆款视频换品复刻` workflow band.
+- Right-side `案例参考` case board.
+- Case detail modal with media preview on the left and prompt/key parameters on the right.
+- `做同款` action that backfills creation parameters.
+
+## 5. Layout Principles
+
+### Spacing System
+
+- Base unit: 4px.
+- Repeated spacing values: 8px, 10px, 12px, 16px, 24px, 32px.
+
+### Grid &amp; Container
+
+- Global container: max width close to `screen-2xl`; desktop observed at 1280px viewport with full-width header and centered content.
+- AI Video home: grouped sections, each with cards in a responsive grid.
+- Product ad task page: left form plus right case references on desktop; stacked layout on mobile/tablet.
+- Case card: square card, media top 64%, content and CTA bottom 36%.
+
+### Whitespace Philosophy
+
+- Use enough spacing to separate tool families, but keep each working panel compact.
+- Creation pages should prioritize visible controls and examples above decorative copy.
+- Avoid large empty hero space on utility pages.
+
+### Border Radius Scale
+
+- Micro: 6px for chips and tiny controls.
+- Standard: 8px for app-native panels and compact controls.
+- Large: 16px for source-style case cards, modals, upload wells.
+- Pill: 999px for badges and category pills.
+
+## 6. Depth &amp; Elevation
+
+| Level | Treatment | Use |
+| --- | --- | --- |
+| Flat | Transparent or page background | Page bands and simple sections |
+| Ring | 1px hairline border | Inputs, cards, panels |
+| Card | Hairline + low shadow | Tool cards and case cards |
+| Focus | Border highlight + faint cyan ring | Keyboard focus and active controls |
+| Modal | Dark overlay + high-z rounded panel | Case detail preview |
+
+### Depth Principles
+
+- Depth separates functional zones, not decoration.
+- Media previews should feel physically framed by black wells.
+- CTA glow should be used sparingly so `做同款` and submit actions remain obvious.
+- Avoid decorative blobs or generic gradient ornaments that do not explain the product.
+
+## 7. Case Card Structure
+
+### Anatomy
+
+1. `article` square card
+   - `display:flex`
+   - `flex-direction:column`
+   - `aspect-ratio:1/1`
+   - `overflow:hidden`
+   - `border-radius:16px`
+   - `border:1px solid var(--yh-line)`
+   - dark background `rgba(18,22,32,.82)`
+
+2. Media area
+   - height: `64%`
+   - background: black
+   - image/video poster: full width and height, `object-fit:contain`
+   - click action opens work detail modal
+   - cursor: zoom-in
+
+3. Hover overlay
+   - absolute full inset
+   - default: transparent black
+   - hover: `rgba(0,0,0,.15)`
+   - centered play icon appears from opacity 0 to 1
+   - play circle: 44px, `rgba(0,0,0,.55)`, white icon, backdrop blur
+
+4. Badge
+   - top-left absolute pill
+   - text: `视频案例`
+   - 11px text, medium weight
+   - background: `rgba(16,27,51,.72)`
+   - includes small play icon
+
+5. Content area
+   - padding: 10px
+   - title: 12px semibold, one-line clamp
+   - description: 11px muted, one-line clamp
+   - CTA: full width, 44px high, gradient, 16px radius
+
+### Observed Card Data
+
+Use these as structural examples only. Do not copy/rehost the original media without authorization.
+
+| Title | Tag | Description | Observed Defaults After `做同款` |
+| --- | --- | --- | --- |
+| 罐装气泡水饮料_广告大片 | 视频案例 | 赢海 AI 星泡 0 零糖零卡气泡饮料 广告大片 | 横屏 16:9, 图片比例 9:16, Seedance-2.0-Mini, 720P, 15 秒 |
+| 镜面金属气垫粉饼_广告大片 | 视频案例 | 轻奢彩妆大片素材｜Liangnishi 电镀镜面椭圆气垫粉饼带货短视频 | same control family |
+| 通勤箱包大片高级质感视频 | 视频案例 | 经典老花波士顿包 9:16 竖屏 15s AI 口播带货视频 | same control family |
+
+### Hover State
+
+- Card media overlay darkens.
+- Play icon fades in.
+- CTA gradient brightens from `#18dcd5/#1bd3fd` to `#24e4dc/#26dcff`.
+- CTA shadow increases from `0 16px 34px rgba(27,211,253,.22)` to `0 20px 42px rgba(27,211,253,.30)`.
+- CTA translates upward by 1px.
+
+## 8. `做同款` Replication Logic
+
+`做同款` is not only a visual action. It must hydrate the current creation form with a complete preset.
+
+### Product Ad Film Preset Shape
+
+```ts
+type VideoCasePreset = {
+  id: string;
+  title: string;
+  tag: &quot;视频案例&quot; | &quot;图片案例&quot;;
+  description: string;
+  coverAssetId: string;
+  sourceAssetIds: string[];
+  productInfo: string;
+  videoRequirements: string;
+  executionMode: &quot;staged&quot; | &quot;direct&quot;;
+  videoAspectRatio: &quot;9:16&quot; | &quot;16:9&quot; | &quot;1:1&quot;;
+  imageAspectRatio: &quot;9:16&quot; | &quot;16:9&quot; | &quot;1:1&quot;;
+  model: &quot;gemini&quot; | &quot;seedance-2-mini&quot; | string;
+  durationSeconds: 5 | 10 | 15;
+  resolution: &quot;720P&quot; | &quot;1080P&quot;;
+};
+```
+
+### Click Behavior
+
+- Fill product images/material references from owned case assets.
+- Fill `产品信息`.
+- Fill `视频特殊要求`.
+- Set execution mode.
+- Set video ratio.
+- Set image ratio.
+- Set model.
+- Set duration.
+- Set resolution.
+- Keep the user on the same creation page and show the form values immediately.
+- Do not expose internal strategy prompts or hidden action-director prompts in the UI.
+
+### Example Owned Replacement Presets
+
+These can be implemented with generated or licensed covers.
+
+| Title | Product Info | Video Requirements | Ratio | Model | Duration |
+| --- | --- | --- | --- | --- | --- |
+| 清爽气泡水广告大片 | 蓝白渐变细罐气泡水，0 糖 0 卡，清爽聚餐与健身场景 | 高级饮品广告，冰块、水珠、清爽光线，快节奏转场 | 16:9 | Gemini/Seedance route | 15s |
+| 金属气垫粉饼广告大片 | 镜面银色椭圆气垫粉饼，轻奢彩妆质感 | 高级美妆广告，柔光反射，手部开盒，产品旋转 | 9:16 | Gemini/Seedance route | 15s |
+| 通勤箱包质感短片 | 老花波士顿通勤包，都市出行、轻商务穿搭 | 城市街景，手提包细节，模特行走，质感近景 | 9:16 | Gemini/Seedance route | 15s |
+
+## 9. Detail Modal
+
+### Structure
+
+- Dialog title: `作品详情`.
+- Left: video/image preview in black media area with play control.
+- Right:
+  - module label, such as `产品广告大片`
+  - `案例素材` with product image thumbnails
+  - `提示词 / 关键参数`
+  - field rows for case name, content description, product info, video requirements, aspect ratio, model, image ratio, resolution, duration
+  - bottom `做同款` CTA
+
+### Implementation Notes
+
+- The modal is useful for inspection but `做同款` should also be available directly on the card.
+- The right parameter list can be read-only; editable fields live in the main creation form after applying the preset.
+
+## 10. AI Video Home Page Structure
+
+### Header
+
+- Logo block at left.
+- Nav items: `一站式视频带货`, `图片创作`, `实用工具`, `我的任务`, `素材库`.
+- Theme toggle and user menu on the right.
+
+### Main Sections
+
+1. Search row
+   - Keyword context: `AI电商视频`.
+
+2. Featured workflow
+   - Title: `爆款视频换品复刻`.
+   - Should be a prominent band/card with step visuals and a direct entry action.
+
+3. `带货视频生成`
+   - `产品广告大片`
+   - `模特对镜自拍`
+
+4. `智能带货视频`
+   - `复刻爆款带货视频-新版`
+   - `智能混剪带货视频`
+   - `口播带货视频`
+
+5. `Seedance2-视频`
+   - `Seedance2 视频`
+
+### Layout Guidance
+
+- Keep these groups expanded on the page.
+- Top-level video modules should look like discoverable app cards, not settings tabs.
+- Each card should show a concise title, short description, representative media, and a primary entry action.
+
+## 11. Responsive Behavior
+
+| Name | Width | Key Changes |
+| --- | --- | --- |
+| Mobile | ~390px | Main content width around 366px; creation page stacks; cards remain square; padding around 12px |
+| Tablet | ~768px | Main width around 736px; creation page still compact/stacked where needed |
+| Desktop | &gt;=1024px | Two-column creation workspace; right `案例参考` remains visible |
+
+### Touch Targets
+
+- Primary card CTA: at least 44px high.
+- Media preview should be tappable across the full thumbnail.
+- Avoid tiny separate controls inside case thumbnails.
+
+### Collapsing Strategy
+
+- Creation form first, examples second on narrow screens.
+- Keep examples available without hiding them behind unclear tabs.
+- Use horizontally scrollable case rows only if vertical stacking becomes too long.
+
+## 12. Do&#39;s and Don&#39;ts
+
+### Do
+
+- Use owned or generated media for every visible case cover.
+- Make `做同款` fill all relevant parameters, not just text.
+- Keep internal prompts hidden from the user.
+- Put case references beside the form on desktop.
+- Preserve task outputs temporarily and require explicit `添加到素材库` for long-term storage.
+
+### Don&#39;t
+
+- Do not copy source-site videos or images into our project without authorization.
+- Do not make AI Video modules a cramped tab-only experience.
+- Do not show internal action-director or replication strategy prompts in the frontend.
+- Do not let generated task outputs automatically become permanent library assets.
+- Do not overload the first screen with marketing explanations.
+
+## 13. Implementation Mapping
+
+Suggested module split for our codebase:
+
+```txt
+app/features/ai-video/
+  constants/
+    video-case-presets.ts
+    video-tool-groups.ts
+  components/
+    ai-video-home.tsx
+    video-tool-card.tsx
+    case-reference-board.tsx
+    case-reference-card.tsx
+    case-detail-dialog.tsx
+    product-ad-film-form.tsx
+  hooks/
+    use-video-case-preset.ts
+    use-video-task-draft.ts
+  types/
+    video-case.ts
+    video-tool.ts
+```
+
+For `product-ad-film`, the `CaseReferenceBoard` should accept an array of owned `VideoCasePreset` objects and an `onApplyPreset` callback. The page owns the form state; the board only emits the selected preset.
+
+## 14. Agent Prompt Guide
+
+When building pages from this design system:
+
+- Build the actual tool page first, not a landing page.
+- Dark mode should feel native, with cyan action energy and quiet glass panels.
+- Keep examples on the right side for desktop creation pages.
+- Use case presets to backfill product info, requirements, ratio, model, duration, and resolution.
+- Use generated or authorized case covers. Never depend on source-site media URLs in production.
+- Hide internal prompts. User-facing labels should be simple: `产品图片`, `产品信息`, `视频特殊要求`, `视频画面比例`, `视频模型`, `视频时长`, `视频分辨率`.
+</pre>
+              <article class="rendered-view" id="previewView" hidden><section><h2>1. Visual Theme &amp; Atmosphere</h2><p>Yinghai AI Video uses a dark commerce-workbench style: compact creation controls, visible media references, and bright cyan actions that guide users from example browsing to parameterized generation.</p><p>It should feel like a practical e-commerce production console: fast to scan, confident, and media-led.</p><ul><li>Overall feeling: polished AI commerce workstation, dark-first, glassy surfaces, high contrast text, cyan action accents.</li><li>Visual density: medium-high. The home page exposes many tools at once; task pages use a two-column creation workspace with a form on the left and example references on the right.</li><li>Brand posture: practical and conversion-focused rather than decorative. The UI should feel like a production tool for e-commerce video creation.</li><li>Signature motifs: cyan-to-blue gradient CTAs, rounded glass cards, black media previews, subtle radial page background, compact Chinese labels.</li></ul><h3>Key Characteristics</h3><ul><li>Dark mode is the strongest visual identity: deep navy page background, semi-transparent panels, white text, cyan gradients.</li><li>Tool cards are directly visible in expanded sections; do not hide the primary modules inside secondary tabs.</li><li>Case references are first-class controls: each card has preview, title, short prompt/description, and a prominent <code>做同款</code> action.</li><li>Creation pages pair parameter forms with a persistent right-side example gallery.</li></ul></section><section><h2>2. Color Palette &amp; Roles</h2><table><thead><tr><th>Role</th><th>Semantic Name</th><th>Value</th><th>Usage</th></tr></thead><tbody><tr><td>Primary action</td><td>Electric Cyan Gradient</td><td><code>linear-gradient(90deg,#18dcd5,#1bd3fd)</code></td><td>Main buttons, <code>做同款</code>, submit actions</td></tr><tr><td>Primary action hover</td><td>Bright Cyan Gradient</td><td><code>linear-gradient(90deg,#24e4dc,#26dcff)</code></td><td>CTA hover state</td></tr><tr><td>Dark background</td><td>Night Canvas</td><td><code>#090c12</code></td><td>Dark page background</td></tr><tr><td>Dark surface</td><td>Ink Glass</td><td><code>rgba(18,22,32,.82)</code> / <code>#121620</code></td><td>Cards, panels, drawers</td></tr><tr><td>Dark text</td><td>Frost White</td><td><code>#eef5ff</code></td><td>Main text on dark backgrounds</td></tr><tr><td>Dark muted text</td><td>Blue Gray</td><td><code>#9aa6ba</code></td><td>Hints, descriptions, disabled labels</td></tr><tr><td>Dark border</td><td>White Hairline</td><td><code>rgba(255,255,255,.12)</code></td><td>Card borders, panel separators</td></tr><tr><td>Light background</td><td>Soft Cloud</td><td><code>#f4f6f6</code></td><td>Light page background</td></tr><tr><td>Light surface</td><td>White</td><td><code>#ffffff</code></td><td>Light cards and panels</td></tr><tr><td>Light text</td><td>Carbon</td><td><code>#252b35</code></td><td>Main text in light mode</td></tr><tr><td>Light muted text</td><td>Slate Muted</td><td><code>#69778d</code></td><td>Supporting copy in light mode</td></tr><tr><td>Light border</td><td>Pale Blue Line</td><td><code>#d8e3f7</code></td><td>Light card borders</td></tr></tbody></table><h3>Primary</h3><ul><li>Use cyan/blue only for high-value actions and selected states.</li><li>Avoid making the entire interface blue. Let surfaces stay neutral and let the CTA carry the brand energy.</li></ul><h3>Interactive</h3><ul><li>Button hover raises the surface slightly: <code>translateY(-1px)</code>.</li><li>Primary hover increases glow: <code>0 20px 42px rgba(27,211,253,.30)</code>.</li><li>Media hover adds a black translucent overlay and reveals a centered play icon.</li><li>Case cards should feel clickable through shadow, hover overlay, and cursor changes.</li></ul><h3>Theme Modes</h3><p>#### Light Mode</p><ul><li>Background: <code>linear-gradient(135deg,#fff,#faf8f6,#f0edf8)</code> over <code>#f4f6f6</code>.</li><li>Surface: <code>#fff</code>.</li><li>Text: <code>#252b35</code>.</li><li>Accent: <code>#1478ff</code>, <code>#24d6c8</code>, <code>#20c8ff</code>.</li><li>Notes: keep shadows soft and borders visible.</li></ul><p>#### Dark Mode</p><ul><li>Background: radial deep blue/cyan highlights over <code>#090c12</code>.</li><li>Surface: <code>rgba(18,22,32,.82)</code> and <code>#101521</code>.</li><li>Text: <code>#eef5ff</code>.</li><li>Accent: <code>#18dcd5</code> to <code>#1bd3fd</code>.</li><li>Notes: cards use white hairlines; black media wells give video thumbnails a clean frame.</li></ul><h3>Shadows &amp; Depth</h3><ul><li>Main panel shadow: <code>0 24px 70px rgba(20,120,255,.12)</code> in light mode.</li><li>Dark card shadow: <code>0 10px 22px rgba(0,0,0,.22)</code>.</li><li>CTA shadow: <code>0 16px 34px rgba(27,211,253,.22)</code>.</li><li>Hover CTA shadow: <code>0 20px 42px rgba(27,211,253,.30)</code>.</li></ul></section><section><h2>3. Typography Rules</h2><h3>Font Family</h3><ul><li>Primary: <code>&quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, ui-sans-serif, system-ui, -apple-system, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, sans-serif</code></li><li>Monospace: use the product default only for ids, task codes, logs, and debug details.</li><li>OpenType Features: normal tracking for most UI; avoid negative tracking except large marketing-style titles copied from the reference hero.</li></ul><h3>Hierarchy</h3><table><thead><tr><th>Role</th><th>Font</th><th>Size</th><th>Weight</th><th>Line Height</th><th>Letter Spacing</th><th>Notes</th></tr></thead><tbody><tr><td>Featured workflow headline</td><td>Primary</td><td><code>clamp(28px,3.2vw,41px)</code></td><td>900</td><td><code>1.08</code></td><td>tight only for hero</td><td>Used for <code>爆款视频换品复刻</code></td></tr><tr><td>Section heading</td><td>Primary</td><td><code>20px-24px</code></td><td>700</td><td><code>32px</code></td><td><code>0</code></td><td>Tool groups such as <code>带货视频生成</code></td></tr><tr><td>Tool card title</td><td>Primary</td><td><code>18px-20px</code></td><td>600</td><td><code>1.25</code></td><td><code>0</code></td><td>Two-line clamp on module cards</td></tr><tr><td>Form label</td><td>Primary</td><td><code>13px-14px</code></td><td>500-600</td><td><code>20px</code></td><td><code>0</code></td><td>Compact and direct</td></tr><tr><td>Case card title</td><td>Primary</td><td><code>12px</code></td><td>600</td><td><code>16px</code></td><td><code>0</code></td><td>One-line clamp</td></tr><tr><td>Case description</td><td>Primary</td><td><code>11px</code></td><td>400</td><td><code>16px</code></td><td><code>0</code></td><td>One-line clamp</td></tr><tr><td>Button label</td><td>Primary</td><td><code>12px-14px</code></td><td>500-600</td><td><code>16px-20px</code></td><td><code>0</code></td><td>Center aligned</td></tr></tbody></table><h3>Principles</h3><ul><li>Keep creation forms compact. Labels should be short and scannable.</li><li>Use one-line truncation for case-card title and description to maintain card rhythm.</li><li>Do not explain internal strategy prompts in the UI; expose only the user-facing fields.</li></ul></section><section><h2>4. Component Stylings</h2><h3>Buttons and Links</h3><ul><li>Primary CTA: cyan-to-blue gradient, dark text <code>#071014</code>, 16px radius, 44px minimum height on compact cards.</li><li>Secondary CTA: translucent surface, hairline border, muted text; reserve for non-destructive navigation.</li><li>Text links: inherit text color with subtle opacity change.</li><li>Hover and active feel: <code>translateY(-1px)</code> plus brighter gradient for primary actions.</li></ul><h3>Cards and Containers</h3><ul><li>Surface style: semi-transparent dark glass or clean white in light mode.</li><li>Radius: source cards commonly use 16px; our product may reduce repeated utility cards to 8px if matching existing app conventions, but the right-side case cards should keep the rounded media style.</li><li>Border: <code>1px solid rgba(255,255,255,.12)</code> dark, <code>1px solid #d8e3f7</code> light.</li><li>Shadow or elevation: low shadow for resting cards, stronger cyan glow only for CTAs.</li><li>Internal spacing: compact, usually 10px-16px in cards and 16px-24px in panels.</li></ul><h3>Inputs and Interactive Controls</h3><ul><li>Inputs should sit on quiet surfaces with clear labels above.</li><li>Select controls should display current choices such as ratio, model, duration, and resolution.</li><li>Upload controls should behave like dropzones but not dominate the page once media exists.</li><li>Filled-by-case values should be visible in the form immediately after <code>做同款</code>.</li></ul><h3>Navigation</h3><ul><li>Structure: global header with logo, primary nav items, task center, asset library, theme toggle, account menu.</li><li>Background treatment: sticky glass header with border in light mode; dark gradient header in dark mode.</li><li>Link style: active video entry is more prominent and can include a <code>HOT NOW</code> motif.</li><li>Page structure: AI Video is a top-level section; modules are shown as expanded grouped cards, not compressed into an inner tab strip.</li></ul><h3>Image and Video Treatment</h3><ul><li>Case preview media sits in a black well.</li><li>Use <code>object-contain</code> for case previews to avoid cropping product/video frames.</li><li>Add top-left media badges such as <code>视频案例</code>.</li><li>On hover, overlay <code>rgba(0,0,0,.15)</code> and reveal a play button with translucent black background.</li></ul><h3>Distinctive Components</h3><ul><li>AI video home module grid.</li><li>Featured <code>爆款视频换品复刻</code> workflow band.</li><li>Right-side <code>案例参考</code> case board.</li><li>Case detail modal with media preview on the left and prompt/key parameters on the right.</li><li><code>做同款</code> action that backfills creation parameters.</li></ul></section><section><h2>5. Layout Principles</h2><h3>Spacing System</h3><ul><li>Base unit: 4px.</li><li>Repeated spacing values: 8px, 10px, 12px, 16px, 24px, 32px.</li></ul><h3>Grid &amp; Container</h3><ul><li>Global container: max width close to <code>screen-2xl</code>; desktop observed at 1280px viewport with full-width header and centered content.</li><li>AI Video home: grouped sections, each with cards in a responsive grid.</li><li>Product ad task page: left form plus right case references on desktop; stacked layout on mobile/tablet.</li><li>Case card: square card, media top 64%, content and CTA bottom 36%.</li></ul><h3>Whitespace Philosophy</h3><ul><li>Use enough spacing to separate tool families, but keep each working panel compact.</li><li>Creation pages should prioritize visible controls and examples above decorative copy.</li><li>Avoid large empty hero space on utility pages.</li></ul><h3>Border Radius Scale</h3><ul><li>Micro: 6px for chips and tiny controls.</li><li>Standard: 8px for app-native panels and compact controls.</li><li>Large: 16px for source-style case cards, modals, upload wells.</li><li>Pill: 999px for badges and category pills.</li></ul></section><section><h2>6. Depth &amp; Elevation</h2><table><thead><tr><th>Level</th><th>Treatment</th><th>Use</th></tr></thead><tbody><tr><td>Flat</td><td>Transparent or page background</td><td>Page bands and simple sections</td></tr><tr><td>Ring</td><td>1px hairline border</td><td>Inputs, cards, panels</td></tr><tr><td>Card</td><td>Hairline + low shadow</td><td>Tool cards and case cards</td></tr><tr><td>Focus</td><td>Border highlight + faint cyan ring</td><td>Keyboard focus and active controls</td></tr><tr><td>Modal</td><td>Dark overlay + high-z rounded panel</td><td>Case detail preview</td></tr></tbody></table><h3>Depth Principles</h3><ul><li>Depth separates functional zones, not decoration.</li><li>Media previews should feel physically framed by black wells.</li><li>CTA glow should be used sparingly so <code>做同款</code> and submit actions remain obvious.</li><li>Avoid decorative blobs or generic gradient ornaments that do not explain the product.</li></ul></section><section><h2>7. Case Card Structure</h2><h3>Anatomy</h3><ol><li><code>article</code> square card - <code>display:flex</code> - <code>flex-direction:column</code> - <code>aspect-ratio:1/1</code> - <code>overflow:hidden</code> - <code>border-radius:16px</code> - <code>border:1px solid var(--yh-line)</code> - dark background <code>rgba(18,22,32,.82)</code></li></ol><ol><li>Media area - height: <code>64%</code> - background: black - image/video poster: full width and height, <code>object-fit:contain</code> - click action opens work detail modal - cursor: zoom-in</li></ol><ol><li>Hover overlay - absolute full inset - default: transparent black - hover: <code>rgba(0,0,0,.15)</code> - centered play icon appears from opacity 0 to 1 - play circle: 44px, <code>rgba(0,0,0,.55)</code>, white icon, backdrop blur</li></ol><ol><li>Badge - top-left absolute pill - text: <code>视频案例</code> - 11px text, medium weight - background: <code>rgba(16,27,51,.72)</code> - includes small play icon</li></ol><ol><li>Content area - padding: 10px - title: 12px semibold, one-line clamp - description: 11px muted, one-line clamp - CTA: full width, 44px high, gradient, 16px radius</li></ol><h3>Observed Card Data</h3><p>Use these as structural examples only. Do not copy/rehost the original media without authorization.</p><table><thead><tr><th>Title</th><th>Tag</th><th>Description</th><th>Observed Defaults After <code>做同款</code></th></tr></thead><tbody><tr><td>罐装气泡水饮料_广告大片</td><td>视频案例</td><td>赢海 AI 星泡 0 零糖零卡气泡饮料 广告大片</td><td>横屏 16:9, 图片比例 9:16, Seedance-2.0-Mini, 720P, 15 秒</td></tr><tr><td>镜面金属气垫粉饼_广告大片</td><td>视频案例</td><td>轻奢彩妆大片素材｜Liangnishi 电镀镜面椭圆气垫粉饼带货短视频</td><td>same control family</td></tr><tr><td>通勤箱包大片高级质感视频</td><td>视频案例</td><td>经典老花波士顿包 9:16 竖屏 15s AI 口播带货视频</td><td>same control family</td></tr></tbody></table><h3>Hover State</h3><ul><li>Card media overlay darkens.</li><li>Play icon fades in.</li><li>CTA gradient brightens from <code>#18dcd5/#1bd3fd</code> to <code>#24e4dc/#26dcff</code>.</li><li>CTA shadow increases from <code>0 16px 34px rgba(27,211,253,.22)</code> to <code>0 20px 42px rgba(27,211,253,.30)</code>.</li><li>CTA translates upward by 1px.</li></ul></section><section><h2>8. 做同款 Replication Logic</h2><p><code>做同款</code> is not only a visual action. It must hydrate the current creation form with a complete preset.</p><h3>Product Ad Film Preset Shape</h3><p>``<code>ts type VideoCasePreset = { id: string; title: string; tag: &quot;视频案例&quot; | &quot;图片案例&quot;; description: string; coverAssetId: string; sourceAssetIds: string[]; productInfo: string; videoRequirements: string; executionMode: &quot;staged&quot; | &quot;direct&quot;; videoAspectRatio: &quot;9:16&quot; | &quot;16:9&quot; | &quot;1:1&quot;; imageAspectRatio: &quot;9:16&quot; | &quot;16:9&quot; | &quot;1:1&quot;; model: &quot;gemini&quot; | &quot;seedance-2-mini&quot; | string; durationSeconds: 5 | 10 | 15; resolution: &quot;720P&quot; | &quot;1080P&quot;; }; </code>``</p><h3>Click Behavior</h3><ul><li>Fill product images/material references from owned case assets.</li><li>Fill <code>产品信息</code>.</li><li>Fill <code>视频特殊要求</code>.</li><li>Set execution mode.</li><li>Set video ratio.</li><li>Set image ratio.</li><li>Set model.</li><li>Set duration.</li><li>Set resolution.</li><li>Keep the user on the same creation page and show the form values immediately.</li><li>Do not expose internal strategy prompts or hidden action-director prompts in the UI.</li></ul><h3>Example Owned Replacement Presets</h3><p>These can be implemented with generated or licensed covers.</p><table><thead><tr><th>Title</th><th>Product Info</th><th>Video Requirements</th><th>Ratio</th><th>Model</th><th>Duration</th></tr></thead><tbody><tr><td>清爽气泡水广告大片</td><td>蓝白渐变细罐气泡水，0 糖 0 卡，清爽聚餐与健身场景</td><td>高级饮品广告，冰块、水珠、清爽光线，快节奏转场</td><td>16:9</td><td>Gemini/Seedance route</td><td>15s</td></tr><tr><td>金属气垫粉饼广告大片</td><td>镜面银色椭圆气垫粉饼，轻奢彩妆质感</td><td>高级美妆广告，柔光反射，手部开盒，产品旋转</td><td>9:16</td><td>Gemini/Seedance route</td><td>15s</td></tr><tr><td>通勤箱包质感短片</td><td>老花波士顿通勤包，都市出行、轻商务穿搭</td><td>城市街景，手提包细节，模特行走，质感近景</td><td>9:16</td><td>Gemini/Seedance route</td><td>15s</td></tr></tbody></table></section><section><h2>9. Detail Modal</h2><h3>Structure</h3><ul><li>Dialog title: <code>作品详情</code>.</li><li>Left: video/image preview in black media area with play control.</li><li>Right:</li><li>module label, such as <code>产品广告大片</code></li><li><code>案例素材</code> with product image thumbnails</li><li><code>提示词 / 关键参数</code></li><li>field rows for case name, content description, product info, video requirements, aspect ratio, model, image ratio, resolution, duration</li><li>bottom <code>做同款</code> CTA</li></ul><h3>Implementation Notes</h3><ul><li>The modal is useful for inspection but <code>做同款</code> should also be available directly on the card.</li><li>The right parameter list can be read-only; editable fields live in the main creation form after applying the preset.</li></ul></section><section><h2>10. AI Video Home Page Structure</h2><h3>Header</h3><ul><li>Logo block at left.</li><li>Nav items: <code>一站式视频带货</code>, <code>图片创作</code>, <code>实用工具</code>, <code>我的任务</code>, <code>素材库</code>.</li><li>Theme toggle and user menu on the right.</li></ul><h3>Main Sections</h3><ol><li>Search row - Keyword context: <code>AI电商视频</code>.</li></ol><ol><li>Featured workflow - Title: <code>爆款视频换品复刻</code>. - Should be a prominent band/card with step visuals and a direct entry action.</li></ol><ol><li><code>带货视频生成</code> - <code>产品广告大片</code> - <code>模特对镜自拍</code></li></ol><ol><li><code>智能带货视频</code> - <code>复刻爆款带货视频-新版</code> - <code>智能混剪带货视频</code> - <code>口播带货视频</code></li></ol><ol><li><code>Seedance2-视频</code> - <code>Seedance2 视频</code></li></ol><h3>Layout Guidance</h3><ul><li>Keep these groups expanded on the page.</li><li>Top-level video modules should look like discoverable app cards, not settings tabs.</li><li>Each card should show a concise title, short description, representative media, and a primary entry action.</li></ul></section><section><h2>11. Responsive Behavior</h2><table><thead><tr><th>Name</th><th>Width</th><th>Key Changes</th></tr></thead><tbody><tr><td>Mobile</td><td>~390px</td><td>Main content width around 366px; creation page stacks; cards remain square; padding around 12px</td></tr><tr><td>Tablet</td><td>~768px</td><td>Main width around 736px; creation page still compact/stacked where needed</td></tr><tr><td>Desktop</td><td>&gt;=1024px</td><td>Two-column creation workspace; right <code>案例参考</code> remains visible</td></tr></tbody></table><h3>Touch Targets</h3><ul><li>Primary card CTA: at least 44px high.</li><li>Media preview should be tappable across the full thumbnail.</li><li>Avoid tiny separate controls inside case thumbnails.</li></ul><h3>Collapsing Strategy</h3><ul><li>Creation form first, examples second on narrow screens.</li><li>Keep examples available without hiding them behind unclear tabs.</li><li>Use horizontally scrollable case rows only if vertical stacking becomes too long.</li></ul></section><section><h2>12. Do&#39;s and Don&#39;ts</h2><h3>Do</h3><ul><li>Use owned or generated media for every visible case cover.</li><li>Make <code>做同款</code> fill all relevant parameters, not just text.</li><li>Keep internal prompts hidden from the user.</li><li>Put case references beside the form on desktop.</li><li>Preserve task outputs temporarily and require explicit <code>添加到素材库</code> for long-term storage.</li></ul><h3>Don&#39;t</h3><ul><li>Do not copy source-site videos or images into our project without authorization.</li><li>Do not make AI Video modules a cramped tab-only experience.</li><li>Do not show internal action-director or replication strategy prompts in the frontend.</li><li>Do not let generated task outputs automatically become permanent library assets.</li><li>Do not overload the first screen with marketing explanations.</li></ul></section><section><h2>13. Implementation Mapping</h2><p>Suggested module split for our codebase:</p><p>``<code>txt app/features/ai-video/ constants/ video-case-presets.ts video-tool-groups.ts components/ ai-video-home.tsx video-tool-card.tsx case-reference-board.tsx case-reference-card.tsx case-detail-dialog.tsx product-ad-film-form.tsx hooks/ use-video-case-preset.ts use-video-task-draft.ts types/ video-case.ts video-tool.ts </code>``</p><p>For <code>product-ad-film</code>, the <code>CaseReferenceBoard</code> should accept an array of owned <code>VideoCasePreset</code> objects and an <code>onApplyPreset</code> callback. The page owns the form state; the board only emits the selected preset.</p></section><section><h2>14. Agent Prompt Guide</h2><p>When building pages from this design system:</p><ul><li>Build the actual tool page first, not a landing page.</li><li>Dark mode should feel native, with cyan action energy and quiet glass panels.</li><li>Keep examples on the right side for desktop creation pages.</li><li>Use case presets to backfill product info, requirements, ratio, model, duration, and resolution.</li><li>Use generated or authorized case covers. Never depend on source-site media URLs in production.</li><li>Hide internal prompts. User-facing labels should be simple: <code>产品图片</code>, <code>产品信息</code>, <code>视频特殊要求</code>, <code>视频画面比例</code>, <code>视频模型</code>, <code>视频时长</code>, <code>视频分辨率</code>.</li></ul></section></article>
+            </div>
+          </article>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const sourceView = document.getElementById("sourceView");
+      const previewView = document.getElementById("previewView");
+      const copyButton = document.getElementById("copyButton");
+      const copyState = document.getElementById("copyState");
+      const viewButtons = document.querySelectorAll("[data-view]");
+
+      function setActiveView(view) {
+        const showSource = view === "source";
+        sourceView.hidden = !showSource;
+        previewView.hidden = showSource;
+        viewButtons.forEach((button) => {
+          button.classList.toggle("is-active", button.dataset.view === view);
+        });
+      }
+
+      viewButtons.forEach((button) => {
+        button.addEventListener("click", () => setActiveView(button.dataset.view));
+      });
+
+      copyButton.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(sourceView.textContent || "");
+          copyState.textContent = "Copied";
+        } catch (error) {
+          copyState.textContent = "Clipboard unavailable";
+        }
+
+        setTimeout(() => {
+          copyState.textContent = "";
+        }, 1400);
+      });
+    </script>
+  </body>
+</html>

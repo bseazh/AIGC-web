@@ -6,10 +6,11 @@ import {
   ChevronDown,
   Film,
   FolderOpen,
-  ImagePlus,
   LoaderCircle,
+  PlayCircle,
   Sparkles,
   Upload,
+  Wand2,
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -41,6 +42,104 @@ type Result = {
 const maxImages = 5;
 const imageAccepts = "image/jpeg,image/png,image/webp";
 
+type ProductAdCase = {
+  id: string;
+  title: string;
+  tag: "视频案例";
+  poster: string;
+  description: string;
+  productInfo: string;
+  specialRequirements: string;
+  executionMode: string;
+  ratio: string;
+  imageRatio: string;
+  duration: string;
+  model: string;
+  modelLabel: string;
+  resolution: string;
+  internalPrompt: string;
+};
+
+const productAdCases: ProductAdCase[] = [
+  {
+    id: "icy-water",
+    title: "清爽气泡水广告大片",
+    tag: "视频案例",
+    poster:
+      "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=900&q=88",
+    description: "冰块、水珠、蓝白高光棚拍，做出清爽饮品广告节奏。",
+    productInfo: "蓝瓶气泡水饮料，主打冰爽、低糖、清透口感，面向年轻通勤和运动后补水人群。",
+    specialRequirements:
+      "冰块飞溅、冷凝水珠、蓝白高光棚拍，镜头从瓶身特写推进到完整产品展示，节奏清爽高级。",
+    executionMode: "分段式执行",
+    ratio: "16:9",
+    imageRatio: "9:16",
+    duration: "15",
+    model: "doubao-seedance-2",
+    modelLabel: "即梦 Seedance-2",
+    resolution: "720p",
+    internalPrompt:
+      "内置策略：以饮品广告片逻辑组织镜头。开场用冰块、水珠和瓶身高光建立清爽感，中段用慢速推进和环绕展示包装细节，结尾保持产品居中、背景干净、无文字水印。",
+  },
+  {
+    id: "jewelry-ring",
+    title: "镜面金属气垫粉饼广告大片",
+    tag: "视频案例",
+    poster:
+      "https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=900&q=88",
+    description: "镜面反光、柔光棚拍、慢速环绕，突出轻奢金属质感。",
+    productInfo: "镜面银色椭圆气垫粉饼，主打轻奢彩妆、细腻底妆和便携补妆场景。",
+    specialRequirements:
+      "暖色棚拍光、慢速环绕运镜、金属高光闪烁，背景保持简洁高级，突出镜面轮廓和反光细节。",
+    executionMode: "分段式执行",
+    ratio: "9:16",
+    imageRatio: "1:1",
+    duration: "15",
+    model: "doubao-seedance-2",
+    modelLabel: "即梦 Seedance-2",
+    resolution: "720p",
+    internalPrompt:
+      "内置策略：以轻奢美妆广告逻辑组织镜头。保持商品为唯一主主体，使用柔光反射、慢速旋转、开盒/合盖暗示和细节近景，避免生成可读文字、价格、水印或额外品牌。",
+  },
+  {
+    id: "luxury-bag",
+    title: "通勤箱包大片高级质感视频",
+    tag: "视频案例",
+    poster:
+      "https://images.unsplash.com/photo-1594223274512-ad4803739b7c?auto=format&fit=crop&w=900&q=88",
+    description: "都市通勤、皮革近景、生活方式陈列，强调高级实用感。",
+    productInfo: "通勤手提包，主打高级皮革、容量收纳和商务穿搭，面向都市白领女性。",
+    specialRequirements:
+      "咖色室内陈列、柔和侧光、镜头缓慢推近包身纹理，再切到桌面生活方式场景。",
+    executionMode: "分段式执行",
+    ratio: "9:16",
+    imageRatio: "4:3",
+    duration: "15",
+    model: "doubao-seedance-2",
+    modelLabel: "即梦 Seedance-2",
+    resolution: "720p",
+    internalPrompt:
+      "内置策略：以通勤箱包生活方式广告组织镜头。先展示整体轮廓，再展示皮革纹理、五金、容量和上手使用感，镜头节奏稳定高级，场景干净且不出现无关人物脸部特写。",
+  },
+];
+
+async function createCaseImage(item: ProductAdCase): Promise<SelectedImage> {
+  const response = await fetch(item.poster);
+  if (!response.ok) throw new Error("案例素材加载失败");
+  const blob = await response.blob();
+  const mimeType = blob.type.startsWith("image/") ? blob.type : "image/jpeg";
+  const suffix = mimeType.split("/")[1] || "jpg";
+  const file = new File([blob], `${item.id}-case-material.${suffix}`, {
+    type: mimeType,
+  });
+  return {
+    file,
+    preview: URL.createObjectURL(file),
+    name: file.name,
+    byteSize: file.size,
+  };
+}
+
 export function ProductAdVideoPage() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -55,12 +154,16 @@ export function ProductAdVideoPage() {
   const [ratio, setRatio] = useState("9:16");
   const [imageRatio, setImageRatio] = useState("自动适配");
   const [duration, setDuration] = useState("15");
+  const [videoModel, setVideoModel] = useState("doubao-seedance-2");
   const [resolution, setResolution] = useState("720p");
   const [phase, setPhase] = useState<
     "idle" | "uploading" | "generating" | "succeeded" | "failed"
   >("idle");
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
+  const [appliedCaseId, setAppliedCaseId] = useState("");
+  const [applyingCaseId, setApplyingCaseId] = useState("");
+  const [detailCase, setDetailCase] = useState<ProductAdCase | null>(null);
 
   useEffect(() => {
     fetch("/api/auth/session/", { cache: "no-store" })
@@ -75,6 +178,34 @@ export function ProductAdVideoPage() {
     setError("");
     setResult(null);
     setPhase("idle");
+  };
+  const applyCase = async (item: ProductAdCase) => {
+    setApplyingCaseId(item.id);
+    setError("");
+    setProductInfo(item.productInfo);
+    setSpecialRequirements(item.specialRequirements);
+    setExecutionMode(item.executionMode);
+    setRatio(item.ratio);
+    setImageRatio(item.imageRatio);
+    setDuration(item.duration);
+    setVideoModel(item.model);
+    setResolution(item.resolution);
+    setAppliedCaseId(item.id);
+    resetTask();
+    try {
+      const caseImage = await createCaseImage(item);
+      setImages((current) => {
+        current.forEach((image) => {
+          if (image.file) URL.revokeObjectURL(image.preview);
+        });
+        return [caseImage];
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? `${caught.message}，已先回填案例参数` : "案例素材加载失败，已先回填案例参数");
+    } finally {
+      setApplyingCaseId("");
+      setDetailCase(null);
+    }
   };
   const addFiles = (files?: FileList | null) => {
     if (!files) return;
@@ -212,6 +343,11 @@ export function ProductAdVideoPage() {
         `视频特殊要求：${specialRequirements.trim()}`,
         `执行方式：${executionMode}`,
         `图片比例：${imageRatio}`,
+        `视频模型：${videoModel}`,
+        appliedCaseId ? `案例预设：${appliedCaseId}` : "",
+        appliedCaseId
+          ? productAdCases.find((item) => item.id === appliedCaseId)?.internalPrompt || ""
+          : "内置策略：按照高品质电商广告片组织镜头，突出商品主体、材质、卖点和使用氛围，画面内不要生成可读文字、价格、水印或额外品牌。",
       ]
         .filter((line) => !line.endsWith("："))
         .join("\n");
@@ -229,6 +365,12 @@ export function ProductAdVideoPage() {
           resolution,
           scene: "产品广告大片",
           style: "商业广告",
+          videoModel,
+          executionMode,
+          imageRatio,
+          productInfo: productInfo.trim(),
+          specialRequirements: specialRequirements.trim(),
+          appliedCaseId,
         }),
       });
       const created = await response.json();
@@ -252,7 +394,11 @@ export function ProductAdVideoPage() {
     setRatio("9:16");
     setImageRatio("自动适配");
     setDuration("15");
+    setVideoModel("doubao-seedance-2");
     setResolution("720p");
+    setAppliedCaseId("");
+    setApplyingCaseId("");
+    setDetailCase(null);
     resetTask();
   };
   if (!account)
@@ -274,12 +420,13 @@ export function ProductAdVideoPage() {
           返回视频创作
         </button>
       </header>
-      <form className="ad-studio-card" onSubmit={submit}>
-        <div className="ad-studio-title">
-          <Film size={22} />
-          <strong>产品广告大片</strong>
-        </div>
-        <section className="ad-studio-body">
+      <div className="ad-studio-layout">
+        <form className="ad-studio-card" onSubmit={submit}>
+          <div className="ad-studio-title">
+            <Film size={22} />
+            <strong>产品广告大片</strong>
+          </div>
+          <section className="ad-studio-body">
           <div className="ad-field-title">
             产品图片 <em>*</em>
           </div>
@@ -452,7 +599,10 @@ export function ProductAdVideoPage() {
             <label>
               视频模型 <em>*</em>
               <span className="ad-select">
-                <select defaultValue="doubao-seedance-2">
+                <select
+                  value={videoModel}
+                  onChange={(event) => setVideoModel(event.target.value)}
+                >
                   <option value="doubao-seedance-2">即梦 Seedance-2</option>
                 </select>
                 <ChevronDown size={16} />
@@ -508,8 +658,103 @@ export function ProductAdVideoPage() {
               重置
             </button>
           </div>
-        </section>
-      </form>
+          </section>
+        </form>
+        <aside className="ad-case-board">
+          <header>
+            <span>
+              <Sparkles size={17} />
+            </span>
+            <div>
+              <h1>案例参考</h1>
+              <p>选择案例可一键回填入参</p>
+            </div>
+          </header>
+          <div className="ad-case-grid">
+            {productAdCases.map((item) => (
+              <article className={appliedCaseId === item.id ? "active" : ""} key={item.id}>
+                <button
+                  type="button"
+                  className="ad-case-media"
+                  onClick={() => setDetailCase(item)}
+                  aria-label={`查看${item.title}作品详情`}
+                >
+                  <img src={item.poster} alt={item.title} />
+                  <span>
+                    <PlayCircle size={12} />
+                    {item.tag}
+                  </span>
+                  <i>
+                    <PlayCircle size={21} />
+                  </i>
+                </button>
+                <div>
+                  <strong>{item.title}</strong>
+                  <p>{item.description}</p>
+                </div>
+                <button
+                  type="button"
+                  className="ad-case-apply"
+                  disabled={applyingCaseId === item.id}
+                  onClick={() => void applyCase(item)}
+                >
+                  {applyingCaseId === item.id ? <LoaderCircle size={15} /> : <Wand2 size={15} />}
+                  {applyingCaseId === item.id ? "回填中" : "做同款"}
+                </button>
+              </article>
+            ))}
+          </div>
+        </aside>
+      </div>
+      {detailCase && (
+        <div className="ad-case-dialog-backdrop" role="presentation" onMouseDown={() => setDetailCase(null)}>
+          <section
+            className="ad-case-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="作品详情"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button className="ad-case-dialog-close" type="button" onClick={() => setDetailCase(null)} aria-label="关闭作品详情">
+              <X size={18} />
+            </button>
+            <div className="ad-case-dialog-media">
+              <img src={detailCase.poster} alt={detailCase.title} />
+              <span><PlayCircle size={13} />{detailCase.tag}</span>
+            </div>
+            <div className="ad-case-dialog-detail">
+              <span className="ad-case-dialog-kicker">产品广告大片</span>
+              <h2>{detailCase.title}</h2>
+              <p>{detailCase.description}</p>
+              <div className="ad-case-materials">
+                <strong>案例素材</strong>
+                <img src={detailCase.poster} alt="" />
+              </div>
+              <div className="ad-case-params">
+                <strong>提示词 / 关键参数</strong>
+                <dl>
+                  <div><dt>产品信息</dt><dd>{detailCase.productInfo}</dd></div>
+                  <div><dt>视频特殊要求</dt><dd>{detailCase.specialRequirements}</dd></div>
+                  <div><dt>视频画面比例</dt><dd>{detailCase.ratio}</dd></div>
+                  <div><dt>图片比例</dt><dd>{detailCase.imageRatio}</dd></div>
+                  <div><dt>模型名称</dt><dd>{detailCase.modelLabel}</dd></div>
+                  <div><dt>视频分辨率</dt><dd>{detailCase.resolution}</dd></div>
+                  <div><dt>视频时长</dt><dd>{detailCase.duration} 秒</dd></div>
+                </dl>
+              </div>
+              <button
+                type="button"
+                className="ad-case-dialog-apply"
+                disabled={applyingCaseId === detailCase.id}
+                onClick={() => void applyCase(detailCase)}
+              >
+                {applyingCaseId === detailCase.id ? <LoaderCircle size={16} /> : <Wand2 size={16} />}
+                {applyingCaseId === detailCase.id ? "正在回填" : "做同款"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Layers3, Sparkles, Video } from "lucide-react";
+import { ArrowRight, Play, Search, Sparkles, Video } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -28,25 +28,46 @@ export function VideoCenterPage() {
   return (
     <AppShell active="video" account={account}>
       <div className="app-page-content video-center">
+        <nav className="video-center-topnav" aria-label="视频创作模块导航">
+          <Link href="/create/product-video" aria-current="page">
+            <Video size={16} />
+            AI电商视频
+          </Link>
+          {videoModules.map((module) => (
+            <a href={`#${module.key}`} key={module.key}>{module.title}</a>
+          ))}
+          <Link href="/tasks">我的任务</Link>
+          <Link href="/assets">素材库</Link>
+        </nav>
+
+        <section className="video-center-search">
+          <Search size={18} />
+          <span>AI电商视频</span>
+          <strong>选择视频能力，进入对应创作流程</strong>
+        </section>
+
         <section className="video-center-hero">
           <div>
             <span className="page-kicker">
               <Video size={15} />
-              视频创作中心
+              一站式视频带货
             </span>
-            <h1>视频创作模块</h1>
-            <p>按视频能力全部展开：带货、复刻、广告大片、混剪、高级生成和模特口播脚本都能直接进入。</p>
+            <h1>爆款视频换品复刻</h1>
+            <p>把对标视频、商品素材和生成参数收束在同一个视频创作中心。下方模块全部展开，直接进入对应工作流。</p>
+            <Link className="video-center-hero-action" href={projectGateHref("recreate-video")}>
+              开始复刻 <ArrowRight size={16} />
+            </Link>
           </div>
           <div className="video-center-stat">
             <Sparkles size={20} />
-            <strong>文案 → 视频</strong>
-            <span>分阶段创作</span>
+            <strong>Reference</strong>
+            <span>换品复刻</span>
           </div>
         </section>
 
         <div className="video-center-groups">
           {videoModules.map((module) => (
-            <section className="video-center-group" key={module.key}>
+            <section className="video-center-group" id={module.key} key={module.key}>
               <div className="video-center-heading">
                 <div>
                   <span>{module.caption}</span>
@@ -60,15 +81,22 @@ export function VideoCenterPage() {
                   const Icon = item.icon;
                   return (
                     <Link className="video-template-card" href={projectGateHref(item.workflowKey)} key={item.title}>
-                      <span className={`video-template-icon ${item.tone}`}>
-                        <Icon size={25} />
-                      </span>
-                      <div>
-                        <strong>{item.title}</strong>
-                        <p>{item.text}</p>
+                      <div className="video-template-media">
+                        <img src={item.cover} alt="" />
+                        <span className="video-template-badge"><Play size={12} />{item.badge}</span>
+                        <span className="video-template-play"><Play size={20} /></span>
+                      </div>
+                      <div className="video-template-body">
+                        <span className={`video-template-icon ${item.tone}`}>
+                          <Icon size={20} />
+                        </span>
+                        <div>
+                          <strong>{item.title}</strong>
+                          <p>{item.text}</p>
+                        </div>
                       </div>
                       <span className="video-template-action">
-                        立即开始 <Layers3 size={14} />
+                        立即开始 <ArrowRight size={14} />
                       </span>
                     </Link>
                   );
