@@ -84,6 +84,18 @@ const checks = [
     "yh-case-board",
   ],
   [
+    "Product scene image uses the recreated case-board layout",
+    "app/components/product-scene-image-page.tsx",
+    "生成产品场景图",
+    "yh-scene-case-board",
+  ],
+  [
+    "Product scene image task accepts multiple product images",
+    "app/api/tasks/scene/route.ts",
+    "body.assetIds",
+    "slice(0, 5)",
+  ],
+  [
     "Image workflows expose case references and same-style apply",
     "app/components/image-workflow-page.tsx",
     "案例参考",
