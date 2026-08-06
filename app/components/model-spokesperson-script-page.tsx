@@ -5,16 +5,18 @@ import {
   Check,
   Clipboard,
   FileText,
+  ImagePlus,
   LoaderCircle,
   MicVocal,
   RefreshCw,
   Save,
   Sparkles,
+  Trash2,
   Video,
   WandSparkles,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type Account = {
   user: { isAdministrator?: boolean };
@@ -37,14 +39,24 @@ type ScriptResult = {
   alternativeOpeners: string[];
   generatedAt: string;
 };
+type ScriptPlan = {
+  id: string;
+  label: string;
+  title: string;
+  angle: string;
+  sellingPointSummary: string[];
+  modelDirection: string;
+  productDirection: string;
+  internalPrompt: string;
+  script: ScriptResult;
+};
 type Draft = {
   productName: string;
-  sellingPoints: string;
-  audience: string;
-  usageScene: string;
-  callToAction: string;
+  productBrief: string;
   tone: string;
   duration: number;
+  plans: ScriptPlan[];
+  selectedPlanId: string;
   result: ScriptResult | null;
 };
 type SpokespersonCase = {
@@ -61,8 +73,20 @@ type SpokespersonCase = {
   tone: string;
   duration: number;
 };
+type ProductImage = {
+  id: string;
+  name: string;
+  preview: string;
+};
 
 const draftStorageKey = "aigc-model-spokesperson-script-draft";
+const toneOptions = [
+  ["auto", "智能匹配"],
+  ["natural", "自然种草"],
+  ["enthusiastic", "强带货"],
+  ["professional", "专业讲解"],
+];
+
 const spokespersonCases: SpokespersonCase[] = [
   {
     id: "healthy-breakfast",
@@ -71,7 +95,7 @@ const spokespersonCases: SpokespersonCase[] = [
     image: "https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=900&q=86",
     description: "通勤人群、快手早餐、自然亲和口吻。",
     productName: "轻氧多功能早餐机",
-    sellingPoints: "三分钟快速加热\n煎烤蒸一体，小厨房也能放\n不粘涂层，清洗省心\n适合上班族快速准备早餐",
+    sellingPoints: "三分钟快速加热；煎烤蒸一体，小厨房也能放；不粘涂层，清洗省心；适合上班族快速准备早餐",
     audience: "通勤上班族、独居年轻人",
     usageScene: "早晨赶时间、办公室轻食、周末简单早餐",
     callToAction: "点击了解更多，今天就把早餐效率提起来",
@@ -85,12 +109,12 @@ const spokespersonCases: SpokespersonCase[] = [
     image: "https://images.unsplash.com/photo-1612817288484-6f916006741a?auto=format&fit=crop&w=900&q=86",
     description: "美妆护肤、卖点拆解、专业讲解口吻。",
     productName: "维稳修护精华液",
-    sellingPoints: "质地清爽不黏腻\n适合换季干燥和屏障脆弱期\n按压泵设计更卫生\n妆前使用也不搓泥",
+    sellingPoints: "质地清爽不黏腻；适合换季干燥和屏障脆弱期；按压泵设计更卫生；妆前使用也不搓泥",
     audience: "关注维稳修护的护肤用户",
     usageScene: "晚间护肤、换季维稳、妆前打底",
     callToAction: "需要维稳修护的朋友可以先从这一瓶开始",
     tone: "professional",
-    duration: 30,
+    duration: 15,
   },
   {
     id: "travel-bag",
@@ -99,7 +123,7 @@ const spokespersonCases: SpokespersonCase[] = [
     image: "https://images.unsplash.com/photo-1594223274512-ad4803739b7c?auto=format&fit=crop&w=900&q=86",
     description: "箱包容量、穿搭场景、热情带货口吻。",
     productName: "大容量通勤托特包",
-    sellingPoints: "可以放下电脑、雨伞和化妆包\n皮革纹理细腻，版型挺括\n通勤、出差、周末逛街都能背\n肩带宽，不容易勒肩",
+    sellingPoints: "可以放下电脑、雨伞和化妆包；皮革纹理细腻，版型挺括；通勤、出差、周末逛街都能背；肩带宽，不容易勒肩",
     audience: "都市通勤女性、轻商务人群",
     usageScene: "上班通勤、短途出差、周末约会",
     callToAction: "喜欢实用又有质感的包，可以直接入手",
@@ -108,21 +132,40 @@ const spokespersonCases: SpokespersonCase[] = [
   },
 ];
 
+function scriptText(result: ScriptResult | null) {
+  return result?.segments.map((segment) => segment.narration).join("\n") || "";
+}
+
+function estimateSeconds(characterCount: number) {
+  return Math.max(1, Math.round(characterCount / 5.2));
+}
+
+function createBriefFromCase(item: SpokespersonCase) {
+  return [
+    item.sellingPoints,
+    item.audience ? `目标人群：${item.audience}` : "",
+    item.usageScene ? `使用场景：${item.usageScene}` : "",
+    item.callToAction ? `行动引导：${item.callToAction}` : "",
+  ].filter(Boolean).join("\n");
+}
+
 export function ModelSpokespersonScriptPage() {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
   const [productName, setProductName] = useState("");
-  const [sellingPoints, setSellingPoints] = useState("");
-  const [audience, setAudience] = useState("");
-  const [usageScene, setUsageScene] = useState("");
-  const [callToAction, setCallToAction] = useState("");
-  const [tone, setTone] = useState("natural");
-  const [duration, setDuration] = useState(15);
+  const [productBrief, setProductBrief] = useState("");
+  const [tone, setTone] = useState("auto");
+  const [duration] = useState(15);
   const [variant, setVariant] = useState(0);
+  const [productImages, setProductImages] = useState<ProductImage[]>([]);
+  const [plans, setPlans] = useState<ScriptPlan[]>([]);
+  const [selectedPlanId, setSelectedPlanId] = useState("");
   const [result, setResult] = useState<ScriptResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const productImagesRef = useRef<ProductImage[]>([]);
 
   useEffect(() => {
     fetch("/api/auth/session/", { cache: "no-store" })
@@ -139,88 +182,114 @@ export function ModelSpokespersonScriptPage() {
     try {
       const draft = JSON.parse(stored) as Partial<Draft>;
       setProductName(draft.productName || "");
-      setSellingPoints(draft.sellingPoints || "");
-      setAudience(draft.audience || "");
-      setUsageScene(draft.usageScene || "");
-      setCallToAction(draft.callToAction || "");
-      if (["natural", "enthusiastic", "professional"].includes(draft.tone || ""))
-        setTone(draft.tone!);
-      if ([15, 30, 60].includes(Number(draft.duration)))
-        setDuration(Number(draft.duration));
+      setProductBrief(draft.productBrief || "");
+      if (["auto", "natural", "enthusiastic", "professional"].includes(draft.tone || "")) setTone(draft.tone!);
+      if (Array.isArray(draft.plans)) setPlans(draft.plans);
+      if (typeof draft.selectedPlanId === "string") setSelectedPlanId(draft.selectedPlanId);
       if (draft.result?.segments?.length) setResult(draft.result);
     } catch {
       localStorage.removeItem(draftStorageKey);
     }
   }, []);
 
-  const fullScript = useMemo(
-    () => result?.segments.map((segment) => segment.narration).join("\n") || "",
-    [result],
+  useEffect(() => {
+    productImagesRef.current = productImages;
+  }, [productImages]);
+
+  useEffect(
+    () => () => {
+      productImagesRef.current.forEach((image) => URL.revokeObjectURL(image.preview));
+    },
+    [],
   );
+
+  const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) || null;
+  const fullScript = useMemo(() => scriptText(result), [result]);
   const characterCount = fullScript.replace(/\s/g, "").length;
+  const estimatedSeconds = estimateSeconds(characterCount);
+  const overTarget = !!result && estimatedSeconds > 15;
+  const canGeneratePlans = productName.trim().length > 0 && productBrief.trim().length > 0 && !busy;
 
   const draftValue = (): Draft => ({
     productName,
-    sellingPoints,
-    audience,
-    usageScene,
-    callToAction,
+    productBrief,
     tone,
     duration,
+    plans,
+    selectedPlanId,
     result,
   });
 
   const saveDraft = () => {
     localStorage.setItem(draftStorageKey, JSON.stringify(draftValue()));
-    setNotice("文案草稿已保存在当前浏览器");
+    setNotice("讲稿草稿已保存在当前浏览器");
     window.setTimeout(() => setNotice(""), 2400);
   };
 
-  const generate = async (event?: FormEvent, nextVariant = variant) => {
+  const handleImages = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || [])
+      .filter((file) => file.type.startsWith("image/") && file.size <= 10 * 1024 * 1024)
+      .slice(0, Math.max(0, 4 - productImages.length));
+    if (!files.length) return;
+    setProductImages((current) => [
+      ...current,
+      ...files.map((file) => ({
+        id: crypto.randomUUID(),
+        name: file.name,
+        preview: URL.createObjectURL(file),
+      })),
+    ]);
+    event.target.value = "";
+  };
+
+  const removeImage = (id: string) =>
+    setProductImages((current) => {
+      const target = current.find((image) => image.id === id);
+      if (target) URL.revokeObjectURL(target.preview);
+      return current.filter((image) => image.id !== id);
+    });
+
+  const generatePlans = async (event?: FormEvent, nextVariant = variant) => {
     event?.preventDefault();
-    if (busy) return;
+    if (!canGeneratePlans && !event) return;
     setBusy(true);
     setError("");
     setNotice("");
     try {
-      const response = await fetch(
-        "/api/workflows/model-spokesperson-script/",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            productName,
-            sellingPoints,
-            audience,
-            usageScene,
-            callToAction,
-            tone,
-            duration,
-            variant: nextVariant,
-          }),
-        },
-      );
+      const response = await fetch("/api/workflows/model-spokesperson-script/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "plans",
+          productName,
+          sellingPoints: productBrief,
+          audience: "",
+          usageScene: "",
+          callToAction: "",
+          tone: tone === "auto" ? "natural" : tone,
+          duration,
+          variant: nextVariant,
+          productImageCount: productImages.length,
+        }),
+      });
       const body = await response.json().catch(() => null);
-      if (!response.ok || body?.status !== "READY")
-        throw new Error(body?.message || "口播文案生成失败");
-      const nextResult: ScriptResult = {
-        status: body.status,
-        draftId: body.draftId,
-        title: body.title,
-        durationSeconds: body.durationSeconds,
-        tone: body.tone,
-        segments: body.segments,
-        alternativeOpeners: body.alternativeOpeners || [],
-        generatedAt: body.generatedAt,
-      };
-      setResult(nextResult);
+      if (!response.ok || body?.status !== "READY" || !Array.isArray(body?.plans))
+        throw new Error(body?.message || "口播方案生成失败");
+      setPlans(body.plans);
+      setSelectedPlanId(body.plans[0]?.id || "");
+      setResult(body.plans[0]?.script || null);
       localStorage.setItem(
         draftStorageKey,
-        JSON.stringify({ ...draftValue(), result: nextResult }),
+        JSON.stringify({
+          ...draftValue(),
+          plans: body.plans,
+          selectedPlanId: body.plans[0]?.id || "",
+          result: body.plans[0]?.script || null,
+        }),
       );
-      setNotice("口播文案已生成，可逐段修改");
+      setNotice("已生成 A/B/C 三套口播方案");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "口播文案生成失败");
+      setError(caught instanceof Error ? caught.message : "口播方案生成失败");
     } finally {
       setBusy(false);
     }
@@ -229,7 +298,14 @@ export function ModelSpokespersonScriptPage() {
   const regenerate = () => {
     const next = variant + 1;
     setVariant(next);
-    void generate(undefined, next);
+    void generatePlans(undefined, next);
+  };
+
+  const selectPlan = (plan: ScriptPlan) => {
+    setSelectedPlanId(plan.id);
+    setResult(plan.script);
+    setNotice(`已选用 ${plan.label} 方案，可继续编辑讲稿`);
+    window.setTimeout(() => setNotice(""), 1800);
   };
 
   const updateSegment = (id: string, narration: string) =>
@@ -250,9 +326,7 @@ export function ModelSpokespersonScriptPage() {
         ? {
             ...current,
             segments: current.segments.map((segment, index) =>
-              index === 0
-                ? { ...segment, narration: `${opener}——${productName}。` }
-                : segment,
+              index === 0 ? { ...segment, narration: `${opener}，这是${productName}。` } : segment,
             ),
           }
         : current,
@@ -260,23 +334,20 @@ export function ModelSpokespersonScriptPage() {
 
   const applyCase = (item: SpokespersonCase) => {
     setProductName(item.productName);
-    setSellingPoints(item.sellingPoints);
-    setAudience(item.audience);
-    setUsageScene(item.usageScene);
-    setCallToAction(item.callToAction);
-    if (["natural", "enthusiastic", "professional"].includes(item.tone))
-      setTone(item.tone);
-    if ([15, 30, 60].includes(item.duration)) setDuration(item.duration);
+    setProductBrief(createBriefFromCase(item));
+    if (["natural", "enthusiastic", "professional"].includes(item.tone)) setTone(item.tone);
+    setPlans([]);
+    setSelectedPlanId("");
     setResult(null);
     setError("");
-    setNotice("案例参数已回填");
+    setNotice("案例参数已回填，可以生成 A/B/C 方案");
     window.setTimeout(() => setNotice(""), 1800);
   };
 
   const copyScript = async () => {
     if (!fullScript) return;
     await navigator.clipboard.writeText(fullScript);
-    setNotice("完整口播文案已复制");
+    setNotice("完整口播讲稿已复制");
     window.setTimeout(() => setNotice(""), 2000);
   };
 
@@ -284,22 +355,18 @@ export function ModelSpokespersonScriptPage() {
     return (
       <main className="workspace-loading">
         <Sparkles size={22} />
-        <p>正在载入口播文案工作台</p>
+        <p>正在载入 AI 模特口播工作台</p>
       </main>
     );
 
   return (
     <main className="spokesperson-script-page">
       <header className="spokesperson-script-header">
-        <button
-          type="button"
-          aria-label="返回视频创作中心"
-          onClick={() => router.push("/create/product-video")}
-        >
+        <button type="button" aria-label="返回视频创作中心" onClick={() => router.push("/create/product-video")}>
           <ArrowLeft size={19} />
         </button>
         <div>
-          <span>阶段 1 / 2 · 文案工作台</span>
+          <span>阶段 1 / 2 · 方案与讲稿</span>
           <strong>AI 模特口播</strong>
         </div>
         <em>
@@ -308,103 +375,77 @@ export function ModelSpokespersonScriptPage() {
         </em>
       </header>
 
-      <form className="spokesperson-script-layout" onSubmit={generate}>
-        <section className="spokesperson-script-form">
+      <form className="spokesperson-script-layout spokesperson-two-column" onSubmit={generatePlans}>
+        <section className="spokesperson-script-form spokesperson-plan-column">
           <div className="spokesperson-script-intro">
             <span>
               <MicVocal size={18} />
-              SPOKESPERSON SCRIPT
+              SPOKESPERSON PLAN
             </span>
-            <h1>先把口播文案说清楚，再生成视频</h1>
-            <p>
-              输入商品信息，系统会按时长拆分开场、卖点、场景和行动引导。生成后可以逐段修改并保存草稿。
-            </p>
+            <h1>上传商品，先生成 A/B/C 口播方案</h1>
+            <p>用户只需要给商品图和一句描述，系统会内置卖点提炼、多视图策略和 15 秒动作导演脚本。</p>
           </div>
 
-          <div className="spokesperson-field-grid">
+          <section className="spokesperson-product-upload">
+            <header>
+              <strong>商品图</strong>
+              <small>后续会自动生成商品多视图参考板</small>
+            </header>
+            <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={handleImages} />
+            <button type="button" className="spokesperson-upload-drop" onClick={() => fileInputRef.current?.click()}>
+              <ImagePlus size={22} />
+              <span>上传商品图</span>
+              <small>最多 4 张，JPG / PNG / WebP</small>
+            </button>
+            {productImages.length ? (
+              <div className="spokesperson-product-images">
+                {productImages.map((image) => (
+                  <article key={image.id}>
+                    <img src={image.preview} alt={image.name} />
+                    <button type="button" aria-label="移除商品图" onClick={() => removeImage(image.id)}>
+                      <Trash2 size={13} />
+                    </button>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+          </section>
+
+          <div className="spokesperson-field-grid compact">
             <label>
               商品名称 <em>*</em>
-              <input
-                value={productName}
-                onChange={(event) => setProductName(event.target.value)}
-                maxLength={80}
-                placeholder="例如：轻氧便携榨汁杯"
-              />
+              <input value={productName} onChange={(event) => setProductName(event.target.value)} maxLength={80} placeholder="例如：轻氧便携榨汁杯" />
             </label>
             <label>
-              目标人群
-              <input
-                value={audience}
-                onChange={(event) => setAudience(event.target.value)}
-                maxLength={120}
-                placeholder="例如：通勤上班族、健身人群"
-              />
-            </label>
-          </div>
-          <label className="spokesperson-wide-field">
-            核心卖点 <em>*</em>
-            <textarea
-              value={sellingPoints}
-              onChange={(event) => setSellingPoints(event.target.value)}
-              maxLength={800}
-              placeholder={"每行填写一个卖点，例如：\n轻巧便携\n充电一次可使用多次\n杯体容易清洗"}
-            />
-            <small>{sellingPoints.length}/800</small>
-          </label>
-          <div className="spokesperson-field-grid">
-            <label>
-              使用场景
-              <input
-                value={usageScene}
-                onChange={(event) => setUsageScene(event.target.value)}
-                maxLength={120}
-                placeholder="例如：办公室、健身后、户外旅行"
-              />
-            </label>
-            <label>
-              行动引导
-              <input
-                value={callToAction}
-                onChange={(event) => setCallToAction(event.target.value)}
-                maxLength={100}
-                placeholder="例如：点击了解更多"
-              />
+              口播方向
+              <select value={tone} onChange={(event) => setTone(event.target.value)}>
+                {toneOptions.map(([value, label]) => (
+                  <option value={value} key={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
 
-          <div className="spokesperson-options">
-            <div>
-              <span>口播语气</span>
-              <nav>
-                {[
-                  ["natural", "自然亲和"],
-                  ["enthusiastic", "热情带货"],
-                  ["professional", "专业讲解"],
-                ].map(([value, label]) => (
-                  <button
-                    type="button"
-                    className={tone === value ? "active" : ""}
-                    key={value}
-                    onClick={() => setTone(value)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </nav>
-            </div>
+          <label className="spokesperson-wide-field">
+            一句话描述 / 补充卖点 <em>*</em>
+            <textarea
+              value={productBrief}
+              onChange={(event) => setProductBrief(event.target.value)}
+              maxLength={600}
+              placeholder="例如：这是一个便携榨汁杯，适合上班族、健身人群，卖点是轻巧、好清洗、续航够用。"
+            />
+            <small>{productBrief.length}/600</small>
+          </label>
+
+          <div className="spokesperson-options compact">
             <div>
               <span>目标时长</span>
               <nav>
-                {[15, 30, 60].map((seconds) => (
-                  <button
-                    type="button"
-                    className={duration === seconds ? "active" : ""}
-                    key={seconds}
-                    onClick={() => setDuration(seconds)}
-                  >
-                    {seconds} 秒
-                  </button>
-                ))}
+                <button type="button" className="active">
+                  15 秒
+                </button>
               </nav>
             </div>
           </div>
@@ -414,55 +455,81 @@ export function ModelSpokespersonScriptPage() {
               {error}
             </p>
           )}
-          <button
-            className="spokesperson-generate"
-            type="submit"
-            disabled={!productName.trim() || !sellingPoints.trim() || busy}
-          >
-            {busy ? (
-              <LoaderCircle className="generation-spinner" size={18} />
-            ) : (
-              <WandSparkles size={18} />
-            )}
-            {busy ? "正在组织口播文案" : "生成口播文案"}
+          {notice && (
+            <p className="spokesperson-notice">
+              <Check size={15} />
+              {notice}
+            </p>
+          )}
+
+          <button className="spokesperson-generate" type="submit" disabled={!canGeneratePlans}>
+            {busy ? <LoaderCircle className="generation-spinner" size={18} /> : <WandSparkles size={18} />}
+            {busy ? "正在生成方案" : plans.length ? "重新生成 A/B/C 方案" : "生成 A/B/C 方案"}
           </button>
+
+          <section className="spokesperson-plan-list">
+            <header>
+              <strong>AI 口播方案</strong>
+              <small>选择一个方案后，在右侧编辑讲稿</small>
+            </header>
+            {plans.length ? (
+              plans.map((plan) => (
+                <article className={plan.id === selectedPlanId ? "active" : ""} key={plan.id}>
+                  <button type="button" onClick={() => selectPlan(plan)}>
+                    <span>{plan.label}</span>
+                    <div>
+                      <strong>{plan.title}</strong>
+                      <p>{plan.angle}</p>
+                    </div>
+                  </button>
+                  <div className="spokesperson-plan-tags">
+                    {plan.sellingPointSummary.slice(0, 3).map((point) => (
+                      <em key={point}>{point}</em>
+                    ))}
+                  </div>
+                </article>
+              ))
+            ) : (
+              <p className="spokesperson-plan-empty">生成后会出现 A/B/C 三种讲稿方向。</p>
+            )}
+          </section>
+
+          <aside className="spokesperson-case-board inline">
+            <header>
+              <span>
+                <Sparkles size={17} />
+              </span>
+              <div>
+                <h1>案例参考</h1>
+                <p>做同款会回填商品描述</p>
+              </div>
+            </header>
+            <div className="spokesperson-case-grid compact">
+              {spokespersonCases.map((item) => (
+                <article key={item.id}>
+                  <div className="spokesperson-case-media">
+                    <img src={item.image} alt={item.title} />
+                    <span>{item.tag}</span>
+                  </div>
+                  <div>
+                    <strong>{item.title}</strong>
+                    <p>{item.description}</p>
+                  </div>
+                  <button type="button" onClick={() => applyCase(item)}>
+                    <WandSparkles size={15} />
+                    做同款
+                  </button>
+                </article>
+              ))}
+            </div>
+          </aside>
         </section>
 
-        <aside className="spokesperson-case-board">
-          <header>
-            <span>
-              <Sparkles size={17} />
-            </span>
-            <div>
-              <h1>案例参考</h1>
-              <p>选择案例可一键回填文案入参</p>
-            </div>
-          </header>
-          <div className="spokesperson-case-grid">
-            {spokespersonCases.map((item) => (
-              <article key={item.id}>
-                <div className="spokesperson-case-media">
-                  <img src={item.image} alt={item.title} />
-                  <span>{item.tag}</span>
-                </div>
-                <div>
-                  <strong>{item.title}</strong>
-                  <p>{item.description}</p>
-                </div>
-                <button type="button" onClick={() => applyCase(item)}>
-                  <WandSparkles size={15} />
-                  做同款
-                </button>
-              </article>
-            ))}
-          </div>
-        </aside>
-
-        <section className="spokesperson-script-result">
+        <section className="spokesperson-script-result spokesperson-editor-column">
           <header>
             <div>
-              <span>口播文案预览</span>
-              <h2>{result?.title || "等待生成文案"}</h2>
+              <span>讲稿编辑 / 视频阶段</span>
+              <h2>{result?.title || "等待选择方案"}</h2>
             </div>
             <div>
               <button type="button" onClick={saveDraft}>
@@ -476,27 +543,35 @@ export function ModelSpokespersonScriptPage() {
             </div>
           </header>
 
-          {notice && (
-            <p className="spokesperson-notice">
-              <Check size={15} />
-              {notice}
-            </p>
-          )}
-
           {!result ? (
             <div className="spokesperson-result-empty">
               <MicVocal size={34} />
-              <strong>这里将显示分镜口播稿</strong>
-              <p>文案会按照视频时间轴拆分，并提供对应画面建议。</p>
+              <strong>这里将显示选中的 15 秒讲稿</strong>
+              <p>左侧生成 A/B/C 方案后，选择一个方向即可编辑。</p>
             </div>
           ) : (
             <>
               <div className="spokesperson-script-meta">
-                <span>{result.durationSeconds} 秒</span>
+                <span>{result.durationSeconds} 秒目标</span>
                 <span>{result.tone}</span>
                 <span>{result.segments.length} 个分镜</span>
                 <span>{characterCount} 字</span>
+                <span className={overTarget ? "warning" : ""}>预计 {estimatedSeconds} 秒</span>
               </div>
+
+              {selectedPlan ? (
+                <section className="spokesperson-internal-plan">
+                  <strong>内置生成策略</strong>
+                  <p>{selectedPlan.productDirection}</p>
+                  <p>{selectedPlan.modelDirection}</p>
+                  <small>复杂提示词不会展示给用户；提交视频时会作为隐藏参数进入请求。</small>
+                </section>
+              ) : null}
+
+              {overTarget ? (
+                <p className="spokesperson-script-warning">当前讲稿预计超过 15 秒，建议删减停顿句或点击重新生成更短方案。</p>
+              ) : null}
+
               <div className="spokesperson-segments">
                 {result.segments.map((segment, index) => (
                   <article key={segment.id}>
@@ -505,13 +580,7 @@ export function ModelSpokespersonScriptPage() {
                       <strong>{segment.stage}</strong>
                       <em>{segment.timeRange}</em>
                     </header>
-                    <textarea
-                      value={segment.narration}
-                      onChange={(event) =>
-                        updateSegment(segment.id, event.target.value)
-                      }
-                      maxLength={500}
-                    />
+                    <textarea value={segment.narration} onChange={(event) => updateSegment(segment.id, event.target.value)} maxLength={220} />
                     <p>
                       <Video size={14} />
                       {segment.visual}
@@ -519,24 +588,22 @@ export function ModelSpokespersonScriptPage() {
                   </article>
                 ))}
               </div>
+
               {result.alternativeOpeners.length > 0 && (
                 <div className="spokesperson-openers">
                   <strong>备选开场</strong>
                   {result.alternativeOpeners.map((opener) => (
-                    <button
-                      type="button"
-                      key={opener}
-                      onClick={() => useOpener(opener)}
-                    >
+                    <button type="button" key={opener} onClick={() => useOpener(opener)}>
                       {opener}
                     </button>
                   ))}
                 </div>
               )}
+
               <div className="spokesperson-result-actions">
                 <button type="button" onClick={regenerate} disabled={busy}>
                   <RefreshCw size={15} />
-                  换一版文案
+                  重新生成 A/B/C
                 </button>
                 <button type="button" disabled title="将在第二阶段开放">
                   <Video size={15} />
@@ -545,9 +612,7 @@ export function ModelSpokespersonScriptPage() {
               </div>
             </>
           )}
-          <footer>
-            文案生成仅作为创作辅助。发布前请核对商品信息，避免绝对化、虚假或未经证实的宣传表述。
-          </footer>
+          <footer>视频阶段会自动使用商品多视图、虚拟模特多视图和动作导演脚本。发布前请核对商品信息，避免绝对化或未经证实的宣传表述。</footer>
         </section>
       </form>
     </main>

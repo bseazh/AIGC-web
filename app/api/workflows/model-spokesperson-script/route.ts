@@ -17,6 +17,27 @@ type Segment = {
   narration: string;
   visual: string;
 };
+type ScriptPlan = {
+  id: string;
+  label: string;
+  title: string;
+  angle: string;
+  sellingPointSummary: string[];
+  modelDirection: string;
+  productDirection: string;
+  internalPrompt: string;
+  script: {
+    status: "READY";
+    draftId: string;
+    title: string;
+    durationSeconds: Duration;
+    tone: string;
+    segments: Segment[];
+    fullScript: string;
+    alternativeOpeners: string[];
+    generatedAt: string;
+  };
+};
 
 const toneCopy: Record<
   Tone,
@@ -232,6 +253,103 @@ function createSegments(input: {
   return base;
 }
 
+function createScriptResult(input: {
+  productName: string;
+  points: string[];
+  audience: string;
+  usageScene: string;
+  callToAction: string;
+  tone: Tone;
+  duration: Duration;
+  variant: number;
+}) {
+  const segments = createSegments(input);
+  const fullScript = segments.map((segment) => segment.narration).join("\n");
+  return {
+    status: "READY" as const,
+    draftId: randomUUID(),
+    title: `${input.productName} · ${input.duration} 秒${toneCopy[input.tone].label}口播稿`,
+    durationSeconds: input.duration,
+    tone: toneCopy[input.tone].label,
+    segments,
+    fullScript,
+    alternativeOpeners: toneCopy[input.tone].openers.filter(
+      (item) => !segments[0].narration.startsWith(item),
+    ),
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+function createPlans(input: {
+  productName: string;
+  points: string[];
+  audience: string;
+  usageScene: string;
+  callToAction: string;
+  duration: Duration;
+  variant: number;
+}): ScriptPlan[] {
+  const planDefinitions: Array<{
+    id: string;
+    label: string;
+    tone: Tone;
+    angle: string;
+    modelDirection: string;
+    productDirection: string;
+  }> = [
+    {
+      id: "plan-a",
+      label: "A",
+      tone: "natural",
+      angle: "自然种草：像真实使用后的轻推荐，先建立信任，再讲两个最容易感知的卖点。",
+      modelDirection: "模特自然半身出镜，轻拿商品，语速放松，动作以展示和点头确认产品体验为主。",
+      productDirection: "先展示商品整体，再切到 1-2 个细节特写；商品多视图参考板用于锁定外观、材质和比例。",
+    },
+    {
+      id: "plan-b",
+      label: "B",
+      tone: "enthusiastic",
+      angle: "卖点转化：开场更直接，突出用户痛点和立即可理解的购买理由。",
+      modelDirection: "模特开场有停顿和手势强调，镜头节奏更快，配合商品上手、指向和近景展示。",
+      productDirection: "商品多视图参考板优先锁定正面、功能区、包装和使用状态，字幕突出强转化卖点。",
+    },
+    {
+      id: "plan-c",
+      label: "C",
+      tone: "professional",
+      angle: "专业讲解：从产品细节和适用场景切入，适合客单价更高或需要解释的商品。",
+      modelDirection: "模特保持讲解感，动作克制清晰，镜头用中近景和细节穿插增强可信度。",
+      productDirection: "商品多视图参考板用于补齐侧面、材质、结构和使用场景，避免单图导致外观漂移。",
+    },
+  ];
+
+  const sellingPointSummary = input.points.slice(0, 4);
+  return planDefinitions.map((definition, index) => {
+    const script = createScriptResult({
+      ...input,
+      tone: definition.tone,
+      variant: input.variant + index,
+    });
+    return {
+      id: definition.id,
+      label: definition.label,
+      title: `${definition.label} 方案 · ${toneCopy[definition.tone].label}`,
+      angle: definition.angle,
+      sellingPointSummary,
+      modelDirection: definition.modelDirection,
+      productDirection: definition.productDirection,
+      internalPrompt: [
+        "内部视频策略：不向用户展示。",
+        "先基于商品图生成商品多视图参考板，锁定外观、材质、比例、包装和可展示细节。",
+        "如用户提供真人/模特图，先做合规与隐私处理，再生成虚拟模特多视图参考；不得直接提交可识别真人脸。",
+        "按选中口播稿拆解 15 秒动作导演脚本：开场注视、商品入镜、卖点指向、细节特写、行动引导收尾。",
+        "视频生成时使用商品多视图、虚拟模特多视图和动作脚本作为隐藏请求参数。",
+      ].join("\n"),
+      script,
+    };
+  });
+}
+
 export async function POST(request: NextRequest) {
   const user = await authenticatedUser(request);
   if (!user)
@@ -253,6 +371,7 @@ export async function POST(request: NextRequest) {
   const audience = text(body?.audience, 120);
   const usageScene = text(body?.usageScene, 120);
   const callToAction = text(body?.callToAction, 100);
+  const mode = body?.mode === "plans" ? "plans" : "script";
   const tone = tones.includes(body?.tone) ? (body.tone as Tone) : "natural";
   const duration = durations.includes(Number(body?.duration) as Duration)
     ? (Number(body.duration) as Duration)
@@ -272,7 +391,35 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const segments = createSegments({
+  if (mode === "plans") {
+    const plans = createPlans({
+      productName,
+      points,
+      audience,
+      usageScene,
+      callToAction,
+      duration,
+      variant,
+    });
+    await audit(user.id, "MODEL_SPOKESPERSON_SCRIPT_PLANS_GENERATED", request, {
+      type: "script_plan_set",
+      id: randomUUID(),
+    }, {
+      duration,
+      planCount: plans.length,
+      characterCount: plans
+        .map((plan) => plan.script.fullScript)
+        .join("")
+        .replace(/\s/g, "").length,
+    });
+    return NextResponse.json({
+      status: "READY",
+      plans,
+      generatedAt: new Date().toISOString(),
+    });
+  }
+
+  const result = createScriptResult({
     productName,
     points,
     audience,
@@ -282,29 +429,15 @@ export async function POST(request: NextRequest) {
     duration,
     variant,
   });
-  const fullScript = segments.map((segment) => segment.narration).join("\n");
-  const draftId = randomUUID();
   await audit(user.id, "MODEL_SPOKESPERSON_SCRIPT_GENERATED", request, {
     type: "script_draft",
-    id: draftId,
+    id: result.draftId,
   }, {
     duration,
     tone,
-    segmentCount: segments.length,
-    characterCount: fullScript.replace(/\s/g, "").length,
+    segmentCount: result.segments.length,
+    characterCount: result.fullScript.replace(/\s/g, "").length,
   });
 
-  return NextResponse.json({
-    status: "READY",
-    draftId,
-    title: `${productName} · ${duration} 秒${toneCopy[tone].label}口播稿`,
-    durationSeconds: duration,
-    tone: toneCopy[tone].label,
-    segments,
-    fullScript,
-    alternativeOpeners: toneCopy[tone].openers.filter(
-      (item) => !segments[0].narration.startsWith(item),
-    ),
-    generatedAt: new Date().toISOString(),
-  });
+  return NextResponse.json(result);
 }
