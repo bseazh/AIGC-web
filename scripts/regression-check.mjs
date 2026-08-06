@@ -643,9 +643,10 @@ const checks = [
     "灵感工作站",
   ],
   [
-    "Video center separates Seedance into a dedicated tab",
-    "app/features/video-center/modules.ts",
-    "Seedance 高级视频",
+    "Video center expands every video module instead of hiding them in tabs",
+    "app/components/video-center-page.tsx",
+    "video-center-groups",
+    "videoModules.map((module)",
   ],
   [
     "Task center warns users that task outputs are temporary",
