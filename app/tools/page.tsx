@@ -30,6 +30,7 @@ type ToolCard = {
   href?: string;
   icon: typeof ImageIcon;
   tone: "blue" | "violet" | "cyan" | "rose" | "orange" | "green";
+  cover?: string;
   badge?: string;
   disabled?: boolean;
 };
@@ -50,6 +51,7 @@ const imageSections: ToolSection[] = [
         workflowKey: "image-generate",
         icon: Sparkles,
         tone: "blue",
+        cover: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=900&q=88",
         badge: "Banana2 / Image2",
       },
       {
@@ -59,6 +61,7 @@ const imageSections: ToolSection[] = [
         workflowKey: "scene-image",
         icon: WandSparkles,
         tone: "violet",
+        cover: "https://images.unsplash.com/photo-1517701604599-bb29b565090c?auto=format&fit=crop&w=900&q=88",
         badge: "HOT",
       },
     ],
@@ -73,6 +76,7 @@ const imageSections: ToolSection[] = [
         workflowKey: "model-wear",
         icon: Shirt,
         tone: "cyan",
+        cover: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&w=900&q=88",
         badge: "VIP",
       },
       {
@@ -82,6 +86,7 @@ const imageSections: ToolSection[] = [
         workflowKey: "model-wear",
         icon: Shirt,
         tone: "rose",
+        cover: "https://images.unsplash.com/photo-1485968579580-b6d095142e6e?auto=format&fit=crop&w=900&q=88",
       },
     ],
   },
@@ -95,6 +100,7 @@ const imageSections: ToolSection[] = [
         workflowKey: "product-hero-image",
         icon: Package,
         tone: "orange",
+        cover: "https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=900&q=88",
         badge: "组合流程",
       },
       {
@@ -104,6 +110,7 @@ const imageSections: ToolSection[] = [
         workflowKey: "product-detail-page",
         icon: Layers3,
         tone: "green",
+        cover: "https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=900&q=88",
       },
       {
         title: "复制详情页",
@@ -112,6 +119,7 @@ const imageSections: ToolSection[] = [
         workflowKey: "recreate-detail-page",
         icon: Layers3,
         tone: "violet",
+        cover: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=88",
       },
       {
         title: "复制主图",
@@ -120,6 +128,7 @@ const imageSections: ToolSection[] = [
         workflowKey: "recreate-product-hero",
         icon: WandSparkles,
         tone: "blue",
+        cover: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=88",
       },
     ],
   },
@@ -133,6 +142,7 @@ const imageSections: ToolSection[] = [
         workflowKey: "resize-image",
         icon: Crop,
         tone: "cyan",
+        cover: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=88",
       },
       {
         title: "白底图生成",
@@ -141,6 +151,7 @@ const imageSections: ToolSection[] = [
         workflowKey: "white-background",
         icon: ImageIcon,
         tone: "green",
+        cover: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=88",
       },
     ],
   },
@@ -154,6 +165,7 @@ const imageSections: ToolSection[] = [
         workflowKey: "hd-enhance",
         icon: ScanSearch,
         tone: "blue",
+        cover: "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=900&q=88",
       },
     ],
   },
@@ -166,6 +178,7 @@ const imageSections: ToolSection[] = [
         description: "批量替换商品或模特素材，适合多 SKU 批量出图场景。",
         icon: WandSparkles,
         tone: "violet",
+        cover: "https://images.unsplash.com/photo-1526178613552-2b45c6c302f0?auto=format&fit=crop&w=900&q=88",
         badge: "即将上线",
         disabled: true,
       },
@@ -181,6 +194,7 @@ const videoTools: ToolCard[] = [
     href: "/create/product-video",
     icon: Video,
     tone: "violet",
+    cover: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=900&q=88",
   },
 ];
 
@@ -192,18 +206,19 @@ function hrefForTool(tool: ToolCard) {
 function ToolTile({ tool }: { tool: ToolCard }) {
   const Icon = tool.icon;
   const visual = (
-    <div className={`yh-tools-card-visual ${tool.tone}`}>
+    <div className={`yh-tools-card-visual ${tool.tone}${tool.cover ? " has-cover" : ""}`}>
+      {tool.cover && <img className="yh-tools-card-cover" src={tool.cover} alt="" />}
       <div className="yh-tools-visual-glow" />
       <div className="yh-tools-visual-copy">
         <span>{tool.category}</span>
         <strong>{tool.title}</strong>
       </div>
-      <div className="yh-tools-mockup-grid" aria-hidden="true">
+      {!tool.cover && <div className="yh-tools-mockup-grid" aria-hidden="true">
         <i />
         <i />
         <i />
         <i />
-      </div>
+      </div>}
       <span className="yh-tools-visual-icon"><Icon size={24} /></span>
     </div>
   );

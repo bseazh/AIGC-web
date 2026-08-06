@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { ImageWorkflowPage } from "@/app/components/image-workflow-page";
 import { ProjectRequiredGate } from "@/app/components/project-required-gate";
+import { hdEnhanceCases } from "@/lib/image-workflow-cases";
 import { hdEnhanceWorkflow } from "@/lib/product-config";
 
 export default function HdEnhancePage() {
@@ -19,5 +20,8 @@ export default function HdEnhancePage() {
     showAspectRatio={false}
     sceneLabel="放大倍率"
     styleLabel="优化策略"
+    cases={hdEnhanceCases}
+    productDescriptionLabel="优化要求"
+    productDescriptionPlaceholder="填写需要增强的边缘、纹理、材质、噪点或清晰度要求"
   /></ProjectRequiredGate>;
 }

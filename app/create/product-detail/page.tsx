@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { ImageWorkflowPage } from "@/app/components/image-workflow-page";
 import { ProjectRequiredGate } from "@/app/components/project-required-gate";
+import { productDetailCases } from "@/lib/image-workflow-cases";
 import { detailPageWorkflow } from "@/lib/product-config";
 
 export default function ProductDetailPage() {
@@ -18,5 +19,8 @@ export default function ProductDetailPage() {
     outputCount={detailPageWorkflow.outputsPerTask}
     showAspectRatio={false}
     defaultRatio="9:16"
+    cases={productDetailCases}
+    productDescriptionLabel="商品信息"
+    productDescriptionPlaceholder="填写商品品类、核心卖点、材质、使用场景和详情页重点"
   /></ProjectRequiredGate>;
 }

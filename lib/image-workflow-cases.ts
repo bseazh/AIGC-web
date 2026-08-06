@@ -141,3 +141,201 @@ export const productSceneCases: ImageWorkflowCase[] = [
     style: "明亮生活方式",
   },
 ];
+
+export const productHeroCases: ImageWorkflowCase[] = [
+  {
+    id: "clean-bottle-hero",
+    title: "通勤水杯清爽主图",
+    tag: "商品主图",
+    image: "https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=900&q=88",
+    productDescription: "磨砂随行水杯，主打通勤、运动补水和简洁耐用。",
+    prompt: "生成干净电商首图，商品居中偏下，浅色背景，柔和自然阴影，保留上方留白用于后期排版，突出杯身轮廓和材质。",
+    ratio: "1:1",
+    scene: "简约家居",
+    style: "清透商业",
+  },
+  {
+    id: "beauty-bottle-hero",
+    title: "香氛精修陈列主图",
+    tag: "商品主图",
+    image: "https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&w=900&q=88",
+    productDescription: "香氛或护肤瓶装产品，强调玻璃材质、精致反光和礼赠质感。",
+    prompt: "棚拍质感商品主图，柔光反射，浅灰或奶白背景，商品边缘清晰，高级低饱和，避免文字、价格和多余品牌元素。",
+    ratio: "3:4",
+    scene: "纯色棚拍",
+    style: "低饱和高级",
+  },
+  {
+    id: "home-storage-hero",
+    title: "轻奢家居陈列主图",
+    tag: "商品主图",
+    image: "https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?auto=format&fit=crop&w=900&q=88",
+    productDescription: "家居收纳或生活方式商品，适合店铺首屏展示。",
+    prompt: "在简约家居场景中生成商品首图，背景干净、光线柔和、商品主体明确，保留电商留白，整体克制高级。",
+    ratio: "4:3",
+    scene: "简约家居",
+    style: "真实摄影",
+  },
+];
+
+export const productDetailCases: ImageWorkflowCase[] = [
+  {
+    id: "kitchen-detail",
+    title: "厨房小家电详情页",
+    tag: "详情页",
+    image: "https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=900&q=88",
+    productDescription: "厨房小家电，主打容量、易清洁、安全材质和日常效率。",
+    prompt: "生成商品详情页套图：开场氛围、核心卖点、材质细节、使用场景、收束展示五个模块。不要生成可读文字，保留排版留白。",
+    ratio: "9:16",
+    scene: "简约品牌",
+    style: "清晰卖点",
+  },
+  {
+    id: "skincare-detail",
+    title: "护肤品详情页套图",
+    tag: "详情页",
+    image: "https://images.unsplash.com/photo-1612817288484-6f916006741a?auto=format&fit=crop&w=900&q=88",
+    productDescription: "护肤精华或面霜，强调质地、成分感、温和修护和精致包装。",
+    prompt: "生成美妆详情页视觉：产品瓶身、质地延展、手部使用、浴室/梳妆台场景、礼赠陈列。画面干净高级，不生成文字。",
+    ratio: "9:16",
+    scene: "轻奢质感",
+    style: "真实摄影",
+  },
+  {
+    id: "travel-bag-detail",
+    title: "通勤箱包详情页",
+    tag: "详情页",
+    image: "https://images.unsplash.com/photo-1594223274512-ad4803739b7c?auto=format&fit=crop&w=900&q=88",
+    productDescription: "通勤包，主打容量分区、皮革纹理、五金细节和商务穿搭。",
+    prompt: "生成箱包详情页长图模块：整体轮廓、容量展示、材质细节、通勤上身/手提场景、收纳对比。避免可读文字和价格。",
+    ratio: "9:16",
+    scene: "自然生活",
+    style: "克制留白",
+  },
+];
+
+export const recreateHeroCases: ImageWorkflowCase[] = [
+  {
+    id: "layout-clean-recreate",
+    title: "干净留白主图复刻",
+    tag: "复刻主图",
+    image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=88",
+    productDescription: "参考清爽电商构图，只复刻布局节奏，不复制原图内容。",
+    prompt: "提取参考图的主体位置、留白比例、光线方向和背景层次，用上传商品生成原创主图。不要复制参考图中的具体商品、文字或品牌。",
+    ratio: "1:1",
+    scene: "构图复刻",
+    style: "原创商业",
+  },
+  {
+    id: "premium-recreate",
+    title: "高级棚拍主图复刻",
+    tag: "复刻主图",
+    image: "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=900&q=88",
+    productDescription: "参考高级棚拍质感，重建商品光影和材质表达。",
+    prompt: "复刻参考图的棚拍光影、反射质感和层次关系，商品主体必须换成上传商品，整体原创且无文字水印。",
+    ratio: "3:4",
+    scene: "氛围复刻",
+    style: "真实摄影",
+  },
+];
+
+export const recreateDetailCases: ImageWorkflowCase[] = [
+  {
+    id: "benefit-flow-detail",
+    title: "卖点结构复刻",
+    tag: "复刻商详",
+    image: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=88",
+    productDescription: "参考竞品详情页的卖点顺序，生成原创商品详情页视觉。",
+    prompt: "提取参考详情页的模块节奏：首屏吸引、核心卖点、细节特写、使用场景、结尾陈列。只学习结构，不复制文字、商品或品牌。",
+    ratio: "9:16",
+    scene: "卖点结构复刻",
+    style: "原创电商",
+  },
+  {
+    id: "minimal-detail-flow",
+    title: "克制留白商详复刻",
+    tag: "复刻商详",
+    image: "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=900&q=88",
+    productDescription: "适合百货、家居和数码类商品的干净详情页节奏。",
+    prompt: "按参考图的留白、景别切换和材质展示节奏生成原创详情页套图，商品换成上传素材，画面内不生成可读文字。",
+    ratio: "9:16",
+    scene: "长图版式复刻",
+    style: "克制留白",
+  },
+];
+
+export const utilityImageCases: ImageWorkflowCase[] = [
+  {
+    id: "white-bg-clean",
+    title: "纯净白底商品图",
+    tag: "白底图",
+    image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=88",
+    productDescription: "保留商品主体和自然接触阴影，生成平台可用白底图。",
+    prompt: "保留商品真实轮廓、颜色、材质和关键细节，背景替换为纯净白底，阴影自然，不改变商品结构。",
+    ratio: "1:1",
+    scene: "电商白底",
+    style: "真实光影",
+  },
+  {
+    id: "ratio-expand",
+    title: "电商留白扩图",
+    tag: "比例调整",
+    image: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=88",
+    productDescription: "在不改变主体的前提下扩展背景，适配平台比例。",
+    prompt: "保持主体位置、比例和边缘自然，扩展外部背景，生成连续真实的电商留白画面。",
+    ratio: "9:16",
+    scene: "智能扩图",
+    style: "电商留白",
+  },
+  {
+    id: "hd-product",
+    title: "商品细节高清优化",
+    tag: "高清优化",
+    image: "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=900&q=88",
+    productDescription: "修复商品边缘、材质、纹理和细节清晰度。",
+    prompt: "增强图片清晰度、商品边缘和材质细节，降低噪点，保持真实自然，不改变商品款式和颜色。",
+    ratio: "1:1",
+    scene: "2 倍增强",
+    style: "商品质感",
+  },
+];
+
+export const whiteBackgroundCases = utilityImageCases.filter((item) => item.id === "white-bg-clean");
+export const resizeImageCases = utilityImageCases.filter((item) => item.id === "ratio-expand");
+export const hdEnhanceCases = utilityImageCases.filter((item) => item.id === "hd-product");
+
+export const modelWearCases: ImageWorkflowCase[] = [
+  {
+    id: "commute-trench-wear",
+    title: "通勤风衣上身图",
+    tag: "模特穿搭",
+    image: "https://images.unsplash.com/photo-1485968579580-b6d095142e6e?auto=format&fit=crop&w=900&q=88",
+    productDescription: "风衣、衬衫、阔腿裤等通勤服饰，强调版型、垂坠和日常上身效果。",
+    prompt: "保持模特五官、发型和自然站姿，将商品自然穿在模特身上，衣服版型清晰，面料垂坠真实，背景为通勤街拍氛围。",
+    ratio: "3:4",
+    scene: "通勤街拍",
+    style: "自然真实",
+  },
+  {
+    id: "boutique-dress-wear",
+    title: "精品店试穿穿搭",
+    tag: "模特穿搭",
+    image: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=900&q=88",
+    productDescription: "连衣裙、套装或女装单品，适合店铺模特展示图。",
+    prompt: "生成精品店试穿效果，商品完整自然上身，保持模特比例协调，布料纹理和边缘清晰，画面有轻奢时尚感。",
+    ratio: "9:16",
+    scene: "精品店试穿",
+    style: "轻奢时尚",
+  },
+  {
+    id: "home-knit-wear",
+    title: "居家针织自然穿搭",
+    tag: "模特穿搭",
+    image: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&w=900&q=88",
+    productDescription: "针织衫、家居服、休闲裤等日常穿搭商品。",
+    prompt: "让模特在自然居家环境中展示商品，动作放松，商品穿着贴合但不变形，整体清新日常，适合电商服饰主图。",
+    ratio: "4:3",
+    scene: "自然居家",
+    style: "清新日常",
+  },
+];
