@@ -13,7 +13,7 @@ type Account = { user: { displayName: string }; wallet: { availablePoints: numbe
 export function VideoCenterPage() {
   const router = useRouter();
   const [account, setAccount] = useState<Account | null>(null);
-  const [activeTab, setActiveTab] = useState<VideoCenterTab>("recreate");
+  const [activeTab, setActiveTab] = useState<VideoCenterTab>("commerce");
   const activeModule = videoModules.find((module) => module.key === activeTab) || videoModules[0];
 
   useEffect(() => {
@@ -28,7 +28,7 @@ export function VideoCenterPage() {
   if (!account) return <LoadingScreen />;
 
   return (
-    <AppShell active="tools" account={account}>
+    <AppShell active="video" account={account}>
       <div className="app-page-content video-center">
         <section className="video-center-hero">
           <div>
@@ -36,8 +36,8 @@ export function VideoCenterPage() {
               <Video size={15} />
               视频创作中心
             </span>
-            <h1>让内容资产，变成可投放的视频</h1>
-            <p>从口播文案、商品素材到视频片段，逐步完成可编辑、可复用的带货视频创作。</p>
+            <h1>视频创作模块</h1>
+            <p>顶部按视频能力拆分入口：带货、复刻、广告大片、混剪、高级生成和模特口播脚本。</p>
           </div>
           <div className="video-center-stat">
             <Sparkles size={20} />

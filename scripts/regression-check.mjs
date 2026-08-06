@@ -37,9 +37,9 @@ const checks = [
     'task.status === "SUCCEEDED"',
   ],
   [
-    "asset library separates uploads and generated results",
+    "asset library separates uploads and saved generated results",
     "app/assets/page.tsx",
-    'title: "生成结果", assets: generatedAssets',
+    'title: "已保存结果", assets: generatedAssets',
   ],
   [
     "asset thumbnails open media preview",
@@ -636,6 +636,66 @@ const checks = [
     "Image creation center exposes the AI creative image section",
     "app/tools/page.tsx",
     "AI创意生图",
+  ],
+  [
+    "App shell exposes the new top-level creation navigation",
+    "app/components/app-shell.tsx",
+    "灵感工作站",
+  ],
+  [
+    "Video center separates Seedance into a dedicated tab",
+    "app/features/video-center/modules.ts",
+    "Seedance 高级视频",
+  ],
+  [
+    "Task center warns users that task outputs are temporary",
+    "app/tasks/page.tsx",
+    "本站仅保留 48 小时",
+  ],
+  [
+    "Asset library explains that task outputs must be manually saved",
+    "app/assets/page.tsx",
+    "任务结果需要手动加入素材库",
+  ],
+  [
+    "Task outputs can be saved to the asset library on demand",
+    "app/api/tasks/[id]/save-assets/route.ts",
+    "TASK_OUTPUTS_SAVED_TO_LIBRARY",
+  ],
+  [
+    "New worker outputs are temporary before library save",
+    "scripts/worker.mjs",
+    "TEMPORARY_OUTPUT",
+  ],
+  [
+    "Lifecycle maintenance removes expired temporary task outputs",
+    "scripts/lifecycle-maintenance.mjs",
+    "cleanupExpiredTaskOutputs",
+  ],
+  [
+    "Lifecycle maintenance records expired task outputs on the task",
+    "scripts/lifecycle-maintenance.mjs",
+    "expiredAssets",
+  ],
+  [
+    "Expired task detail clearly explains that output files are gone",
+    "app/tasks/[id]/page.tsx",
+    "结果文件已过期",
+  ],
+  [
+    "Expired task detail keeps the project continuation entry",
+    "app/tasks/[id]/page.tsx",
+    "回到项目继续编辑",
+  ],
+  [
+    "Expired successful tasks can be regenerated from retained inputs",
+    "app/api/tasks/[id]/retry/route.ts",
+    "TASK_REGENERATED",
+  ],
+  [
+    "Task detail exposes retained input parameters after outputs expire",
+    "app/tasks/[id]/page.tsx",
+    "保留的输入参数",
   ],
   [
     "Project gate keeps existing query params when opening projects",

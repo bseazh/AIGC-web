@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   const kind = request.nextUrl.searchParams.get("kind") || "ALL";
   const query = (request.nextUrl.searchParams.get("q") || "").trim().slice(0, 80);
   const params: string[] = [user.id];
-  let where = "owner_id = $1 AND audit_status = 'READY'";
+  let where = "owner_id = $1 AND audit_status = 'READY' AND (kind = 'INPUT' OR (kind = 'OUTPUT' AND metadata_json #>> '{library,saved}' = 'true'))";
   if (["INPUT", "OUTPUT"].includes(kind)) {
     params.push(kind);
     where += ` AND kind = $${params.length}`;
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     createdAt: asset.created_at,
   })));
   const usage = await db.query<{ bytes: string }>(
-    "SELECT COALESCE(SUM(byte_size), 0)::text AS bytes FROM assets WHERE owner_id = $1 AND audit_status = 'READY'", [user.id],
+    "SELECT COALESCE(SUM(byte_size), 0)::text AS bytes FROM assets WHERE owner_id = $1 AND audit_status = 'READY' AND (kind = 'INPUT' OR (kind = 'OUTPUT' AND metadata_json #>> '{library,saved}' = 'true'))", [user.id],
   );
   const storage = await storageSummary(user.id); return NextResponse.json({ assets, totalBytes: Number(usage.rows[0]?.bytes || 0), storage });
 }

@@ -143,6 +143,9 @@ try {
     ALTER TABLE assets ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb;
     ALTER TABLE assets ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
     ALTER TABLE assets ADD COLUMN IF NOT EXISTS content_hash TEXT;
+    UPDATE assets
+      SET metadata_json = metadata_json || '{"library":{"saved":true,"retention":"SAVED_ASSET","migratedAt":"legacy-output"}}'::jsonb
+      WHERE kind = 'OUTPUT' AND NOT (metadata_json ? 'library');
     UPDATE assets SET audit_status = 'PENDING_REVIEW' WHERE audit_status = 'PENDING';
     ALTER TABLE assets DROP CONSTRAINT IF EXISTS assets_audit_status_check;
     ALTER TABLE assets ADD CONSTRAINT assets_audit_status_check CHECK (audit_status IN ('UPLOADING', 'PENDING_REVIEW', 'READY', 'REJECTED'));
@@ -151,6 +154,9 @@ try {
     CREATE INDEX IF NOT EXISTS assets_owner_content_hash_ready_idx
       ON assets (owner_id, content_hash, mime_type, created_at DESC)
       WHERE content_hash IS NOT NULL AND audit_status = 'READY';
+    CREATE INDEX IF NOT EXISTS assets_temporary_output_expiry_idx
+      ON assets ((metadata_json #>> '{library,expiresAt}'), created_at)
+      WHERE kind = 'OUTPUT' AND audit_status = 'READY' AND COALESCE(metadata_json #>> '{library,saved}', 'false') <> 'true';
 
     CREATE TABLE IF NOT EXISTS content_review_records (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

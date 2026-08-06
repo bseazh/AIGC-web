@@ -2,37 +2,17 @@
 
 export const dynamic = "force-dynamic";
 
-import { ArrowRight, Boxes, ChevronRight, ImageIcon, Layers3, PackageOpen, ScanSearch, Search, Shirt, Sparkles, Video, WandSparkles } from "lucide-react";
+import { ArrowRight, Boxes, ChevronRight, ImageIcon, PackageOpen, Play, RefreshCw, Search, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppShell, LoadingScreen } from "@/app/components/app-shell";
-import { WorkflowIcon } from "@/app/components/workflow-icon";
 import { projectGateHref, projectStartHref, projectWorkflows, type ProjectWorkflowKey } from "@/lib/project-workflows";
-
-type WorkspaceTool = {
-  name: string;
-  note: string;
-  icon: typeof ImageIcon;
-  color: string;
-  workflowKey?: ProjectWorkflowKey;
-  href?: string;
-  available: boolean;
-};
-
-const tools: WorkspaceTool[] = [
-  { name: "AI生图", note: "提示词生成原创图片", icon: Sparkles, color: "blue", workflowKey: "image-generate", available: true },
-  { name: "商品主图", note: "生成电商首屏视觉", icon: ImageIcon, color: "blue", workflowKey: "product-hero-image", available: true },
-  { name: "模特穿搭", note: "服装自然上身展示", icon: Shirt, color: "violet", workflowKey: "model-wear", available: true },
-  { name: "场景延展", note: "匹配营销使用场景", icon: WandSparkles, color: "cyan", workflowKey: "scene-image", available: true },
-  { name: "高清优化", note: "修复细节并提升清晰度", icon: ScanSearch, color: "blue", workflowKey: "hd-enhance", available: true },
-  { name: "详情页套图", note: "生成四张统一卖点视觉", icon: Layers3, color: "orange", workflowKey: "product-detail-page", available: true },
-  { name: "视频创作中心", note: "广告大片、复刻与高级创作", icon: Video, color: "violet", href: "/create/product-video", available: true },
-];
 
 type Account = { user: { identifier: string; displayName: string; isAdministrator?: boolean }; wallet: { availablePoints: number; frozenPoints: number } };
 type ProjectDraft = { id: string; title: string; workflowKey: ProjectWorkflowKey; updatedAt: string };
 type Inspiration = { id: string; title: string; category: string; industry: string; description: string; image: string; href: string };
+const caseCategories = ["灵感广场", "服装鞋包", "珠宝首饰", "童装带货", "宠物带货", "美妆护理", "剧情带货", "数码家电", "零食食品", "母婴用品", "海外电商", "日用百货"];
 
 export default function Workspace() {
   const router = useRouter();
@@ -56,17 +36,52 @@ export default function Workspace() {
     }).catch(() => router.replace("/"));
   }, [router]);
   if (!account) return <LoadingScreen />;
+  const visibleCases = inspirations.filter((item) => (industry === "全部" || industry === "灵感广场" || item.industry === industry) && `${item.title}${item.category}${item.description}`.includes(caseQuery.trim()));
   return <AppShell active="workspace" account={account} taskCount={activeCount}>
-    <div className="workspace-content">
-      <section className="welcome-row"><div><p>{account.user.identifier}</p><h1>今天想做什么？</h1></div><Link className="new-task" href={projectGateHref("image-generate")}><ImageIcon size={18} />新建项目</Link></section>
-      <section className="tool-grid" aria-label="创作工具">{tools.map((tool) => { const Icon = tool.icon; const href = tool.href || (tool.workflowKey ? projectGateHref(tool.workflowKey) : "/tools"); return tool.available ? (
-        <Link className="tool-card" key={tool.name} href={href}><span className={`tool-icon ${tool.color}`}><Icon size={22} /></span><span><strong>{tool.name}</strong><small>{tool.note}</small></span><ChevronRight size={18} /></Link>
-      ) : <div className="tool-card coming-soon" key={tool.name}><span className={`tool-icon ${tool.color}`}><Icon size={22} /></span><span><strong>{tool.name}<em>即将上线</em></strong><small>{tool.note}</small></span></div>; })}</section>
-      <section className="workspace-band"><div className="section-title"><div><h2>最近项目</h2><p>按创作项目查看进度、积分和最新结果</p></div><Link href="/tasks">查看全部<ChevronRight size={16} /></Link></div>
-        {projects.length === 0 ? <div className="empty-tasks"><span><PackageOpen size={24} /></span><strong>暂无项目</strong><p>创建项目后，进度与结果会出现在这里。</p></div> : <div className="dashboard-task-list">{projects.map((project) => <Link className="dashboard-task project" href={projectStartHref(project.workflowKey, project.id)} key={project.id}><div className="record-thumb"><WorkflowIcon workflowKey={project.workflowKey} /></div><div><strong>{project.title}</strong><span>{new Date(project.updatedAt).toLocaleString("zh-CN")}</span></div><span>项目</span><span>{projectWorkflows[project.workflowKey]?.title || "创作项目"}</span><ChevronRight size={17} /></Link>)}</div>}
+    <div className="workspace-content inspiration-workstation">
+      <section className="station-heading">
+        <div>
+          <h1>灵感工作站</h1>
+          <p>从灵感案例出发，开启高效创作</p>
+        </div>
+        <Link className="new-task" href={projectGateHref("image-generate")}><ImageIcon size={18} />新建项目</Link>
       </section>
-      <section className="asset-shortcut"><div><span><Boxes size={20} /></span><div><strong>内容资产</strong><p>上传素材与生成结果都已集中保存。</p></div></div><Link href="/assets">打开资产库<ChevronRight size={16} /></Link></section>
-      <section className="inspiration-band"><div className="section-title"><div><h2>灵感案例</h2><p>授权示例素材，可按行业筛选并一键带入创作参数。</p></div><Link href="/tools">查看工具<ChevronRight size={16} /></Link></div><div className="case-controls"><label><Search size={15} /><input value={caseQuery} onChange={(event) => setCaseQuery(event.target.value)} placeholder="搜索案例" /></label><div>{["全部", ...Array.from(new Set(inspirations.map((item) => item.industry)))].map((item) => <button type="button" className={industry === item ? "active" : ""} key={item} onClick={() => setIndustry(item)}>{item}</button>)}</div></div><div className="inspiration-grid">{inspirations.filter((item) => (industry === "全部" || item.industry === industry) && `${item.title}${item.category}${item.description}`.includes(caseQuery.trim())).map((item) => <article className="inspiration-card" key={item.id}><img src={item.image} alt="" /><span>{item.industry} · {item.category}</span><div><strong>{item.title}</strong><p>{item.description}</p><Link href={item.href}>做同款<ArrowRight size={15} /></Link></div></article>)}</div></section>
+
+      <section className="station-hero">
+        <div className="station-hero-copy">
+          <span>全新功能上线</span>
+          <h2>复刻带货视频<br />抽帧换品更稳一致</h2>
+          <p>保留爆款节奏，换成你的商品与模特。</p>
+          <Link href={projectGateHref("recreate-video")}><Play size={17} />点击使用</Link>
+        </div>
+        <div className="station-hero-flow" aria-hidden="true">
+          {["选择关键词", "生成脚本", "确认素材", "生成视频"].map((item, index) => <span key={item}><b>{String(index + 1).padStart(2, "0")}</b>{item}</span>)}
+        </div>
+        <div className="station-hero-stage" aria-hidden="true">
+          <i /><i /><i /><i /><i />
+          <strong><Play size={42} /></strong>
+        </div>
+      </section>
+
+      <section className="station-search">
+        <button type="button">全部<ChevronRight size={14} /></button>
+        <label><Search size={16} /><input value={caseQuery} onChange={(event) => setCaseQuery(event.target.value)} placeholder="搜索案例名称或关键词..." /></label>
+        <button type="button" aria-label="刷新案例"><RefreshCw size={16} /></button>
+      </section>
+
+      <section className="station-case-panel">
+        <nav className="station-case-tabs" aria-label="案例分类">
+          {caseCategories.map((item) => <button type="button" className={industry === item || (industry === "全部" && item === "灵感广场") ? "active" : ""} key={item} onClick={() => setIndustry(item)}>{item}</button>)}
+        </nav>
+        {visibleCases.length === 0 ? <div className="empty-tasks"><span><PackageOpen size={24} /></span><strong>暂无案例</strong><p>换一个关键词试试看。</p></div> : <div className="station-case-grid">{visibleCases.map((item) => <article className="station-case-card" key={item.id}><img src={item.image} alt="" /><span>{item.category}</span><div><strong>{item.title}</strong><p>{item.description}</p><Link href={item.href}>做同款<ArrowRight size={15} /></Link></div></article>)}</div>}
+      </section>
+
+      <section className="workspace-overview-row">
+        <section className="workspace-band"><div className="section-title"><div><h2>最近项目</h2><p>按项目继续编辑和查看进度</p></div><Link href="/tasks">查看全部<ChevronRight size={16} /></Link></div>
+          {projects.length === 0 ? <div className="empty-tasks"><span><PackageOpen size={24} /></span><strong>暂无项目</strong><p>创建项目后，进度与结果会出现在这里。</p></div> : <div className="dashboard-task-list compact">{projects.map((project) => <Link className="dashboard-task project" href={projectStartHref(project.workflowKey, project.id)} key={project.id}><div><strong>{project.title}</strong><span>{projectWorkflows[project.workflowKey]?.title || "创作项目"} · {new Date(project.updatedAt).toLocaleString("zh-CN")}</span></div><ChevronRight size={17} /></Link>)}</div>}
+        </section>
+        <section className="asset-shortcut"><div><span><Boxes size={20} /></span><div><strong>素材库</strong><p>只长期保存主动上传或手动加入素材库的资产。</p></div></div><Link href="/assets">打开素材库<ChevronRight size={16} /></Link></section>
+      </section>
     </div>
   </AppShell>;
 }

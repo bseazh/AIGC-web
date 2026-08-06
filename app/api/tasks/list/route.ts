@@ -31,6 +31,11 @@ export async function GET(request: NextRequest) {
 
   const tasks = await Promise.all(result.rows.map(async (task) => {
     const output = task.output_json?.assets?.[0];
+    const outputAssetIds = (task.output_json?.assets || []).map((asset) => asset.assetId).filter(Boolean);
+    const savedOutputCount = outputAssetIds.length ? await db.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM assets WHERE id = ANY($1::uuid[]) AND owner_id = $2 AND kind = 'OUTPUT' AND audit_status = 'READY' AND metadata_json #>> '{library,saved}' = 'true'",
+      [outputAssetIds, user.id],
+    ) : { rows: [{ count: "0" }] };
     return {
       id: task.id,
       workflowKey: task.workflow_key,
@@ -45,6 +50,7 @@ export async function GET(request: NextRequest) {
         style: task.input_json?.style || null,
       },
       outputCount: task.output_json?.assets?.length || 0,
+      savedOutputCount: Number(savedOutputCount.rows[0]?.count || 0),
       thumbnailUrl: task.status === "SUCCEEDED" && output ? await createSignedObjectUrl(output.storageKey, "GET", 3600) : null,
       errorCode: task.error_code,
       createdAt: task.created_at,

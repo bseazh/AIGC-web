@@ -1,25 +1,23 @@
 "use client";
 
-import { ArrowLeft, Boxes, ChevronDown, CircleDollarSign, Clock3, Coins, Headphones, Home, ImageIcon, LogOut, Menu, Settings2, Sparkles, UserRound, WalletCards } from "lucide-react";
+import { Boxes, ChevronDown, CircleDollarSign, Clock3, Coins, Headphones, Home, ImageIcon, LogOut, Menu, Moon, Settings2, Sparkles, UserRound, Video, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ReactNode, useState } from "react";
 
 type AppShellProps = {
-  active: "workspace" | "tools" | "tasks" | "assets" | "wallet" | "recharge" | "account" | "complaints";
+  active: "workspace" | "tools" | "video" | "tasks" | "assets" | "wallet" | "recharge" | "account" | "complaints";
   account: { user: { displayName: string; avatarUrl?: string | null; avatarStyle?: string; isAdministrator?: boolean }; wallet: { availablePoints: number } };
   taskCount?: number;
   children: ReactNode;
 };
 
 const navItems = [
-  { key: "workspace", label: "工作台", href: "/workspace", icon: Home },
-  { key: "tools", label: "创作工具", href: "/tools", icon: Sparkles },
-  { key: "tasks", label: "任务中心", href: "/tasks", icon: Clock3 },
-  { key: "assets", label: "内容资产", href: "/assets", icon: Boxes },
-  { key: "wallet", label: "积分钱包", href: "/wallet", icon: WalletCards },
-  { key: "recharge", label: "充值中心", href: "/recharge", icon: CircleDollarSign },
-  { key: "complaints", label: "投诉与客服", href: "/complaints", icon: Headphones },
+  { key: "workspace", label: "灵感工作站", href: "/workspace", icon: Home },
+  { key: "video", label: "一站式视频带货", href: "/create/product-video", icon: Video, hot: true },
+  { key: "tools", label: "图片创作", href: "/tools", icon: ImageIcon },
+  { key: "tasks", label: "我的任务", href: "/tasks", icon: Clock3 },
+  { key: "assets", label: "素材库", href: "/assets", icon: Boxes },
 ] as const;
 
 export function AppShell({ active, account, taskCount = 0, children }: AppShellProps) {
@@ -39,14 +37,16 @@ export function AppShell({ active, account, taskCount = 0, children }: AppShellP
         <nav>
           {navItems.map((item) => { const Icon = item.icon; return (
             <Link key={item.key} href={item.href} className={active === item.key ? "active" : ""} onClick={() => setSidebarOpen(false)}>
-              <Icon size={19} />{item.label}{item.key === "tasks" && taskCount > 0 && <span className="nav-count">{taskCount > 99 ? "99+" : taskCount}</span>}
+              <Icon size={19} />{"hot" in item && item.hot && <em>HOT NOW</em>}{item.label}{item.key === "tasks" && taskCount > 0 && <span className="nav-count">{taskCount > 99 ? "99+" : taskCount}</span>}
             </Link>
           ); })}
           {account.user.isAdministrator && <Link href="/admin" className="admin-console-link" onClick={() => setSidebarOpen(false)}><Settings2 size={19} />管理控制台</Link>}
         </nav>
         <div className="sidebar-bottom">
           <div className="credit-card"><span>{account.user.isAdministrator ? "任务计费" : "可用积分"}</span><strong><Coins size={18} />{account.user.isAdministrator ? "管理员免积分" : account.wallet.availablePoints.toLocaleString()}</strong><em>{account.user.isAdministrator ? "保留任务成本审计" : "1 元 = 10 积分"}</em></div>
-          <Link href="/"><ArrowLeft size={17} />返回首页</Link>
+          <Link href="/wallet"><WalletCards size={17} />积分钱包</Link>
+          <Link href="/recharge"><CircleDollarSign size={17} />充值中心</Link>
+          <Link href="/complaints"><Headphones size={17} />投诉与客服</Link>
           <button className="logout-link" onClick={logout}><LogOut size={16} />退出登录</button>
         </div>
       </aside>
@@ -55,7 +55,7 @@ export function AppShell({ active, account, taskCount = 0, children }: AppShellP
         <header className="workspace-header app-page-header">
           <button className="icon-button mobile-menu" aria-label="打开菜单" onClick={() => setSidebarOpen(true)}><Menu size={21} /></button>
           <Link href="/workspace" className="mobile-brand"><img src="/brand/bala-aigc-mark.png" alt="" /><strong>芭乐AIGC</strong></Link>
-          <div className="header-actions"><Link className="header-create" href="/tools"><ImageIcon size={17} />开始创作</Link><div className="header-account"><button className={`avatar avatar-${account.user.avatarStyle || "ocean"}`} type="button" aria-label="打开账户菜单" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen((open) => !open)}>{account.user.avatarUrl ? <img src={account.user.avatarUrl} alt="" /> : account.user.displayName.slice(0, 1)}<ChevronDown size={13} /></button>{accountMenuOpen && <div className="account-menu"><div><strong>{account.user.displayName}</strong><small>{account.user.isAdministrator ? "管理员账号" : `${account.wallet.availablePoints.toLocaleString()} 积分可用`}</small></div>{account.user.isAdministrator && <Link href="/admin" onClick={() => setAccountMenuOpen(false)}><Settings2 size={16} />管理控制台</Link>}<Link href="/account" onClick={() => setAccountMenuOpen(false)}><UserRound size={16} />账号设置</Link><Link href="/wallet" onClick={() => setAccountMenuOpen(false)}><WalletCards size={16} />积分钱包</Link><Link href="/recharge" onClick={() => setAccountMenuOpen(false)}><CircleDollarSign size={16} />充值中心</Link><button type="button" onClick={logout}><LogOut size={16} />退出登录</button></div>}</div></div>
+          <div className="header-actions"><button className="icon-button" type="button" aria-label="切换夜间模式"><Moon size={17} /></button><Link className="header-create" href="/tools"><ImageIcon size={17} />开始创作</Link><div className="header-account"><button className={`avatar avatar-${account.user.avatarStyle || "ocean"}`} type="button" aria-label="打开账户菜单" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen((open) => !open)}>{account.user.avatarUrl ? <img src={account.user.avatarUrl} alt="" /> : account.user.displayName.slice(0, 1)}<ChevronDown size={13} /></button>{accountMenuOpen && <div className="account-menu"><div><strong>{account.user.displayName}</strong><small>{account.user.isAdministrator ? "管理员账号" : `${account.wallet.availablePoints.toLocaleString()} 积分可用`}</small></div>{account.user.isAdministrator && <Link href="/admin" onClick={() => setAccountMenuOpen(false)}><Settings2 size={16} />管理控制台</Link>}<Link href="/account" onClick={() => setAccountMenuOpen(false)}><UserRound size={16} />账号设置</Link><Link href="/wallet" onClick={() => setAccountMenuOpen(false)}><WalletCards size={16} />积分钱包</Link><Link href="/recharge" onClick={() => setAccountMenuOpen(false)}><CircleDollarSign size={16} />充值中心</Link><Link href="/complaints" onClick={() => setAccountMenuOpen(false)}><Headphones size={16} />投诉与客服</Link><button type="button" onClick={logout}><LogOut size={16} />退出登录</button></div>}</div></div>
         </header>
         {children}
       </section>

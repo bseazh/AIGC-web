@@ -644,10 +644,12 @@ const worker = new Worker("generation", async (job) => {
       await putObject(key, buffer, contentType);
       savedKeys.push(key);
       const auditStatus = contentReviewEnabled ? "PENDING_REVIEW" : "READY";
+      const generatedAt = new Date();
+      const expiresAt = new Date(generatedAt.getTime() + Number(process.env.TEMP_OUTPUT_RETENTION_HOURS || 48) * 60 * 60 * 1000);
       const asset = await pool.query(
         `INSERT INTO assets (owner_id, kind, storage_key, mime_type, byte_size, audit_status, original_name, metadata_json)
          VALUES ($1, 'OUTPUT', $2, $3, $4, $5, $6, $7::jsonb) RETURNING id`,
-        [task.user_id, key, contentType, buffer.length, auditStatus, `${task.workflow_key}-${index + 1}.${extension}`, JSON.stringify({ taskId: task.id, workflowKey: task.workflow_key, provider, model, aiGenerated: true, aiContentLabel: "AI_GENERATED", provenance: { generatedAt: new Date().toISOString(), workerId }, moderation: { status: contentReviewEnabled ? "PENDING_REVIEW" : "BYPASSED" } })],
+        [task.user_id, key, contentType, buffer.length, auditStatus, `${task.workflow_key}-${index + 1}.${extension}`, JSON.stringify({ taskId: task.id, workflowKey: task.workflow_key, provider, model, aiGenerated: true, aiContentLabel: "AI_GENERATED", provenance: { generatedAt: generatedAt.toISOString(), workerId }, library: { saved: false, retention: "TEMPORARY_OUTPUT", expiresAt: expiresAt.toISOString() }, moderation: { status: contentReviewEnabled ? "PENDING_REVIEW" : "BYPASSED" } })],
       );
       savedAssets.push({ assetId: asset.rows[0].id, storageKey: key });
     }

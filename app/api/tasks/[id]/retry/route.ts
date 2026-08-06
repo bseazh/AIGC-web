@@ -21,12 +21,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const adminExempt = isAdministrator(user.email || user.phone);
   try {
     await client.query("BEGIN");
-    const originalResult = await client.query<{ workflow_key: string; status: string; points: number; input_json: Record<string, unknown> }>(
-      "SELECT workflow_key, status, points, input_json FROM generation_tasks WHERE id = $1 AND user_id = $2 FOR UPDATE", [id, user.id],
+    const originalResult = await client.query<{ workflow_key: string; status: string; points: number; input_json: Record<string, unknown>; output_json: { assets?: unknown[]; expiredAssets?: unknown[] } }>(
+      "SELECT workflow_key, status, points, input_json, output_json FROM generation_tasks WHERE id = $1 AND user_id = $2 FOR UPDATE", [id, user.id],
     );
     const original = originalResult.rows[0];
     if (!original) { await client.query("ROLLBACK"); return NextResponse.json({ code: "TASK_NOT_FOUND" }, { status: 404 }); }
-    if (!retryableStatuses.includes(original.status)) { await client.query("ROLLBACK"); return NextResponse.json({ code: "TASK_NOT_RETRYABLE", message: "仅失败、拒绝或取消的任务可重新发起" }, { status: 409 }); }
+    const expiredOutputCount = Array.isArray(original.output_json?.expiredAssets) ? original.output_json.expiredAssets.length : 0;
+    const currentOutputCount = Array.isArray(original.output_json?.assets) ? original.output_json.assets.length : 0;
+    const retryableExpiredSuccess = original.status === "SUCCEEDED" && expiredOutputCount > 0 && currentOutputCount === 0;
+    if (!retryableStatuses.includes(original.status) && !retryableExpiredSuccess) { await client.query("ROLLBACK"); return NextResponse.json({ code: "TASK_NOT_RETRYABLE", message: "仅失败、拒绝、取消或结果已过期的任务可重新发起" }, { status: 409 }); }
     workflowKey = original.workflow_key;
     const input = original.input_json || {};
     const assetIds = Array.isArray(input.assetIds) ? input.assetIds.filter((assetId): assetId is string => typeof assetId === "string") : [];
@@ -41,6 +44,19 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const { billingMode: _billingMode, quotedPoints: _quotedPoints, ...baseInput } = input;
     const retryInput = { ...baseInput, ...(adminExempt ? { billingMode: ADMIN_EXEMPT_BILLING_MODE, quotedPoints: points } : {}), retryOf: id, retriedAt: new Date().toISOString() };
     await client.query("INSERT INTO generation_tasks (id, user_id, workflow_key, status, points, input_json, idempotency_key) VALUES ($1, $2, $3, 'QUEUED', $4, $5::jsonb, $6)", [retryTaskId, user.id, original.workflow_key, points, JSON.stringify(retryInput), idempotencyKey]);
+    const draft = await client.query<{ id: string }>(
+      "SELECT id FROM workflow_drafts WHERE task_id = $1 AND user_id = $2 AND workflow_key = $3 AND status IN ('ACTIVE', 'ARCHIVED') ORDER BY updated_at DESC LIMIT 1",
+      [id, user.id, original.workflow_key],
+    );
+    const draftId = draft.rows[0]?.id;
+    if (draftId) {
+      await client.query("UPDATE workflow_drafts SET status = 'ACTIVE', task_id = $2, archived_at = NULL, updated_at = NOW() WHERE id = $1", [draftId, retryTaskId]);
+      await client.query(
+        `INSERT INTO workflow_draft_events (draft_id, user_id, workflow_key, event_type, step_key, field_name, value_json, task_id)
+         VALUES ($1, $2, $3, 'TASK_REGENERATED', 'generate', 'generation_task', $4::jsonb, $5)`,
+        [draftId, user.id, original.workflow_key, JSON.stringify({ taskId: retryTaskId, retryOf: id, reason: retryableExpiredSuccess ? "OUTPUT_EXPIRED" : "TASK_RETRY" }), retryTaskId],
+      );
+    }
     if (adminExempt) {
       await client.query("INSERT INTO wallet_ledger (user_id, type, amount, balance_after, business_type, business_id, idempotency_key) VALUES ($1, 'ADMIN_EXEMPT_TASK', 0, $2, 'ADMIN_EXEMPT_TASK', $3, $4)", [user.id, balance, retryTaskId, `admin-exempt:${retryTaskId}`]);
     } else {

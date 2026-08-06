@@ -7,9 +7,10 @@ for (const name of required) if (!process.env[name]) throw new Error(`${name} is
 
 const inputReviewTimeoutHours = Number(process.env.INPUT_REVIEW_TIMEOUT_HOURS || 24);
 const outputReviewTimeoutHours = Number(process.env.OUTPUT_REVIEW_TIMEOUT_HOURS || 24);
+const tempOutputRetentionHours = Number(process.env.TEMP_OUTPUT_RETENTION_HOURS || 48);
 const deletionCoolingDays = Number(process.env.ACCOUNT_DELETION_COOLING_DAYS || 7);
 const contentReviewEnabled = process.env.CONTENT_REVIEW_ENABLED === "true";
-for (const [name, value] of [["INPUT_REVIEW_TIMEOUT_HOURS", inputReviewTimeoutHours], ["OUTPUT_REVIEW_TIMEOUT_HOURS", outputReviewTimeoutHours], ["ACCOUNT_DELETION_COOLING_DAYS", deletionCoolingDays]]) {
+for (const [name, value] of [["INPUT_REVIEW_TIMEOUT_HOURS", inputReviewTimeoutHours], ["OUTPUT_REVIEW_TIMEOUT_HOURS", outputReviewTimeoutHours], ["TEMP_OUTPUT_RETENTION_HOURS", tempOutputRetentionHours], ["ACCOUNT_DELETION_COOLING_DAYS", deletionCoolingDays]]) {
   if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be positive`);
 }
 
@@ -212,6 +213,54 @@ async function cleanupExpiredDouyinCaches() {
   return { found: expired.rowCount, removed };
 }
 
+async function cleanupExpiredTaskOutputs() {
+  const expired = await pool.query(
+    `SELECT id, storage_key, metadata_json
+       FROM assets
+      WHERE kind = 'OUTPUT'
+        AND audit_status = 'READY'
+        AND COALESCE(metadata_json #>> '{library,saved}', 'false') <> 'true'
+        AND COALESCE((metadata_json #>> '{library,expiresAt}')::timestamptz, created_at + ($1 * INTERVAL '1 hour')) < NOW()
+      ORDER BY created_at ASC LIMIT 200`,
+    [tempOutputRetentionHours],
+  );
+  let removed = 0;
+  const removedByTask = new Map();
+  for (const asset of expired.rows) {
+    await removeObject(asset.storage_key).catch(() => undefined);
+    const changed = await pool.query(
+      "DELETE FROM assets WHERE id = $1 AND kind = 'OUTPUT' AND COALESCE(metadata_json #>> '{library,saved}', 'false') <> 'true' RETURNING id, metadata_json",
+      [asset.id],
+    );
+    if (!changed.rowCount) continue;
+    removed += 1;
+    const taskId = changed.rows[0].metadata_json?.taskId;
+    if (typeof taskId === "string") {
+      const ids = removedByTask.get(taskId) || [];
+      ids.push(changed.rows[0].id);
+      removedByTask.set(taskId, ids);
+    }
+  }
+  for (const [taskId, assetIds] of removedByTask.entries()) {
+    const task = await pool.query("SELECT output_json FROM generation_tasks WHERE id = $1", [taskId]);
+    const currentAssets = Array.isArray(task.rows[0]?.output_json?.assets) ? task.rows[0].output_json.assets : [];
+    const currentExpiredAssets = Array.isArray(task.rows[0]?.output_json?.expiredAssets) ? task.rows[0].output_json.expiredAssets : [];
+    const nextAssets = currentAssets.filter((asset) => !assetIds.includes(asset?.assetId));
+    const expiredAt = new Date().toISOString();
+    const nextExpiredAssets = [
+      ...currentExpiredAssets,
+      ...currentAssets
+        .filter((asset) => assetIds.includes(asset?.assetId))
+        .map((asset) => ({ ...asset, expiredAt })),
+    ];
+    await pool.query(
+      "UPDATE generation_tasks SET output_json = jsonb_set(jsonb_set(output_json, '{assets}', $2::jsonb, true), '{expiredAssets}', $3::jsonb, true), updated_at = NOW() WHERE id = $1",
+      [taskId, JSON.stringify(nextAssets), JSON.stringify(nextExpiredAssets)],
+    );
+  }
+  return { found: expired.rowCount, removed };
+}
+
 async function finalizeDeletedAccounts() {
   const found = await pool.query(
     `SELECT id FROM users WHERE status = 'DELETION_PENDING'
@@ -249,8 +298,9 @@ try {
   const waitingTasks = await reconcileWaitingTasks();
   const reviewTimeouts = contentReviewEnabled ? await expireReviewWaits() : { inputExpired: 0, outputExpired: 0, skipped: true };
   const douyinCaches = await cleanupExpiredDouyinCaches();
+  const taskOutputs = await cleanupExpiredTaskOutputs();
   const accountDeletions = await finalizeDeletedAccounts();
-  const summary = { event: "lifecycle_maintenance_complete", contentReview, waitingTasks, reviewTimeouts, douyinCaches, accountDeletions };
+  const summary = { event: "lifecycle_maintenance_complete", contentReview, waitingTasks, reviewTimeouts, douyinCaches, taskOutputs, accountDeletions };
   await pool.query("INSERT INTO operations_runs (operation, status, summary) VALUES ('LIFECYCLE_MAINTENANCE', 'SUCCEEDED', $1)", [JSON.stringify(summary)]);
   console.log(JSON.stringify(summary));
 } catch (error) {
