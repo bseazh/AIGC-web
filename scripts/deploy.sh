@@ -81,6 +81,7 @@ bash scripts/refresh-douyin-profile.sh
 npm ci --include=dev --no-audit --no-fund
 npm run test:regression
 npm run typecheck
+rm -rf .next
 env -u TURBOPACK -u __NEXT_PRIVATE_STANDALONE_CONFIG -u __NEXT_PRIVATE_ORIGIN npm run build
 node scripts/migrate.mjs
 node scripts/configure-production-acceptance.mjs
