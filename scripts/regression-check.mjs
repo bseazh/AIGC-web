@@ -617,9 +617,9 @@ const checks = [
     "renameCurrentProject",
   ],
   [
-    "Recreate video sidebar shows current project instead of archive list",
-    "app/features/recreate-video/components/recreate-workspace-sidebar.tsx",
-    "recreate-current-project",
+    "Recreate video header shows the current project rename toolbar",
+    "app/components/recreate-video-page.tsx",
+    "recreate-project-toolbar",
   ],
   [
     "Project guard preserves deep-link query params",

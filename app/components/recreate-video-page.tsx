@@ -1576,10 +1576,13 @@ export function RecreateVideoPage() {
           返回一站式视频带货
         </button>
         <div className="recreate-flow-header-actions">
-          <button type="button" onClick={renameCurrentProject}>
-            <Pencil size={16} />
-            重命名项目
-          </button>
+          <div className="recreate-project-toolbar">
+            <span title={draftTitle || "未命名项目"}>{draftTitle || "未命名项目"}</span>
+            <button type="button" onClick={renameCurrentProject} aria-label="重命名项目" title="重命名项目">
+              <Pencil size={16} />
+              重命名
+            </button>
+          </div>
         </div>
       </header>
       <form className="recreate-flow-card" onSubmit={submit}>
@@ -1587,8 +1590,6 @@ export function RecreateVideoPage() {
           activeStep={step}
           clipReady={clipReady}
           completedCount={completedCount}
-          draftSyncState={draftSyncState}
-          draftTitle={draftTitle}
           onStepChange={setStep}
           phaseSucceeded={phase === "succeeded"}
           productReady={productReady}

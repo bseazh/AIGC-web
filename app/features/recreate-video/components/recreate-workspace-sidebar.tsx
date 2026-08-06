@@ -1,14 +1,10 @@
 import type { WorkflowStep } from "../types";
 import { RecreateStepList } from "./recreate-step-list";
 
-type DraftSyncState = "idle" | "saving" | "saved" | "error";
-
 type RecreateWorkspaceSidebarProps = {
   activeStep: WorkflowStep;
   clipReady: boolean;
   completedCount: number;
-  draftSyncState: DraftSyncState;
-  draftTitle: string;
   onStepChange: (step: WorkflowStep) => void;
   phaseSucceeded: boolean;
   productReady: boolean;
@@ -21,8 +17,6 @@ export function RecreateWorkspaceSidebar({
   activeStep,
   clipReady,
   completedCount,
-  draftSyncState,
-  draftTitle,
   onStepChange,
   phaseSucceeded,
   productReady,
@@ -44,18 +38,6 @@ export function RecreateWorkspaceSidebar({
         </div>
         <span>立即观看</span>
       </button>
-      <section className="recreate-current-project">
-        <strong>{draftTitle || "未命名项目"}</strong>
-        <small>
-          {draftSyncState === "saving"
-            ? "正在自动保存"
-            : draftSyncState === "saved"
-              ? "已自动保存"
-              : draftSyncState === "error"
-                ? "自动保存失败，本地已兜底"
-                : "项目已加载"}
-        </small>
-      </section>
       <div className="recreate-flow-summary">
         <strong>制作流程</strong>
         <span>{completedCount}/5</span>
