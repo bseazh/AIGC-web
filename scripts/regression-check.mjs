@@ -833,6 +833,18 @@ const checks = [
     "/create/model-spokesperson-video",
   ],
   [
+    "Video center labels model spokesperson as script phase before video generation",
+    "app/features/video-center/modules.ts",
+    "模特口播文案",
+    "文案工作台",
+  ],
+  [
+    "Model spokesperson page exposes case references and same-style backfill",
+    "app/components/model-spokesperson-script-page.tsx",
+    "spokespersonCases",
+    "做同款",
+  ],
+  [
     "Video center exposes recreate inside the smart commerce group",
     "app/features/video-center/modules.ts",
     'key: "smart-commerce"',

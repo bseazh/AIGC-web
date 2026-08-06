@@ -1,4 +1,4 @@
-import { Clapperboard, Film, Layers3, MicVocal, Repeat2, Video } from "lucide-react";
+import { Clapperboard, Film, Layers3, Repeat2, Video } from "lucide-react";
 import type { ProjectWorkflowKey } from "@/lib/project-workflows";
 
 export type VideoCenterTab = "commerce" | "smart-commerce" | "seedance";
@@ -42,14 +42,14 @@ export const videoModules: VideoModule[] = [
         sourceFile: "app/create/product-ad-video/page.tsx",
       },
       {
-        title: "模特对镜自拍",
-        text: "围绕商品、穿搭或妆容生成自然的模特自拍带货视频。",
+        title: "模特口播文案",
+        text: "先生成可编辑的分镜口播稿，后续衔接口型、配音与人物视频生成。",
         href: "/create/model-spokesperson-video",
         workflowKey: "model-spokesperson-script",
         icon: Video,
         tone: "violet",
         cover: "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=900&q=86",
-        badge: "模特自拍",
+        badge: "文案工作台",
         sourceFile: "app/create/model-spokesperson-video/page.tsx",
       },
     ],
@@ -82,17 +82,6 @@ export const videoModules: VideoModule[] = [
         cover: "https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?auto=format&fit=crop&w=900&q=86",
         badge: "素材混剪",
         sourceFile: "app/create/video-mix/page.tsx",
-      },
-      {
-        title: "口播带货视频",
-        text: "先生成可编辑的分镜口播稿，后续直接衔接口型、配音与视频生成。",
-        href: "/create/model-spokesperson-video",
-        workflowKey: "model-spokesperson-script",
-        icon: MicVocal,
-        tone: "blue",
-        cover: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?auto=format&fit=crop&w=900&q=86",
-        badge: "口播脚本",
-        sourceFile: "app/create/model-spokesperson-video/page.tsx",
       },
     ],
   },

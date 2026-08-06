@@ -47,8 +47,66 @@ type Draft = {
   duration: number;
   result: ScriptResult | null;
 };
+type SpokespersonCase = {
+  id: string;
+  title: string;
+  tag: string;
+  image: string;
+  description: string;
+  productName: string;
+  sellingPoints: string;
+  audience: string;
+  usageScene: string;
+  callToAction: string;
+  tone: string;
+  duration: number;
+};
 
 const draftStorageKey = "aigc-model-spokesperson-script-draft";
+const spokespersonCases: SpokespersonCase[] = [
+  {
+    id: "healthy-breakfast",
+    title: "轻食早餐机口播脚本",
+    tag: "文案案例",
+    image: "https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=900&q=86",
+    description: "通勤人群、快手早餐、自然亲和口吻。",
+    productName: "轻氧多功能早餐机",
+    sellingPoints: "三分钟快速加热\n煎烤蒸一体，小厨房也能放\n不粘涂层，清洗省心\n适合上班族快速准备早餐",
+    audience: "通勤上班族、独居年轻人",
+    usageScene: "早晨赶时间、办公室轻食、周末简单早餐",
+    callToAction: "点击了解更多，今天就把早餐效率提起来",
+    tone: "natural",
+    duration: 15,
+  },
+  {
+    id: "beauty-serum",
+    title: "精华液种草口播脚本",
+    tag: "文案案例",
+    image: "https://images.unsplash.com/photo-1612817288484-6f916006741a?auto=format&fit=crop&w=900&q=86",
+    description: "美妆护肤、卖点拆解、专业讲解口吻。",
+    productName: "维稳修护精华液",
+    sellingPoints: "质地清爽不黏腻\n适合换季干燥和屏障脆弱期\n按压泵设计更卫生\n妆前使用也不搓泥",
+    audience: "关注维稳修护的护肤用户",
+    usageScene: "晚间护肤、换季维稳、妆前打底",
+    callToAction: "需要维稳修护的朋友可以先从这一瓶开始",
+    tone: "professional",
+    duration: 30,
+  },
+  {
+    id: "travel-bag",
+    title: "通勤包带货口播脚本",
+    tag: "文案案例",
+    image: "https://images.unsplash.com/photo-1594223274512-ad4803739b7c?auto=format&fit=crop&w=900&q=86",
+    description: "箱包容量、穿搭场景、热情带货口吻。",
+    productName: "大容量通勤托特包",
+    sellingPoints: "可以放下电脑、雨伞和化妆包\n皮革纹理细腻，版型挺括\n通勤、出差、周末逛街都能背\n肩带宽，不容易勒肩",
+    audience: "都市通勤女性、轻商务人群",
+    usageScene: "上班通勤、短途出差、周末约会",
+    callToAction: "喜欢实用又有质感的包，可以直接入手",
+    tone: "enthusiastic",
+    duration: 15,
+  },
+];
 
 export function ModelSpokespersonScriptPage() {
   const router = useRouter();
@@ -199,6 +257,21 @@ export function ModelSpokespersonScriptPage() {
           }
         : current,
     );
+
+  const applyCase = (item: SpokespersonCase) => {
+    setProductName(item.productName);
+    setSellingPoints(item.sellingPoints);
+    setAudience(item.audience);
+    setUsageScene(item.usageScene);
+    setCallToAction(item.callToAction);
+    if (["natural", "enthusiastic", "professional"].includes(item.tone))
+      setTone(item.tone);
+    if ([15, 30, 60].includes(item.duration)) setDuration(item.duration);
+    setResult(null);
+    setError("");
+    setNotice("案例参数已回填");
+    window.setTimeout(() => setNotice(""), 1800);
+  };
 
   const copyScript = async () => {
     if (!fullScript) return;
@@ -354,6 +427,36 @@ export function ModelSpokespersonScriptPage() {
             {busy ? "正在组织口播文案" : "生成口播文案"}
           </button>
         </section>
+
+        <aside className="spokesperson-case-board">
+          <header>
+            <span>
+              <Sparkles size={17} />
+            </span>
+            <div>
+              <h1>案例参考</h1>
+              <p>选择案例可一键回填文案入参</p>
+            </div>
+          </header>
+          <div className="spokesperson-case-grid">
+            {spokespersonCases.map((item) => (
+              <article key={item.id}>
+                <div className="spokesperson-case-media">
+                  <img src={item.image} alt={item.title} />
+                  <span>{item.tag}</span>
+                </div>
+                <div>
+                  <strong>{item.title}</strong>
+                  <p>{item.description}</p>
+                </div>
+                <button type="button" onClick={() => applyCase(item)}>
+                  <WandSparkles size={15} />
+                  做同款
+                </button>
+              </article>
+            ))}
+          </div>
+        </aside>
 
         <section className="spokesperson-script-result">
           <header>
