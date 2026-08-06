@@ -2,11 +2,17 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import { audit } from "@/lib/audit";
+import { db } from "@/lib/db";
 import { redis } from "@/lib/redis";
 import { authenticatedUser } from "@/lib/session";
 
 const tones = ["natural", "enthusiastic", "professional"] as const;
 const durations = [15, 30, 60] as const;
+const toneLabels: Record<(typeof tones)[number], string> = {
+  natural: "自然种草",
+  enthusiastic: "强带货",
+  professional: "专业讲解",
+};
 
 type Tone = (typeof tones)[number];
 type Duration = (typeof durations)[number];
@@ -17,6 +23,17 @@ type Segment = {
   narration: string;
   visual: string;
 };
+type ScriptResult = {
+  status: "READY";
+  draftId: string;
+  title: string;
+  durationSeconds: Duration;
+  tone: string;
+  segments: Segment[];
+  fullScript: string;
+  alternativeOpeners: string[];
+  generatedAt: string;
+};
 type ScriptPlan = {
   id: string;
   label: string;
@@ -26,53 +43,7 @@ type ScriptPlan = {
   modelDirection: string;
   productDirection: string;
   internalPrompt: string;
-  script: {
-    status: "READY";
-    draftId: string;
-    title: string;
-    durationSeconds: Duration;
-    tone: string;
-    segments: Segment[];
-    fullScript: string;
-    alternativeOpeners: string[];
-    generatedAt: string;
-  };
-};
-
-const toneCopy: Record<
-  Tone,
-  { label: string; openers: string[]; transition: string; closing: string }
-> = {
-  natural: {
-    label: "自然亲和",
-    openers: [
-      "最近发现了一个很实用的好物",
-      "如果你也在认真挑选日常好物，可以看看这个",
-      "今天想和大家分享一个使用起来很省心的产品",
-    ],
-    transition: "我实际关注下来，比较打动我的是",
-    closing: "如果这些特点正好符合你的需求，可以进一步了解一下",
-  },
-  enthusiastic: {
-    label: "热情带货",
-    openers: [
-      "姐妹们，这个好物真的值得认真看一下",
-      "还没找到合适产品的朋友，先别划走",
-      "今天给大家带来一个非常有吸引力的选择",
-    ],
-    transition: "它最让我惊喜的地方就是",
-    closing: "喜欢的朋友可以马上去了解，别错过适合自己的选择",
-  },
-  professional: {
-    label: "专业讲解",
-    openers: [
-      "选择产品时，真正值得关注的是使用价值和核心细节",
-      "今天从实际需求出发，为大家介绍一款产品",
-      "判断一款产品是否值得选择，可以先看它的核心优势",
-    ],
-    transition: "从产品表现来看，它的重点优势包括",
-    closing: "建议结合自己的使用场景进一步了解并理性选择",
-  },
+  script: ScriptResult;
 };
 
 function text(value: unknown, maxLength: number) {
@@ -86,265 +57,247 @@ function splitPoints(value: string) {
     .split(/[\n，,；;。]+/)
     .map((item) => item.trim())
     .filter(Boolean)
-    .slice(0, 6);
+    .slice(0, 8);
 }
 
-function choose(values: string[], productName: string, variant: number) {
-  const seed = [...productName].reduce(
-    (total, character) => total + character.charCodeAt(0),
-    Math.max(0, variant),
-  );
-  return values[seed % values.length];
+function compact(value: unknown, maxLength: number) {
+  if (typeof value !== "string") return "";
+  const normalized = value.replace(/\s+/g, " ").replace(/[。；;，,]+$/g, "").trim();
+  if (normalized.length <= maxLength) return normalized;
+  const sentence = normalized
+    .split(/[。！？!?；;]/)
+    .map((item) => item.trim())
+    .find((item) => item.length > 4 && item.length <= maxLength);
+  return (sentence || normalized.slice(0, maxLength)).replace(/[。；;，,]+$/g, "").trim();
 }
 
-function joinPoints(points: string[], limit: number) {
-  return points
-    .slice(0, limit)
-    .map((point, index) => `${index ? "另外，" : ""}${point}`)
-    .join("；");
-}
-
-function concise(value: string, maxLength: number) {
-  return value.replace(/[。；;，,]+$/g, "").trim().slice(0, maxLength);
-}
-
-function conciseList(value: string, maxItems: number, maxLength: number) {
-  return concise(
-    value
-      .split(/[，,、]|(?:和|及|与)/)
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .slice(0, maxItems)
-      .join("、"),
-    maxLength,
-  );
-}
-
-function createSegments(input: {
-  productName: string;
-  points: string[];
-  audience: string;
-  usageScene: string;
-  callToAction: string;
-  tone: Tone;
-  duration: Duration;
-  variant: number;
-}): Segment[] {
-  const copy = toneCopy[input.tone];
-  const opener = choose(copy.openers, input.productName, input.variant);
-  const productName = concise(input.productName, input.duration === 60 ? 30 : 14);
-  const audienceValue =
-    input.duration === 15
-      ? ""
-      : concise(input.audience, input.duration === 60 ? 32 : 12);
-  const sceneValue = conciseList(
-    input.usageScene,
-    input.duration === 15 ? 2 : 3,
-    input.duration === 15 ? 12 : input.duration === 30 ? 20 : 36,
-  );
-  const audience = audienceValue ? `，尤其适合${audienceValue}` : "";
-  const scene = sceneValue ? `在${sceneValue}时` : "日常使用时";
-  const closing = concise(
-    input.callToAction || copy.closing,
-    input.duration === 15 ? 12 : input.duration === 30 ? 18 : 48,
-  );
-  const pointLength = input.duration === 15 ? 12 : input.duration === 30 ? 18 : 32;
-  const concisePoints = input.points.map((point) => concise(point, pointLength));
-  const primary = joinPoints(concisePoints, input.duration === 15 ? 2 : 3);
-  const secondary = joinPoints(concisePoints.slice(3), 3);
-
-  if (input.duration === 15) {
-    return [
-      {
-        id: randomUUID(),
-        stage: "开场吸引",
-        timeRange: "0–3 秒",
-        narration: `这是${productName}。`,
-        visual: "模特半身正面出镜，快速建立视线交流。",
-      },
-      {
-        id: randomUUID(),
-        stage: "核心卖点",
-        timeRange: "3–10 秒",
-        narration: `它${primary.replace(/；另外，/g, "，而且")}${audience}。`,
-        visual: "模特口播与商品特写交替，卖点关键词同步上屏。",
-      },
-      {
-        id: randomUUID(),
-        stage: "使用场景",
-        timeRange: "10–13 秒",
-        narration: `${scene}，使用更省心。`,
-        visual: "展示商品使用场景或细节动作。",
-      },
-      {
-        id: randomUUID(),
-        stage: "行动引导",
-        timeRange: "13–15 秒",
-        narration: `${closing}。`,
-        visual: "模特回到正面，商品名称和行动提示出现。",
-      },
-    ];
+function providerConfig() {
+  if (process.env.DEEPSEEK_API_KEY) {
+    return {
+      provider: "deepseek-chat",
+      apiKey: process.env.DEEPSEEK_API_KEY,
+      baseUrl: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1",
+      model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
+    };
   }
+  const sophnetKey =
+    process.env.SOPHNET_CHAT_API_KEY ||
+    process.env.SOPHNET_VISION_API_KEY ||
+    process.env.AI_API_KEY;
+  if (sophnetKey) {
+    return {
+      provider: "sophnet-chat",
+      apiKey: sophnetKey,
+      baseUrl: process.env.SOPHNET_CHAT_BASE_URL || "https://www.sophnet.com/api/open-apis/v1",
+      model: process.env.SOPHNET_CHAT_MODEL || "doubao-seed-2-0-mini-260428",
+    };
+  }
+  return null;
+}
 
-  const base: Segment[] = [
-    {
-      id: randomUUID(),
-      stage: "开场吸引",
-      timeRange: input.duration === 30 ? "0–4 秒" : "0–6 秒",
-      narration:
-        input.duration === 30
-          ? `今天介绍${productName}${audience}。`
-          : `${opener}，它就是${productName}${audience}。`,
-      visual: "模特半身近景开场，商品放在画面侧前方。",
-    },
-    {
-      id: randomUUID(),
-      stage: "需求共鸣",
-      timeRange: input.duration === 30 ? "4–9 秒" : "6–15 秒",
-      narration:
-        input.duration === 30
-          ? "选择这类产品，既要好用，也要兼顾实际体验。"
-          : "很多人在选择这类产品时，既希望好用，也在意细节和实际体验。",
-      visual: "模特自然口播，搭配用户需求关键词字幕。",
-    },
-    {
-      id: randomUUID(),
-      stage: "卖点讲解",
-      timeRange: input.duration === 30 ? "9–20 秒" : "15–35 秒",
-      narration:
-        input.duration === 30
-          ? `${copy.transition}：${primary}。`
-          : `${copy.transition}：${primary}。这些特点不是简单堆砌，而是直接服务于真实使用需求。`,
-      visual: "依次穿插商品全景、材质和功能细节。",
-    },
-  ];
+function parseJsonObject(raw: string) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const matched = raw.match(/\{[\s\S]*\}/);
+    if (!matched) throw new Error("LLM 返回内容不是 JSON");
+    return JSON.parse(matched[0]);
+  }
+}
 
-  if (input.duration === 60) {
-    base.push({
-      id: randomUUID(),
-      stage: "补充优势",
-      timeRange: "35–46 秒",
-      narration: secondary
-        ? `除此之外，${secondary}。整体考虑会更加完整。`
-        : `它在细节处理和日常适配方面也比较均衡，使用起来没有太多负担。`,
-      visual: "补充展示包装、操作方式或不同角度。",
+async function callScriptLLM(options: {
+  operation: string;
+  prompt: string;
+  requestLog: Record<string, unknown>;
+}) {
+  const config = providerConfig();
+  if (!config) {
+    throw Object.assign(new Error("请先配置 DeepSeek 或 SophNet Chat 大模型后再生成口播方案"), {
+      code: "LLM_NOT_CONFIGURED",
+      status: 503,
     });
   }
-
-  base.push(
-    {
-      id: randomUUID(),
-      stage: "场景说明",
-      timeRange: input.duration === 30 ? "20–26 秒" : "46–55 秒",
-      narration:
-        input.duration === 30
-          ? `${scene}，使用起来更省心。`
-          : `${scene}，它能帮助你减少不必要的麻烦，让使用过程更自然顺畅。`,
-      visual: "切换到真实使用场景，保留模特画外音。",
-    },
-    {
-      id: randomUUID(),
-      stage: "行动引导",
-      timeRange: input.duration === 30 ? "26–30 秒" : "55–60 秒",
-      narration: `${closing}。`,
-      visual: "模特与商品同框收尾，显示商品名称和行动提示。",
-    },
+  const response = await fetch(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: config.model,
+      stream: false,
+      temperature: 0.72,
+      messages: [
+        {
+          role: "system",
+          content: [
+            "你是资深电商短视频口播导演和转化文案策划。",
+            "你必须真正理解用户商品描述，生成可拍摄、可口播、15秒内讲得清楚的方案。",
+            "只输出严格 JSON，不要 Markdown，不要解释。",
+          ].join("\n"),
+        },
+        { role: "user", content: options.prompt },
+      ],
+      response_format: { type: "json_object" },
+    }),
+    signal: AbortSignal.timeout(60_000),
+  });
+  const payload = await response.json().catch(() => null);
+  await db.query(
+    `INSERT INTO provider_call_logs (provider, operation, request_json, response_status, response_json, error_code, provider_request_id)
+     VALUES ($1, $2, $3::jsonb, $4, $5::jsonb, $6, $7)`,
+    [
+      config.provider,
+      options.operation,
+      JSON.stringify({ ...options.requestLog, model: config.model }),
+      response.status,
+      JSON.stringify(payload || {}),
+      response.ok ? null : "LLM_CHAT_HTTP_ERROR",
+      payload?.id || response.headers.get("x-request-id"),
+    ],
   );
-  return base;
+  if (!response.ok) {
+    throw Object.assign(
+      new Error(payload?.message || payload?.error?.message || `LLM HTTP ${response.status}`),
+      { code: "LLM_CHAT_FAILED", status: 502 },
+    );
+  }
+  const raw = payload?.choices?.[0]?.message?.content;
+  if (typeof raw !== "string") {
+    throw Object.assign(new Error("大模型没有返回可用文本"), {
+      code: "LLM_EMPTY_RESPONSE",
+      status: 502,
+    });
+  }
+  return parseJsonObject(raw);
 }
 
-function createScriptResult(input: {
+function plansPrompt(input: {
   productName: string;
+  sellingPoints: string;
   points: string[];
-  audience: string;
-  usageScene: string;
-  callToAction: string;
   tone: Tone;
   duration: Duration;
-  variant: number;
+  productImageCount: number;
 }) {
-  const segments = createSegments(input);
+  return [
+    "请为 AI 模特口播视频生成 A/B/C 三套 15 秒带货方案，输出严格 JSON。",
+    "JSON 结构：{ \"plans\": [ ...3项... ] }。",
+    "每个 plan 字段必须为：label、title、angle、sellingPointSummary、modelDirection、productDirection、internalPrompt、script。",
+    "label 必须分别是 A、B、C。",
+    "A 必须是真实种草型，B 必须是痛点转化型，C 必须是专业讲解型。三套不能只是换皮，切入角度、卖点排序、动作设计都要不同。",
+    "script 字段必须包含：title、tone、segments、alternativeOpeners。",
+    "segments 必须正好 4 段，字段：stage、timeRange、narration、visual。",
+    "4 段时间固定为：0-3秒、3-8秒、8-12秒、12-15秒。",
+    "所有 narration 加起来必须 45-65 个中文字；每段 narration 不超过 18 个中文字。",
+    "讲稿必须短、口语、具体、能真人自然说出口；禁止空泛套话，禁止长句，禁止绝对化宣传。",
+    "必须出现商品名或商品类型，最多讲 2 个核心卖点，必须有一个具体使用场景。",
+    "visual 要写清楚模特动作、商品入镜方式、镜头景别和细节特写，不要泛泛写展示商品。",
+    "productDirection 必须说明商品多视图参考板如何生成和使用：正面、侧面、材质/功能细节、使用状态、包装/比例锁定。",
+    "modelDirection 必须说明模特动作：注视、拿起、指向、靠近镜头、收尾动作。",
+    "internalPrompt 必须是隐藏给视频模型的中文提示词，包含商品多视图、虚拟模特多视图、动作导演脚本、字幕节奏；不得给用户显示。",
+    "如果用户上传了真人/模特图，internalPrompt 必须要求先合规安检、隐私化、虚拟模特多视图，不得直接提交可识别真人脸。",
+    `商品名称：${input.productName}`,
+    `用户描述/卖点：${input.sellingPoints}`,
+    `拆分卖点：${input.points.join("、")}`,
+    `用户选择口吻：${toneLabels[input.tone]}`,
+    `目标时长：${input.duration} 秒`,
+    `用户上传商品图数量：${input.productImageCount}`,
+  ].join("\n");
+}
+
+function scriptPrompt(input: {
+  productName: string;
+  sellingPoints: string;
+  points: string[];
+  tone: Tone;
+  duration: Duration;
+}) {
+  return [
+    "请生成一版 AI 模特口播讲稿，输出严格 JSON。",
+    "JSON 字段：title、tone、segments、alternativeOpeners。",
+    "segments 正好 4 段，字段：stage、timeRange、narration、visual。",
+    "时间固定为：0-3秒、3-8秒、8-12秒、12-15秒。",
+    "所有 narration 加起来必须 45-65 个中文字，每段不超过 18 个中文字。",
+    "讲稿必须具体、短、自然，不要模板腔，不要长句，不要绝对化宣传。",
+    `商品名称：${input.productName}`,
+    `用户描述/卖点：${input.sellingPoints}`,
+    `拆分卖点：${input.points.join("、")}`,
+    `口吻：${toneLabels[input.tone]}`,
+    `目标时长：${input.duration} 秒`,
+  ].join("\n");
+}
+
+function normalizeSegments(value: unknown): Segment[] {
+  const input = Array.isArray(value) ? value.slice(0, 4) : [];
+  if (input.length !== 4) throw new Error("LLM 讲稿分镜数量不正确");
+  const ranges = ["0-3 秒", "3-8 秒", "8-12 秒", "12-15 秒"];
+  return input.map((item, index) => {
+    const record = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+    const narration = compact(record.narration, 20);
+    const visual = compact(record.visual, 90);
+    const stage = compact(record.stage, 12) || ["开场钩子", "核心卖点", "场景展示", "行动引导"][index];
+    if (!narration || !visual) throw new Error("LLM 讲稿缺少口播或画面建议");
+    return {
+      id: randomUUID(),
+      stage,
+      timeRange: ranges[index],
+      narration,
+      visual,
+    };
+  });
+}
+
+function normalizeScript(value: unknown, fallbackTitle: string, duration: Duration): ScriptResult {
+  const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const segments = normalizeSegments(record.segments);
   const fullScript = segments.map((segment) => segment.narration).join("\n");
+  const characterCount = fullScript.replace(/\s/g, "").length;
+  if (characterCount > 72) throw new Error("LLM 讲稿超过 15 秒字数限制");
   return {
-    status: "READY" as const,
+    status: "READY",
     draftId: randomUUID(),
-    title: `${input.productName} · ${input.duration} 秒${toneCopy[input.tone].label}口播稿`,
-    durationSeconds: input.duration,
-    tone: toneCopy[input.tone].label,
+    title: compact(record.title, 40) || fallbackTitle,
+    durationSeconds: duration,
+    tone: compact(record.tone, 16) || "自然口播",
     segments,
     fullScript,
-    alternativeOpeners: toneCopy[input.tone].openers.filter(
-      (item) => !segments[0].narration.startsWith(item),
-    ),
+    alternativeOpeners: Array.isArray(record.alternativeOpeners)
+      ? record.alternativeOpeners.map((item) => compact(item, 22)).filter(Boolean).slice(0, 3)
+      : [],
     generatedAt: new Date().toISOString(),
   };
 }
 
-function createPlans(input: {
-  productName: string;
-  points: string[];
-  audience: string;
-  usageScene: string;
-  callToAction: string;
-  duration: Duration;
-  variant: number;
-}): ScriptPlan[] {
-  const planDefinitions: Array<{
-    id: string;
-    label: string;
-    tone: Tone;
-    angle: string;
-    modelDirection: string;
-    productDirection: string;
-  }> = [
-    {
-      id: "plan-a",
-      label: "A",
-      tone: "natural",
-      angle: "自然种草：像真实使用后的轻推荐，先建立信任，再讲两个最容易感知的卖点。",
-      modelDirection: "模特自然半身出镜，轻拿商品，语速放松，动作以展示和点头确认产品体验为主。",
-      productDirection: "先展示商品整体，再切到 1-2 个细节特写；商品多视图参考板用于锁定外观、材质和比例。",
-    },
-    {
-      id: "plan-b",
-      label: "B",
-      tone: "enthusiastic",
-      angle: "卖点转化：开场更直接，突出用户痛点和立即可理解的购买理由。",
-      modelDirection: "模特开场有停顿和手势强调，镜头节奏更快，配合商品上手、指向和近景展示。",
-      productDirection: "商品多视图参考板优先锁定正面、功能区、包装和使用状态，字幕突出强转化卖点。",
-    },
-    {
-      id: "plan-c",
-      label: "C",
-      tone: "professional",
-      angle: "专业讲解：从产品细节和适用场景切入，适合客单价更高或需要解释的商品。",
-      modelDirection: "模特保持讲解感，动作克制清晰，镜头用中近景和细节穿插增强可信度。",
-      productDirection: "商品多视图参考板用于补齐侧面、材质、结构和使用场景，避免单图导致外观漂移。",
-    },
-  ];
-
-  const sellingPointSummary = input.points.slice(0, 4);
-  return planDefinitions.map((definition, index) => {
-    const script = createScriptResult({
-      ...input,
-      tone: definition.tone,
-      variant: input.variant + index,
-    });
+function normalizePlans(value: unknown, productName: string, duration: Duration): ScriptPlan[] {
+  const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const rawPlans = Array.isArray(record.plans) ? record.plans.slice(0, 3) : [];
+  if (rawPlans.length !== 3) throw new Error("LLM 必须返回 A/B/C 三套方案");
+  const labels = ["A", "B", "C"];
+  return rawPlans.map((item, index) => {
+    const plan = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+    const label = labels[index];
+    const script = normalizeScript(
+      plan.script,
+      `${productName} · ${label} 方案 15 秒口播稿`,
+      duration,
+    );
+    const sellingPointSummary = Array.isArray(plan.sellingPointSummary)
+      ? plan.sellingPointSummary.map((point) => compact(point, 18)).filter(Boolean).slice(0, 4)
+      : [];
+    const angle = compact(plan.angle, 120);
+    const modelDirection = compact(plan.modelDirection, 180);
+    const productDirection = compact(plan.productDirection, 180);
+    const internalPrompt = compact(plan.internalPrompt, 900);
+    if (!angle || !modelDirection || !productDirection || !internalPrompt) {
+      throw new Error("LLM 方案缺少动作、多视图或内部提示词");
+    }
     return {
-      id: definition.id,
-      label: definition.label,
-      title: `${definition.label} 方案 · ${toneCopy[definition.tone].label}`,
-      angle: definition.angle,
+      id: `plan-${label.toLowerCase()}`,
+      label,
+      title: compact(plan.title, 32) || `${label} 方案`,
+      angle,
       sellingPointSummary,
-      modelDirection: definition.modelDirection,
-      productDirection: definition.productDirection,
-      internalPrompt: [
-        "内部视频策略：不向用户展示。",
-        "先基于商品图生成商品多视图参考板，锁定外观、材质、比例、包装和可展示细节。",
-        "如用户提供真人/模特图，先做合规与隐私处理，再生成虚拟模特多视图参考；不得直接提交可识别真人脸。",
-        "按选中口播稿拆解 15 秒动作导演脚本：开场注视、商品入镜、卖点指向、细节特写、行动引导收尾。",
-        "视频生成时使用商品多视图、虚拟模特多视图和动作脚本作为隐藏请求参数。",
-      ].join("\n"),
+      modelDirection,
+      productDirection,
+      internalPrompt,
       script,
     };
   });
@@ -367,19 +320,14 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => null);
   const productName = text(body?.productName, 80);
-  const sellingPoints = text(body?.sellingPoints, 800);
-  const audience = text(body?.audience, 120);
-  const usageScene = text(body?.usageScene, 120);
-  const callToAction = text(body?.callToAction, 100);
+  const sellingPoints = text(body?.sellingPoints, 1000);
   const mode = body?.mode === "plans" ? "plans" : "script";
   const tone = tones.includes(body?.tone) ? (body.tone as Tone) : "natural";
   const duration = durations.includes(Number(body?.duration) as Duration)
     ? (Number(body.duration) as Duration)
     : 15;
-  const variant = Number.isFinite(Number(body?.variant))
-    ? Math.max(0, Math.floor(Number(body.variant)))
-    : 0;
   const points = splitPoints(sellingPoints);
+  const productImageCount = Math.max(0, Math.min(8, Number(body?.productImageCount) || 0));
 
   if (!productName || !points.length) {
     return NextResponse.json(
@@ -391,53 +339,72 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (mode === "plans") {
-    const plans = createPlans({
-      productName,
-      points,
-      audience,
-      usageScene,
-      callToAction,
-      duration,
-      variant,
+  try {
+    if (mode === "plans") {
+      const raw = await callScriptLLM({
+        operation: "model_spokesperson_script_plans",
+        prompt: plansPrompt({ productName, sellingPoints, points, tone, duration, productImageCount }),
+        requestLog: {
+          mode,
+          productName,
+          sellingPointCount: points.length,
+          tone,
+          duration,
+          productImageCount,
+        },
+      });
+      const plans = normalizePlans(raw, productName, duration);
+      await audit(user.id, "MODEL_SPOKESPERSON_SCRIPT_PLANS_GENERATED", request, {
+        type: "script_plan_set",
+        id: randomUUID(),
+      }, {
+        duration,
+        llmRequired: true,
+        planCount: plans.length,
+        characterCount: plans
+          .map((plan) => plan.script.fullScript)
+          .join("")
+          .replace(/\s/g, "").length,
+      });
+      return NextResponse.json({
+        status: "READY",
+        provider: "llm",
+        plans,
+        generatedAt: new Date().toISOString(),
+      });
+    }
+
+    const raw = await callScriptLLM({
+      operation: "model_spokesperson_script_single",
+      prompt: scriptPrompt({ productName, sellingPoints, points, tone, duration }),
+      requestLog: { mode, productName, sellingPointCount: points.length, tone, duration },
     });
-    await audit(user.id, "MODEL_SPOKESPERSON_SCRIPT_PLANS_GENERATED", request, {
-      type: "script_plan_set",
-      id: randomUUID(),
+    const result = normalizeScript(raw, `${productName} · ${duration} 秒口播稿`, duration);
+    await audit(user.id, "MODEL_SPOKESPERSON_SCRIPT_GENERATED", request, {
+      type: "script_draft",
+      id: result.draftId,
     }, {
       duration,
-      planCount: plans.length,
-      characterCount: plans
-        .map((plan) => plan.script.fullScript)
-        .join("")
-        .replace(/\s/g, "").length,
+      tone,
+      llmRequired: true,
+      segmentCount: result.segments.length,
+      characterCount: result.fullScript.replace(/\s/g, "").length,
     });
-    return NextResponse.json({
-      status: "READY",
-      plans,
-      generatedAt: new Date().toISOString(),
-    });
+
+    return NextResponse.json(result);
+  } catch (error) {
+    const status = typeof (error as { status?: unknown }).status === "number"
+      ? (error as { status: number }).status
+      : 502;
+    const code = typeof (error as { code?: unknown }).code === "string"
+      ? (error as { code: string }).code
+      : "LLM_SCRIPT_GENERATION_FAILED";
+    return NextResponse.json(
+      {
+        code,
+        message: error instanceof Error ? error.message : "大模型口播方案生成失败",
+      },
+      { status },
+    );
   }
-
-  const result = createScriptResult({
-    productName,
-    points,
-    audience,
-    usageScene,
-    callToAction,
-    tone,
-    duration,
-    variant,
-  });
-  await audit(user.id, "MODEL_SPOKESPERSON_SCRIPT_GENERATED", request, {
-    type: "script_draft",
-    id: result.draftId,
-  }, {
-    duration,
-    tone,
-    segmentCount: result.segments.length,
-    characterCount: result.fullScript.replace(/\s/g, "").length,
-  });
-
-  return NextResponse.json(result);
 }
