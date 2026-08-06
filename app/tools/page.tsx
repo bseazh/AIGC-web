@@ -2,7 +2,18 @@
 
 export const dynamic = "force-dynamic";
 
-import { Crop, ImageIcon, Layers3, ScanSearch, Shirt, Sparkles, Video, WandSparkles } from "lucide-react";
+import {
+  ArrowRight,
+  Crop,
+  ImageIcon,
+  Layers3,
+  Package,
+  ScanSearch,
+  Shirt,
+  Sparkles,
+  Video,
+  WandSparkles,
+} from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -11,125 +22,282 @@ import { projectGateHref, type ProjectWorkflowKey } from "@/lib/project-workflow
 
 type Account = { user: { displayName: string }; wallet: { availablePoints: number } };
 
-type Tool = {
-  name: string;
-  group: string;
+type ToolCard = {
+  title: string;
+  category: string;
   description: string;
   workflowKey?: ProjectWorkflowKey;
   href?: string;
   icon: typeof ImageIcon;
-  color: "blue" | "cyan" | "orange" | "violet";
-  ready: boolean;
+  tone: "blue" | "violet" | "cyan" | "rose" | "orange" | "green";
+  badge?: string;
+  disabled?: boolean;
 };
 
-const imageToolGroups: Array<{ title: string; subtitle: string; tools: Tool[] }> = [
+type ToolSection = {
+  title: string;
+  tools: ToolCard[];
+};
+
+const imageSections: ToolSection[] = [
   {
-    title: "电商图片生成",
-    subtitle: "从商品素材出发，生成主图、场景图、模特图和详情页。",
+    title: "AI创意生图",
     tools: [
-  { name: "AI生图", group: "AI 创意生图", description: "输入提示词生成原创图像，也可以从案例一键做同款。", workflowKey: "image-generate", icon: Sparkles, color: "blue", ready: true },
-  { name: "商品主图", group: "电商商品图", description: "上传商品素材，生成四张适配店铺首屏的商业主图。", workflowKey: "product-hero-image", icon: ImageIcon, color: "blue", ready: true },
-  { name: "生成产品场景图", group: "AI 创意生图", description: "上传商品图并填写产品描述，生成营销场景图。", workflowKey: "scene-image", icon: WandSparkles, color: "cyan", ready: true },
-  { name: "模特穿搭", group: "AI 带货模特", description: "模特图加商品图，生成自然上身展示效果。", workflowKey: "model-wear", icon: Shirt, color: "violet", ready: true },
-  { name: "商品详情页", group: "电商商品图", description: "围绕卖点组织四张统一风格的详情页视觉。", workflowKey: "product-detail-page", icon: Layers3, color: "orange", ready: true },
+      {
+        title: "AI生图",
+        category: "文字/参考图生成",
+        description: "输入提示词或参考案例，一键生成高质感电商创意图。",
+        workflowKey: "image-generate",
+        icon: Sparkles,
+        tone: "blue",
+        badge: "Banana2 / Image2",
+      },
+      {
+        title: "生成产品场景图",
+        category: "商品场景生成",
+        description: "上传商品图并填写卖点，生成室内、户外、棚拍等营销场景。",
+        workflowKey: "scene-image",
+        icon: WandSparkles,
+        tone: "violet",
+        badge: "HOT",
+      },
     ],
   },
   {
-    title: "图片处理与复刻",
-    subtitle: "处理已有图片，或参考结构重新生成原创电商素材。",
+    title: "AI带货模特",
     tools: [
-  { name: "高清优化", group: "图片处理", description: "修复细节、放大分辨率并提升商品展示质感。", workflowKey: "hd-enhance", icon: ScanSearch, color: "blue", ready: true },
-  { name: "白底图生成", group: "图片处理", description: "自动保留商品主体，生成干净的电商白底图。", workflowKey: "white-background", icon: ImageIcon, color: "cyan", ready: true },
-  { name: "图片比例调整", group: "图片处理", description: "智能扩图适配常用电商比例，保持主体不变形。", workflowKey: "resize-image", icon: Crop, color: "blue", ready: true },
-  { name: "复刻商品主图", group: "电商商品图", description: "提取参考图构图方向，生成原创商品主图。", workflowKey: "recreate-product-hero", icon: WandSparkles, color: "violet", ready: true },
-  { name: "复刻商详页", group: "电商商品图", description: "参考卖点结构和节奏，生成原创详情页套图。", workflowKey: "recreate-detail-page", icon: Layers3, color: "orange", ready: true },
+      {
+        title: "创作专属带货模特",
+        category: "模特资产",
+        description: "沉淀可复用的带货模特形象，后续接入穿搭与口播流程。",
+        workflowKey: "model-wear",
+        icon: Shirt,
+        tone: "cyan",
+        badge: "VIP",
+      },
+      {
+        title: "模特穿搭图",
+        category: "服饰上身",
+        description: "用模特图和商品图生成自然上身展示，适合服饰主图。",
+        workflowKey: "model-wear",
+        icon: Shirt,
+        tone: "rose",
+      },
+    ],
+  },
+  {
+    title: "电商商品图制作",
+    tools: [
+      {
+        title: "商品主图+详情页",
+        category: "套图生成",
+        description: "先生成商品主图，再衔接详情页素材，统一视觉表达。",
+        workflowKey: "product-hero-image",
+        icon: Package,
+        tone: "orange",
+        badge: "组合流程",
+      },
+      {
+        title: "商品详情页（百货）",
+        category: "详情页生成",
+        description: "围绕商品卖点生成统一风格的详情页视觉内容。",
+        workflowKey: "product-detail-page",
+        icon: Layers3,
+        tone: "green",
+      },
+      {
+        title: "复制详情页",
+        category: "参考复刻",
+        description: "参考竞品详情页节奏与版式，生成原创商品详情页。",
+        workflowKey: "recreate-detail-page",
+        icon: Layers3,
+        tone: "violet",
+      },
+      {
+        title: "复制主图",
+        category: "主图复刻",
+        description: "提取参考图的构图方向，重新生成原创商品主图。",
+        workflowKey: "recreate-product-hero",
+        icon: WandSparkles,
+        tone: "blue",
+      },
+    ],
+  },
+  {
+    title: "图片处理",
+    tools: [
+      {
+        title: "调整图片比例",
+        category: "智能扩图",
+        description: "扩展画面比例并保持商品主体稳定，适配常用平台尺寸。",
+        workflowKey: "resize-image",
+        icon: Crop,
+        tone: "cyan",
+      },
+      {
+        title: "白底图生成",
+        category: "电商白底",
+        description: "自动保留商品主体，生成干净的白底展示图。",
+        workflowKey: "white-background",
+        icon: ImageIcon,
+        tone: "green",
+      },
+    ],
+  },
+  {
+    title: "图片处理与优化",
+    tools: [
+      {
+        title: "商品图高清优化",
+        category: "清晰度增强",
+        description: "修复商品细节、提升清晰度，适配店铺与投放素材。",
+        workflowKey: "hd-enhance",
+        icon: ScanSearch,
+        tone: "blue",
+      },
+    ],
+  },
+  {
+    title: "图片生成",
+    tools: [
+      {
+        title: "批量替换",
+        category: "批量生产",
+        description: "批量替换商品或模特素材，适合多 SKU 批量出图场景。",
+        icon: WandSparkles,
+        tone: "violet",
+        badge: "即将上线",
+        disabled: true,
+      },
     ],
   },
 ];
 
-const videoTools: Tool[] = [
-  { name: "视频创作中心", group: "AI 视频", description: "产品广告大片、复刻带货与 Seedance2 高级视频创作。", href: "/create/product-video", icon: Video, color: "violet", ready: true },
+const videoTools: ToolCard[] = [
+  {
+    title: "视频创作中心",
+    category: "带货视频",
+    description: "产品广告大片、复刻带货、Seedance2 视频创作集中入口。",
+    href: "/create/product-video",
+    icon: Video,
+    tone: "violet",
+  },
 ];
+
+function hrefForTool(tool: ToolCard) {
+  if (tool.workflowKey) return projectGateHref(tool.workflowKey);
+  return tool.href || "/tools";
+}
+
+function ToolTile({ tool }: { tool: ToolCard }) {
+  const Icon = tool.icon;
+  const visual = (
+    <div className={`yh-tools-card-visual ${tool.tone}`}>
+      <div className="yh-tools-visual-glow" />
+      <div className="yh-tools-visual-copy">
+        <span>{tool.category}</span>
+        <strong>{tool.title}</strong>
+      </div>
+      <div className="yh-tools-mockup-grid" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+        <i />
+      </div>
+      <span className="yh-tools-visual-icon"><Icon size={24} /></span>
+    </div>
+  );
+  const info = (
+    <div className="yh-tools-card-info">
+      <div>
+        <span className="yh-tools-card-kicker">{tool.category}</span>
+        {tool.badge && <em>{tool.badge}</em>}
+      </div>
+      <h3>{tool.title}</h3>
+      <p>{tool.description}</p>
+      <span className="yh-tools-card-action">
+        {tool.disabled ? "敬请期待" : "立即开始"}
+        {!tool.disabled && <ArrowRight size={14} />}
+      </span>
+    </div>
+  );
+
+  return tool.disabled ? (
+    <article className="yh-tools-card disabled">
+      {visual}
+      {info}
+    </article>
+  ) : (
+    <Link href={hrefForTool(tool)} className="yh-tools-card">
+      {visual}
+      {info}
+    </Link>
+  );
+}
 
 export default function ToolsPage() {
-  const router = useRouter(); const [account, setAccount] = useState<Account | null>(null);
-  useEffect(() => { fetch("/api/auth/session/", { cache: "no-store" }).then(async (r) => { if (!r.ok) throw new Error(); setAccount(await r.json()); }).catch(() => router.replace("/")); }, [router]);
+  const router = useRouter();
+  const [account, setAccount] = useState<Account | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/session/", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("unauthorized");
+        setAccount(await response.json());
+      })
+      .catch(() => router.replace("/"));
+  }, [router]);
+
   if (!account) return <LoadingScreen />;
-  const toolCard = (tool: Tool, variant = "") => {
-    const Icon = tool.icon;
-    const content = (
-      <>
-        <span className={`tool-icon ${tool.color}`}>
-          <Icon size={24} />
-        </span>
-        <span className="catalog-copy">
-          <small>{tool.group}</small>
-          <strong>
-            {tool.name}
-            {!tool.ready && <em>即将上线</em>}
-          </strong>
-          <p>{tool.description}</p>
-        </span>
-        {tool.ready && <span className="catalog-action">开始创作</span>}
-      </>
-    );
-    const href = tool.href || (tool.workflowKey ? projectGateHref(tool.workflowKey) : "/tools");
-    return tool.ready ? (
-      <Link href={href} className={`catalog-card ${variant}`} key={tool.name}>
-        {content}
-      </Link>
-    ) : (
-      <article className={`catalog-card disabled ${variant}`} key={tool.name}>
-        {content}
-      </article>
-    );
-  };
 
-  return <AppShell active="tools" account={account}>
-    <div className="app-page-content">
-      <section className="page-intro">
-        <div>
-          <span className="page-kicker"><Sparkles size={15} />创作能力</span>
-          <h1>创作工具</h1>
-          <p>图片和视频分开管理，每个已开放工具都接入任务、资产和积分结算。</p>
-        </div>
-      </section>
+  const imageToolCount = imageSections.reduce((total, section) => total + section.tools.length, 0);
 
-      <section className="catalog-section">
-        <header className="catalog-section-head">
+  return (
+    <AppShell active="tools" account={account}>
+      <div className="app-page-content yh-tools-page">
+        <section className="yh-tools-hero">
           <div>
-            <span>IMAGE CREATION</span>
-            <h2>图片创作</h2>
+            <span><Sparkles size={15} />图片创作中心</span>
+            <h1>AI 图片创作</h1>
+            <p>按目标站的图片创作模块重组入口，先选择项目，再进入对应工具沉淀素材和任务。</p>
           </div>
-          <p>{imageToolGroups.reduce((total, group) => total + group.tools.length, 0)} 个图片工具</p>
-        </header>
-        <div className="catalog-split">
-          {imageToolGroups.map((group) => (
-            <section className="catalog-subsection" key={group.title}>
-              <header>
-                <h3>{group.title}</h3>
-                <p>{group.subtitle}</p>
-              </header>
-              <div className="catalog-grid compact">
-                {group.tools.map((tool) => toolCard(tool))}
-              </div>
-            </section>
-          ))}
-        </div>
-      </section>
+          <nav aria-label="创作类型">
+            <a className="active" href="#image-tools">图片</a>
+            <Link href="/create/product-video">视频</Link>
+          </nav>
+        </section>
 
-      <section className="catalog-section video">
-        <header className="catalog-section-head">
-          <div>
+        <section id="image-tools" className="yh-tools-shell">
+          <header className="yh-tools-shell-head">
+            <div>
+              <span>IMAGE GENERATION</span>
+              <h2>图片创作</h2>
+            </div>
+            <p>{imageToolCount} 个图片工具</p>
+          </header>
+
+          <div className="yh-tools-section-list">
+            {imageSections.map((section) => (
+              <section className="yh-tools-section" key={section.title}>
+                <h2>{section.title}</h2>
+                <div className="yh-tools-grid">
+                  {section.tools.map((tool) => <ToolTile tool={tool} key={tool.title} />)}
+                </div>
+              </section>
+            ))}
+          </div>
+        </section>
+
+        <section className="yh-tools-video-strip" aria-label="视频创作">
+          <header>
             <span>VIDEO CREATION</span>
             <h2>视频创作</h2>
+          </header>
+          <div className="yh-tools-grid">
+            {videoTools.map((tool) => <ToolTile tool={tool} key={tool.title} />)}
           </div>
-          <p>{videoTools.length} 个视频入口</p>
-        </header>
-        <div className="catalog-grid video-grid">
-          {videoTools.map((tool) => toolCard(tool, "wide"))}
-        </div>
-      </section>
-    </div>
-  </AppShell>;
+        </section>
+      </div>
+    </AppShell>
+  );
 }

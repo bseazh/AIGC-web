@@ -628,6 +628,16 @@ const checks = [
     "projectGateHref(tool.workflowKey)",
   ],
   [
+    "Image creation center uses Yinghai-style grouped tool cards",
+    "app/tools/page.tsx",
+    "yh-tools-card",
+  ],
+  [
+    "Image creation center exposes the AI creative image section",
+    "app/tools/page.tsx",
+    "AI创意生图",
+  ],
+  [
     "Project gate keeps existing query params when opening projects",
     "lib/project-workflows.ts",
     "appendProjectId",
