@@ -339,3 +339,39 @@ export const modelWearCases: ImageWorkflowCase[] = [
     style: "清新日常",
   },
 ];
+
+export const commerceModelCases: ImageWorkflowCase[] = [
+  {
+    id: "pink-wall-commerce-model",
+    title: "清新女装带货模特",
+    tag: "模特资产",
+    image: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&w=900&q=88",
+    productDescription: "适合女装、饰品、生活方式商品的可复用带货模特形象。",
+    prompt: "生成一位清新自然的电商带货模特，全身或半身构图，年轻时尚，干净背景，真实商业摄影质感，可作为后续穿搭和口播资产使用，不生成文字、水印或品牌标识。",
+    ratio: "3:4",
+    scene: "人物氛围",
+    style: "真实摄影",
+  },
+  {
+    id: "urban-commerce-model",
+    title: "通勤风带货模特",
+    tag: "模特资产",
+    image: "https://images.unsplash.com/photo-1485968579580-b6d095142e6e?auto=format&fit=crop&w=900&q=88",
+    productDescription: "适合通勤服饰、箱包、鞋履等商品的都市模特资产。",
+    prompt: "生成都市通勤风电商模特，姿态自然自信，穿基础款服装，背景为干净街拍或浅色室内，突出真实可复用的带货人物形象，不生成文字、水印或品牌标识。",
+    ratio: "9:16",
+    scene: "人物氛围",
+    style: "清透商业",
+  },
+  {
+    id: "premium-commerce-model",
+    title: "轻奢精品带货模特",
+    tag: "模特资产",
+    image: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=900&q=88",
+    productDescription: "适合美妆、珠宝、精品服饰等高质感商品。",
+    prompt: "生成轻奢精品风格带货模特，棚拍柔光，面部自然，姿态克制高级，服装简洁，背景干净，适合作为高端商品营销人物资产，不生成文字、水印或品牌标识。",
+    ratio: "3:4",
+    scene: "人物氛围",
+    style: "清透商业",
+  },
+];

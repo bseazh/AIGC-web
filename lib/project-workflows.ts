@@ -2,6 +2,7 @@ export const projectWorkflows = {
   "image-generate": { title: "AI生图", startPath: "/create/image-generate" },
   "product-hero-image": { title: "商品主图", startPath: "/create/product-hero" },
   "scene-image": { title: "场景图生成", startPath: "/create/scene-image" },
+  "commerce-model": { title: "带货模特", startPath: "/create/commerce-model" },
   "model-wear": { title: "模特穿搭", startPath: "/create/model-wear" },
   "hd-enhance": { title: "高清优化", startPath: "/create/hd-enhance" },
   "white-background": { title: "白底图生成", startPath: "/create/white-background" },

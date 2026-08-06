@@ -33,6 +33,15 @@ export const imageGenerateWorkflow = {
   refundOnFailure: true,
 } as const;
 
+export const commerceModelWorkflow = {
+  ...imageGenerateWorkflow,
+  key: "commerce-model",
+  name: "带货模特",
+  pointsPerTask: Number(process.env.COMMERCE_MODEL_TASK_POINTS || 10),
+  scenes: ["人物氛围", "室内棚拍", "通勤街拍", "自然居家"],
+  styles: ["真实摄影", "清透商业", "轻奢时尚", "清新日常"],
+} as const;
+
 export const sceneImageWorkflow = {
   key: "scene-image",
   name: "场景图生成",

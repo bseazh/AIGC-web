@@ -73,7 +73,7 @@ const imageSections: ToolSection[] = [
         title: "创作专属带货模特",
         category: "模特资产",
         description: "沉淀可复用的带货模特形象，后续接入穿搭与口播流程。",
-        workflowKey: "model-wear",
+        workflowKey: "commerce-model",
         icon: Shirt,
         tone: "cyan",
         cover: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&w=900&q=88",
