@@ -17,6 +17,7 @@ type WorkflowIconDefinition = {
 };
 
 const workflowIcons: Record<string, WorkflowIconDefinition> = {
+  "image-generate": { color: "blue", icon: Sparkles },
   "product-hero-image": { color: "blue", icon: ImageIcon },
   "scene-image": { color: "cyan", icon: WandSparkles },
   "model-wear": { color: "violet", icon: Shirt },

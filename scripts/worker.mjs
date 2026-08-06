@@ -361,7 +361,9 @@ function geminiImageResponseAspectRatio(value) {
 async function generateOne(inputUrls, input, index, workflowKey, generationTaskId) {
   const variation = ["正面居中构图", "轻微侧角构图", "留出营销文案空间", "更强调商品材质细节"][index] || "商业构图";
   const detailStage = ["品牌定位与首屏商品展示长图", "核心卖点解析长图", "材质、结构与工艺细节长图", "真实使用场景与效果长图", "规格、服务与购买理由长图"][index] || "商品详情长图";
-  const shared = workflowKey === "hd-enhance"
+  const shared = workflowKey === "image-generate"
+    ? "按提示词生成原创图像，画面干净完整，不添加文字、水印、价格或无关标识。"
+    : workflowKey === "hd-enhance"
     ? "保持原图的主体、构图、比例、颜色、文字和关键细节准确，不新增、不删除或替换任何内容，不添加水印。"
     : workflowKey === "white-background"
     ? "精确抠出商品主体，生成干净纯白电商背景，保留真实材质、边缘、标识与自然轻投影，不添加文字、水印或额外商品。"
@@ -386,6 +388,8 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
       ].join("\n")
     : workflowKey === "recreate-reference-image" && input.scene === "场景多视图"
     ? `生成一张场景/背景多视图参考板，参考 environment concept board，不是商品主图。以空间结构、光线方向、背景层次、材质、关键道具、前中远景和可摆放主体区域为核心，不要把画面中的单个商品或人物当成唯一主主体。必须在同一张图中包含：正面空间视角、左侧空间视角、右侧空间视角、纵深/俯视空间视角、近景材质细节、光线氛围小图、可放置模特/商品的留白区域示意。所有视角必须保持同一个场景的色调、材质、空间关系、道具位置和光线逻辑一致，只改变镜头位置、景别和关注点。不要出现清晰真人脸、品牌水印、字幕、箭头、UI 或不可控文字。输出干净、高清、电影级构图的场景参考板。画幅比例${input.aspectRatio}。`
+    : workflowKey === "image-generate"
+    ? `根据用户提示词生成图像，风格为${input.style}，场景方向为${input.scene}，${variation}，画幅比例${input.aspectRatio}。`
     : workflowKey === "recreate-reference-image"
     ? `生成一张商品/物体多视图参考板，不是普通商品主图、不是带模特图、不是场景海报。以用户选择的商品/物体为唯一主主体，保留轮廓、结构、颜色、材质、比例、Logo/标识位置和关键卖点。必须在同一张图中包含：正面、左 45 度、右 45 度、侧面、背面/反面、顶部或底部、材质细节、尺寸比例关系、可选使用方式小图。所有视角必须是同一个商品，品类、颜色、材质、结构和品牌标识位置保持一致，不要凭空换款式、换品类或增加无关配件。如果输入是服装静物且用户选择了商品类型，则输出服装商品多视图；不要补成人物模特。若画面中意外出现真人脸，必须弱化或遮挡，不保留可识别真实身份。不要套用普通商品主图逻辑。画幅比例${input.aspectRatio}。`
     : "";

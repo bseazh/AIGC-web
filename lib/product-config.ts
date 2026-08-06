@@ -17,6 +17,22 @@ export const heroImageWorkflow = {
   refundOnFailure: true,
 } as const;
 
+export const imageGenerateWorkflow = {
+  key: "image-generate",
+  name: "AI生图",
+  enabled: Boolean(imageProviderConfigured && process.env.COS_SECRET_ID),
+  disabledReason: imageProviderConfigured && process.env.COS_SECRET_ID ? null : "PROVIDER_NOT_CONFIGURED",
+  pointsPerTask: Number(process.env.IMAGE_GENERATE_TASK_POINTS || 10),
+  outputsPerTask: 4,
+  minAssets: 0,
+  acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
+  maxFileBytes: 10 * 1024 * 1024,
+  aspectRatios: ["1:1", "3:4", "4:3", "9:16"],
+  scenes: ["自由创作", "商品灵感", "人物氛围", "室内空间", "自然风景"],
+  styles: ["真实摄影", "清透商业", "电影感", "插画质感", "明快促销"],
+  refundOnFailure: true,
+} as const;
+
 export const sceneImageWorkflow = {
   key: "scene-image",
   name: "场景图生成",

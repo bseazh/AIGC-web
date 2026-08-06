@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { ArrowRight, Boxes, ChevronRight, ImageIcon, Layers3, PackageOpen, ScanSearch, Search, Shirt, Video, WandSparkles } from "lucide-react";
+import { ArrowRight, Boxes, ChevronRight, ImageIcon, Layers3, PackageOpen, ScanSearch, Search, Shirt, Sparkles, Video, WandSparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -21,6 +21,7 @@ type WorkspaceTool = {
 };
 
 const tools: WorkspaceTool[] = [
+  { name: "AI生图", note: "提示词生成原创图片", icon: Sparkles, color: "blue", workflowKey: "image-generate", available: true },
   { name: "商品主图", note: "生成电商首屏视觉", icon: ImageIcon, color: "blue", workflowKey: "product-hero-image", available: true },
   { name: "模特穿搭", note: "服装自然上身展示", icon: Shirt, color: "violet", workflowKey: "model-wear", available: true },
   { name: "场景延展", note: "匹配营销使用场景", icon: WandSparkles, color: "cyan", workflowKey: "scene-image", available: true },
@@ -57,7 +58,7 @@ export default function Workspace() {
   if (!account) return <LoadingScreen />;
   return <AppShell active="workspace" account={account} taskCount={activeCount}>
     <div className="workspace-content">
-      <section className="welcome-row"><div><p>{account.user.identifier}</p><h1>今天想做什么？</h1></div><Link className="new-task" href={projectGateHref("product-hero-image")}><ImageIcon size={18} />新建项目</Link></section>
+      <section className="welcome-row"><div><p>{account.user.identifier}</p><h1>今天想做什么？</h1></div><Link className="new-task" href={projectGateHref("image-generate")}><ImageIcon size={18} />新建项目</Link></section>
       <section className="tool-grid" aria-label="创作工具">{tools.map((tool) => { const Icon = tool.icon; const href = tool.href || (tool.workflowKey ? projectGateHref(tool.workflowKey) : "/tools"); return tool.available ? (
         <Link className="tool-card" key={tool.name} href={href}><span className={`tool-icon ${tool.color}`}><Icon size={22} /></span><span><strong>{tool.name}</strong><small>{tool.note}</small></span><ChevronRight size={18} /></Link>
       ) : <div className="tool-card coming-soon" key={tool.name}><span className={`tool-icon ${tool.color}`}><Icon size={22} /></span><span><strong>{tool.name}<em>即将上线</em></strong><small>{tool.note}</small></span></div>; })}</section>

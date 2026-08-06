@@ -30,12 +30,12 @@ const features: Array<{
   href?: string;
 }> = [
   {
-    title: "商品主图",
+    title: "AI生图",
     tag: "AI 生图",
-    description: "聚焦卖点与构图，生成适配电商首屏的商品视觉。",
-    image: "https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&w=900&q=88",
-    icon: ImageIcon,
-    href: projectGateHref("product-hero-image"),
+    description: "输入提示词生成原创图片，也可以从案例一键带入创作参数。",
+    image: "https://images.unsplash.com/photo-1573865526739-10659fec78a5?auto=format&fit=crop&w=900&q=88",
+    icon: Sparkles,
+    href: projectGateHref("image-generate"),
   },
   {
     title: "模特穿搭",
@@ -46,7 +46,7 @@ const features: Array<{
     href: projectGateHref("model-wear"),
   },
   {
-    title: "场景延展",
+    title: "生成产品场景图",
     tag: "场景图",
     description: "为商品匹配居家、户外和商业棚拍等营销场景。",
     image: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=900&q=88",

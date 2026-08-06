@@ -27,8 +27,9 @@ const imageToolGroups: Array<{ title: string; subtitle: string; tools: Tool[] }>
     title: "电商图片生成",
     subtitle: "从商品素材出发，生成主图、场景图、模特图和详情页。",
     tools: [
+  { name: "AI生图", group: "AI 创意生图", description: "输入提示词生成原创图像，也可以从案例一键做同款。", workflowKey: "image-generate", icon: Sparkles, color: "blue", ready: true },
   { name: "商品主图", group: "电商商品图", description: "上传商品素材，生成四张适配店铺首屏的商业主图。", workflowKey: "product-hero-image", icon: ImageIcon, color: "blue", ready: true },
-  { name: "场景图生成", group: "AI 创意生图", description: "将商品自然融入居家、户外、精品店等营销场景。", workflowKey: "scene-image", icon: WandSparkles, color: "cyan", ready: true },
+  { name: "生成产品场景图", group: "AI 创意生图", description: "上传商品图并填写产品描述，生成营销场景图。", workflowKey: "scene-image", icon: WandSparkles, color: "cyan", ready: true },
   { name: "模特穿搭", group: "AI 带货模特", description: "模特图加商品图，生成自然上身展示效果。", workflowKey: "model-wear", icon: Shirt, color: "violet", ready: true },
   { name: "商品详情页", group: "电商商品图", description: "围绕卖点组织四张统一风格的详情页视觉。", workflowKey: "product-detail-page", icon: Layers3, color: "orange", ready: true },
     ],

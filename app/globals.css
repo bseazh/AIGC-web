@@ -171,6 +171,7 @@ a { color: inherit; text-decoration: none; }
 .creator-header span { color: var(--muted); font-size: 12px; }
 .creator-points { height: 34px; padding: 0 12px; display: flex; align-items: center; gap: 6px; border: 1px solid rgba(255,91,110,.18); border-radius: 999px; color: #b74150; background: #fff3f4; font-size: 12px; font-weight: 600; }
 .creator-layout { width: min(1320px, calc(100% - 48px)); min-height: calc(100dvh - 116px); margin: 24px auto; display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 20px; }
+.creator-layout.inspiration-workflow-layout { grid-template-columns: minmax(0, 1fr) 350px 320px; align-items: start; }
 .video-creator-shell { background: radial-gradient(circle at 14% 0, rgba(100,71,255,.16), transparent 31%), radial-gradient(circle at 88% 12%, rgba(32,200,255,.13), transparent 29%), #f4f6f6; }
 .ad-studio-shell { min-height: 100dvh; padding: 26px 40px 60px; background: radial-gradient(circle at 10% 0, rgba(84,152,255,.14), transparent 25%), #f5f7fb; }
 .ad-studio-header { width: min(1160px, 100%); margin: 0 auto 18px; }.ad-studio-header button { height: 52px; padding: 0 21px; display: inline-flex; align-items: center; gap: 9px; border: 0; border-radius: 17px; color: #fff; background: linear-gradient(135deg, #2f9bff, #1ed2c8); box-shadow: 0 14px 28px rgba(40,143,255,.24); font-size: 16px; font-weight: 700; }
@@ -262,6 +263,10 @@ a { color: inherit; text-decoration: none; }
 .upload-drop strong { margin-top: 16px; color: var(--ink); font-size: 16px; }
 .upload-drop small { margin-top: 7px; font-size: 12px; }
 .upload-drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.text-image-empty { width: min(540px, calc(100% - 40px)); min-height: 300px; display: grid; place-content: center; justify-items: center; gap: 10px; border: 1px dashed #b7c8df; border-radius: 12px; color: #6b788c; background: linear-gradient(145deg, rgba(248,251,255,.9), rgba(240,253,250,.78)); text-align: center; }
+.text-image-empty span { width: 62px; height: 62px; display: grid; place-items: center; border-radius: 16px; color: #1689d8; background: #e8f7ff; }
+.text-image-empty strong { color: #26394f; font-size: 17px; }
+.text-image-empty small { max-width: 320px; color: #75869a; font-size: 12px; line-height: 1.6; }
 .source-preview { position: relative; width: 100%; height: 100%; min-height: 640px; display: grid; place-items: center; padding: 26px; background: linear-gradient(145deg, #edf1f4, #f8fafb); }
 .source-preview img { max-width: 100%; max-height: 640px; object-fit: contain; border-radius: 8px; box-shadow: 0 20px 54px rgba(29,36,51,.14); }
 .source-preview > button { position: absolute; top: 18px; right: 18px; color: #a94450; }
@@ -307,6 +312,19 @@ a { color: inherit; text-decoration: none; }
 .result-grid img { width: 100%; height: 100%; min-height: 280px; display: block; object-fit: cover; }
 .result-grid a { position: absolute; right: 10px; bottom: 10px; height: 36px; padding: 0 12px; display: flex; align-items: center; gap: 6px; border-radius: 999px; color: white; background: rgba(24,30,40,.72); backdrop-filter: blur(8px); font-size: 12px; font-weight: 600; }
 .creator-panel { align-self: start; padding: 22px; display: grid; gap: 16px; border: 1px solid rgba(20,120,255,.15); border-radius: 12px; background: rgba(255,255,255,.86); box-shadow: 0 18px 44px rgba(29,36,51,.07); }
+.case-reference-panel { align-self: start; max-height: calc(100dvh - 116px); overflow: hidden; display: grid; grid-template-rows: auto minmax(0,1fr); border: 1px solid rgba(20,120,255,.15); border-radius: 12px; background: rgba(255,255,255,.9); box-shadow: 0 18px 44px rgba(29,36,51,.07); }
+.case-reference-panel > header { min-height: 70px; padding: 17px 18px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #edf1f6; }
+.case-reference-panel h2 { margin: 0; color: #253951; font-size: 15px; }
+.case-reference-panel p { margin: 4px 0 0; color: #7a8a9d; font-size: 11px; line-height: 1.55; }
+.case-reference-grid { min-height: 0; overflow-y: auto; padding: 14px; display: grid; gap: 12px; }
+.case-reference-grid article { overflow: hidden; border: 1px solid #e1eaf3; border-radius: 10px; background: #fff; transition: border-color .18s, box-shadow .18s, transform .18s; }
+.case-reference-grid article:hover, .case-reference-grid article.active { border-color: #93dce5; box-shadow: 0 14px 30px rgba(39,111,152,.12); transform: translateY(-1px); }
+.case-reference-grid img { width: 100%; aspect-ratio: 4 / 3; display: block; object-fit: cover; background: #eef3f8; }
+.case-reference-grid article > div { padding: 12px; display: grid; gap: 7px; }
+.case-reference-grid span { width: fit-content; padding: 4px 7px; border-radius: 999px; color: #1689a9; background: #eefcff; font-size: 10px; font-weight: 800; }
+.case-reference-grid strong { color: #26394f; font-size: 13px; }
+.case-reference-grid p { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin: 0; color: #71839a; font-size: 11px; line-height: 1.55; }
+.case-reference-grid button { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 999px; color: #fff; background: linear-gradient(135deg, #1689d8, #20c5c7); font-size: 12px; font-weight: 900; }
 .panel-title { display: flex; align-items: center; gap: 11px; padding-bottom: 16px; border-bottom: 1px solid #edf1f6; }
 .panel-title > span { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 10px; color: white; background: linear-gradient(135deg, var(--brand), var(--leaf)); }
 .panel-title h1 { margin: 0; font-size: 17px; }
@@ -852,8 +870,9 @@ a { color: inherit; text-decoration: none; }
   .mobile-brand { display: flex; }
   .search-box { margin-right: auto; }
   .tool-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .creator-layout { grid-template-columns: 1fr; }
+  .creator-layout, .creator-layout.inspiration-workflow-layout { grid-template-columns: 1fr; }
   .creator-panel { order: -1; width: 100%; }
+  .case-reference-panel { max-height: none; }
   .upload-stage, .source-preview { min-height: 560px; }
   .wear-stage, .wear-inputs { min-height: auto; }
   .asset-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }

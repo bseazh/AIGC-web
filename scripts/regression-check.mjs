@@ -72,6 +72,18 @@ const checks = [
     "<GenerationProgress",
   ],
   [
+    "AI image generation can submit without a source asset",
+    "lib/product-config.ts",
+    'key: "image-generate"',
+    "minAssets: 0",
+  ],
+  [
+    "Image workflows expose case references and same-style apply",
+    "app/components/image-workflow-page.tsx",
+    "案例参考",
+    "做同款",
+  ],
+  [
     "model wear shows elapsed generation time",
     "app/create/model-wear/page.tsx",
     "<GenerationProgress",
@@ -342,6 +354,12 @@ const checks = [
     "ASPECT_RATIO_SIXTEEN_BY_NINE",
   ],
   [
+    "Worker keeps AI image generation prompt-only instead of product-main-image bias",
+    "scripts/worker.mjs",
+    'workflowKey === "image-generate"',
+    "按提示词生成原创图像",
+  ],
+  [
     "Gemini image generation supports a worker-only proxy",
     "scripts/worker.mjs",
     "GOOGLE_AI_PROXY_URL",
@@ -604,6 +622,11 @@ const checks = [
   [
     "Direct image creation pages require a project",
     "app/create/product-hero/page.tsx",
+    "ProjectRequiredGate",
+  ],
+  [
+    "Direct AI image generation page requires a project",
+    "app/create/image-generate/page.tsx",
     "ProjectRequiredGate",
   ],
   [

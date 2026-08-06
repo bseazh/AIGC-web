@@ -1,4 +1,5 @@
 export const projectWorkflows = {
+  "image-generate": { title: "AI生图", startPath: "/create/image-generate" },
   "product-hero-image": { title: "商品主图", startPath: "/create/product-hero" },
   "scene-image": { title: "场景图生成", startPath: "/create/scene-image" },
   "model-wear": { title: "模特穿搭", startPath: "/create/model-wear" },

@@ -61,6 +61,7 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
   const assetIds = [...new Set(selectAssets(body).filter((id) => typeof id === "string" && id.length > 0))];
   if (assetIds.length < (workflow.minAssets ?? 1)) return NextResponse.json({ code: "ASSET_NOT_READY", message: "请补充必传素材" }, { status: 400 });
   const prompt = typeof body?.prompt === "string" ? body.prompt.trim().slice(0, 1200) : "";
+  if ((workflow.minAssets ?? 1) === 0 && !prompt) return NextResponse.json({ code: "INVALID_REQUEST", message: "请输入提示词" }, { status: 400 });
   const requestedAspectRatio = typeof body.aspectRatio === "string" ? body.aspectRatio : "";
   const requestedScene = typeof body.scene === "string" ? body.scene : "";
   const requestedStyle = typeof body.style === "string" ? body.style : "";
@@ -102,7 +103,7 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
       return NextResponse.json({ code: "INSUFFICIENT_POINTS", message: "积分不足" }, { status: 402 });
     }
     const promptConfig = workflow.key.includes("video") ? await resolvePromptConfig(client, workflow.key, user.id) : undefined;
-    const input = { assetId: assets[0].id, storageKey: assets[0].storage_key, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), assetMimeTypes: assets.map((asset) => asset.mime_type), prompt, aspectRatio, duration, resolution, scene, style, outputs: workflow.outputsPerTask, ...(adminExempt ? { billingMode: ADMIN_EXEMPT_BILLING_MODE, quotedPoints: points } : {}), ...(promptConfig ? { promptConfig } : {}), ...(inputExtras?.(body) || {}) };
+    const input = { assetId: assets[0]?.id || null, storageKey: assets[0]?.storage_key || null, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), assetMimeTypes: assets.map((asset) => asset.mime_type), prompt, aspectRatio, duration, resolution, scene, style, outputs: workflow.outputsPerTask, ...(adminExempt ? { billingMode: ADMIN_EXEMPT_BILLING_MODE, quotedPoints: points } : {}), ...(promptConfig ? { promptConfig } : {}), ...(inputExtras?.(body) || {}) };
     await client.query(
       `INSERT INTO generation_tasks (id, user_id, workflow_key, status, points, input_json, idempotency_key, request_id)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,

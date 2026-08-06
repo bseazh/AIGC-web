@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowLeft, Check, Download, FolderOpen, ImagePlus, LoaderCircle, Sparkles, Upload, X } from "lucide-react";
+import { ArrowLeft, Check, Download, FolderOpen, ImagePlus, LoaderCircle, Sparkles, Upload, Wand2, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { GenerationProgress } from "@/app/components/generation-progress";
+import type { ImageWorkflowCase } from "@/lib/image-workflow-cases";
 import { appendProjectId } from "@/lib/project-workflows";
 
 type Props = {
@@ -23,6 +24,10 @@ type Props = {
   styleLabel?: string;
   nextStepHref?: string;
   nextStepLabel?: string;
+  requireSource?: boolean;
+  cases?: readonly ImageWorkflowCase[];
+  productDescriptionLabel?: string;
+  productDescriptionPlaceholder?: string;
 };
 
 type Account = { user: { isAdministrator?: boolean }; wallet: { availablePoints: number } };
@@ -49,6 +54,10 @@ export function ImageWorkflowPage({
   styleLabel = "视觉风格",
   nextStepHref,
   nextStepLabel,
+  requireSource = true,
+  cases = [],
+  productDescriptionLabel,
+  productDescriptionPlaceholder = "填写商品名称、材质、卖点、适用场景等信息",
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -64,6 +73,8 @@ export function ImageWorkflowPage({
   const [scene, setScene] = useState(scenes[0]);
   const [style, setStyle] = useState(styles[0]);
   const [prompt, setPrompt] = useState("");
+  const [productDescription, setProductDescription] = useState("");
+  const [appliedCaseId, setAppliedCaseId] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState("");
   const [task, setTask] = useState<TaskResult | null>(null);
@@ -117,6 +128,16 @@ export function ImageWorkflowPage({
     setError("");
     setTask(null);
     setPhase("idle");
+  };
+
+  const applyCase = (item: ImageWorkflowCase) => {
+    if (item.ratio && ratios.includes(item.ratio)) setRatio(item.ratio);
+    if (item.scene && scenes.includes(item.scene)) setScene(item.scene);
+    if (item.style && styles.includes(item.style)) setStyle(item.style);
+    setPrompt(item.prompt.slice(0, 1200));
+    if (item.productDescription) setProductDescription(item.productDescription.slice(0, 900));
+    setAppliedCaseId(item.id);
+    resetTask();
   };
 
   const chooseFile = (nextFile?: File) => {
@@ -176,7 +197,7 @@ export function ImageWorkflowPage({
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if ((!file && !selectedAsset) || ["uploading", "generating"].includes(phase)) return;
+    if ((requireSource && !file && !selectedAsset) || (!requireSource && !prompt.trim()) || ["uploading", "generating"].includes(phase)) return;
     setError("");
     setTask(null);
     setPhase("uploading");
@@ -197,10 +218,14 @@ export function ImageWorkflowPage({
         });
         assetId = presign.assetId;
       }
+      const composedPrompt = [
+        productDescription.trim() ? `商品描述：${productDescription.trim()}` : "",
+        prompt.trim() ? `提示词：${prompt.trim()}` : "",
+      ].filter(Boolean).join("\n");
       const created = await request(submitUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({ assetId, prompt, aspectRatio: ratio, scene, style }),
+        body: JSON.stringify({ assetId, prompt: composedPrompt || prompt, productDescription, aspectRatio: ratio, scene, style }),
       });
       setPhase("generating");
       await pollTask(created.taskId);
@@ -219,11 +244,14 @@ export function ImageWorkflowPage({
       <div><strong>{title}</strong><span>芭乐AIGC</span></div>
       <div className="creator-points"><Sparkles size={15} />{account.user.isAdministrator ? "管理员免积分" : `${account.wallet.availablePoints} 积分`}</div>
     </header>
-    <form className="creator-layout" onSubmit={submit}>
+    <form className={cases.length ? "creator-layout inspiration-workflow-layout" : "creator-layout"} onSubmit={submit}>
       <section className="upload-stage">
         {!preview ? <div className="image-source-choice">
+          {!requireSource && <div className="text-image-empty"><span><Wand2 size={30} /></span><strong>输入提示词即可生成</strong><small>也可以从右侧案例选择“做同款”快速回填创作方向</small></div>}
+          {requireSource && <>
           <label className="upload-drop"><span><ImagePlus size={28} /></span><strong>{sourceTitle}</strong><small>{sourceHint}</small><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => chooseFile(event.target.files?.[0])} /></label>
           <button type="button" className="image-library-button" onClick={openLibrary}><FolderOpen size={17} />从内容资产选择</button>
+          </>}
         </div> : <div className="source-preview">
           <img src={preview} alt="待生成商品素材" />
           <div className="source-preview-actions">{selectedAsset && <span>已引用资产素材</span>}<button type="button" className="icon-button" aria-label="移除图片" onClick={() => { if (preview.startsWith("blob:")) URL.revokeObjectURL(preview); setFile(null); setSelectedAsset(null); setPreview(""); resetTask(); }}><X size={18} /></button></div>
@@ -236,11 +264,21 @@ export function ImageWorkflowPage({
         {showAspectRatio && <><label className="field-label">画幅比例</label><div className="ratio-control">{ratios.map((item) => <button type="button" key={item} className={ratio === item ? "active" : ""} onClick={() => setRatio(item)}>{item}</button>)}</div></>}
         <label className="field-label">{sceneLabel}<select value={scene} onChange={(event) => setScene(event.target.value)}>{scenes.map((item) => <option key={item}>{item}</option>)}</select></label>
         <label className="field-label">{styleLabel}<select value={style} onChange={(event) => setStyle(event.target.value)}>{styles.map((item) => <option key={item}>{item}</option>)}</select></label>
-        <label className="field-label">补充要求<textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={1200} placeholder="例如：商品放在窗边桌面，保留自然投影与留白" /><small>{prompt.length}/1200</small></label>
+        {productDescriptionLabel && <label className="field-label">{productDescriptionLabel}<textarea value={productDescription} onChange={(event) => setProductDescription(event.target.value)} maxLength={900} placeholder={productDescriptionPlaceholder} /><small>{productDescription.length}/900</small></label>}
+        <label className="field-label">{requireSource ? "提示词" : "提示词"}<textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={1200} placeholder={requireSource ? "例如：商品放在窗边桌面，保留自然投影与留白" : "请输入图像描述，例如：一只可爱的橘猫在阳光下打盹，温暖真实摄影"} /><small>{prompt.length}/1200</small></label>
         {error && <p className="creator-error" role="alert">{error}</p>}
         {phase === "succeeded" && <p className="creator-success"><Check size={16} />{outputCount} 张结果已保存到内容资产</p>}
-        <button className="generate-button" type="submit" disabled={(!file && !selectedAsset) || busy || (!account.user.isAdministrator && account.wallet.availablePoints < pointsPerTask)}><Upload size={18} />{busy ? "任务处理中" : !account.user.isAdministrator && account.wallet.availablePoints < pointsPerTask ? "积分不足" : submitLabel}</button>
+        <button className="generate-button" type="submit" disabled={(requireSource && !file && !selectedAsset) || (!requireSource && !prompt.trim()) || busy || (!account.user.isAdministrator && account.wallet.availablePoints < pointsPerTask)}><Upload size={18} />{busy ? "任务处理中" : !account.user.isAdministrator && account.wallet.availablePoints < pointsPerTask ? "积分不足" : submitLabel}</button>
       </aside>
+      {cases.length > 0 && <aside className="case-reference-panel">
+        <header><div><h2>案例参考</h2><p>选择案例可一键回填入参</p></div></header>
+        <div className="case-reference-grid">
+          {cases.map((item) => <article className={appliedCaseId === item.id ? "active" : ""} key={item.id}>
+            <img src={item.image} alt={item.title} />
+            <div><span>{item.tag}</span><strong>{item.title}</strong>{item.productDescription && <p>{item.productDescription}</p>}<button type="button" onClick={() => applyCase(item)}><Wand2 size={14} />做同款</button></div>
+          </article>)}
+        </div>
+      </aside>}
     </form>
     {libraryOpen && <div className="asset-picker-backdrop" role="dialog" aria-modal="true" aria-label="选择图片素材"><section className="asset-picker-modal"><header><div><span>内容资产</span><h2>选择图片素材</h2></div><button type="button" className="icon-button" onClick={() => setLibraryOpen(false)}><X size={18} /></button></header>{assetsLoading ? <div className="asset-picker-empty"><LoaderCircle size={22} />正在加载素材</div> : assets.length ? <div className="asset-picker-grid">{assets.map((asset) => <button type="button" key={asset.id} onClick={() => selectAsset(asset)}><img src={asset.url} alt="" /><strong>{asset.originalName}</strong><small>{asset.kind === "OUTPUT" ? "生成结果" : "上传素材"}</small></button>)}</div> : <div className="asset-picker-empty"><FolderOpen size={25} /><strong>暂无图片素材</strong><p>上传或完成一次生成后，素材会自动显示在这里。</p></div>}</section></div>}
   </main>;

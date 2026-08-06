@@ -1,4 +1,5 @@
 export const workflowNames: Record<string, string> = {
+  "image-generate": "AI生图",
   "product-hero-image": "商品主图",
   "scene-image": "场景图生成",
   "model-wear": "模特穿搭",
