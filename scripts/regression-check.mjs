@@ -78,6 +78,12 @@ const checks = [
     "minAssets: 0",
   ],
   [
+    "AI image generation uses a dedicated case-board layout",
+    "app/components/ai-image-generate-page.tsx",
+    "yh-image-form-card",
+    "yh-case-board",
+  ],
+  [
     "Image workflows expose case references and same-style apply",
     "app/components/image-workflow-page.tsx",
     "案例参考",
