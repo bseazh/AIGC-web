@@ -11,7 +11,6 @@ import {
   ScanSearch,
   Shirt,
   Sparkles,
-  Video,
   WandSparkles,
 } from "lucide-react";
 import Link from "next/link";
@@ -186,18 +185,6 @@ const imageSections: ToolSection[] = [
   },
 ];
 
-const videoTools: ToolCard[] = [
-  {
-    title: "视频创作中心",
-    category: "带货视频",
-    description: "产品广告大片、复刻带货、Seedance2 视频创作集中入口。",
-    href: "/create/product-video",
-    icon: Video,
-    tone: "violet",
-    cover: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=900&q=88",
-  },
-];
-
 function hrefForTool(tool: ToolCard) {
   if (tool.workflowKey) return projectGateHref(tool.workflowKey);
   return tool.href || "/tools";
@@ -300,16 +287,6 @@ export default function ToolsPage() {
                 </div>
               </section>
             ))}
-          </div>
-        </section>
-
-        <section className="yh-tools-video-strip" aria-label="视频创作">
-          <header>
-            <span>VIDEO CREATION</span>
-            <h2>视频创作</h2>
-          </header>
-          <div className="yh-tools-grid">
-            {videoTools.map((tool) => <ToolTile tool={tool} key={tool.title} />)}
           </div>
         </section>
       </div>
