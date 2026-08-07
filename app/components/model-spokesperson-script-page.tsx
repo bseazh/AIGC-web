@@ -18,7 +18,7 @@ import {
   Video,
   WandSparkles,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { VideoGenerationProgress } from "@/app/components/video-generation-progress";
@@ -61,6 +61,13 @@ type Draft = {
   productBrief: string;
   tone: string;
   duration: number;
+  productImages: Array<{
+    id: string;
+    name: string;
+    preview: string;
+    byteSize: number;
+    assetId?: string;
+  }>;
   plans: ScriptPlan[];
   selectedPlanId: string;
   result: ScriptResult | null;
@@ -197,8 +204,12 @@ function createBriefFromCase(item: SpokespersonCase) {
 
 export function ModelSpokespersonScriptPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const projectId = searchParams?.get("projectId") || null;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
+  const [projectTitle, setProjectTitle] = useState("模特口播项目");
+  const [draftHydrated, setDraftHydrated] = useState(false);
   const [productName, setProductName] = useState("");
   const [productBrief, setProductBrief] = useState("");
   const [tone, setTone] = useState("auto");
@@ -217,6 +228,7 @@ export function ModelSpokespersonScriptPage() {
   const [videoError, setVideoError] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [imageUploading, setImageUploading] = useState(false);
   const productImagesRef = useRef<ProductImage[]>([]);
 
   useEffect(() => {
@@ -229,21 +241,52 @@ export function ModelSpokespersonScriptPage() {
   }, [router]);
 
   useEffect(() => {
-    const stored = localStorage.getItem(draftStorageKey);
-    if (!stored) return;
-    try {
-      const draft = JSON.parse(stored) as Partial<Draft>;
+    let cancelled = false;
+    const applyDraft = (draft: Partial<Draft>) => {
+      if (cancelled) return;
       setProductName(draft.productName || "");
       setProductBrief(draft.productBrief || "");
       if (["auto", "natural", "enthusiastic", "professional"].includes(draft.tone || "")) setTone(draft.tone!);
+      if (Array.isArray(draft.productImages)) {
+        setProductImages(
+          draft.productImages
+            .filter((image) => typeof image?.assetId === "string" && typeof image.preview === "string")
+            .map((image) => ({ ...image, file: undefined })),
+        );
+      }
       if (Array.isArray(draft.plans)) setPlans(draft.plans);
       if (typeof draft.selectedPlanId === "string") setSelectedPlanId(draft.selectedPlanId);
       if (draft.result?.segments?.length) setResult(draft.result);
       if (draft.videoPack?.finalPrompt) setVideoPack(draft.videoPack);
-    } catch {
-      localStorage.removeItem(draftStorageKey);
-    }
-  }, []);
+    };
+
+    const load = async () => {
+      try {
+        if (projectId) {
+          const response = await fetch(`/api/workflow-drafts/${projectId}/`, { cache: "no-store" });
+          const body = await response.json().catch(() => null);
+          if (response.ok && body?.draft?.payload) {
+            if (typeof body.draft.title === "string" && body.draft.title.trim()) setProjectTitle(body.draft.title);
+            applyDraft(body.draft.payload as Partial<Draft>);
+            return;
+          }
+        }
+        const stored = localStorage.getItem(draftStorageKey);
+        if (!stored) return;
+        try {
+          applyDraft(JSON.parse(stored) as Partial<Draft>);
+        } catch {
+          localStorage.removeItem(draftStorageKey);
+        }
+      } finally {
+        if (!cancelled) setDraftHydrated(true);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
   useEffect(() => {
     productImagesRef.current = productImages;
@@ -268,6 +311,13 @@ export function ModelSpokespersonScriptPage() {
     productBrief,
     tone,
     duration,
+    productImages: productImages.map(({ id, name, preview, byteSize, assetId }) => ({
+      id,
+      name,
+      preview: assetId ? `/api/assets/${assetId}/download/` : preview,
+      byteSize,
+      assetId,
+    })),
     plans,
     selectedPlanId,
     result,
@@ -275,11 +325,25 @@ export function ModelSpokespersonScriptPage() {
   });
 
   useEffect(() => {
+    if (!draftHydrated) return;
     const timer = window.setTimeout(() => {
-      localStorage.setItem(draftStorageKey, JSON.stringify(draftValue()));
-    }, 600);
+      const payload = draftValue();
+      localStorage.setItem(draftStorageKey, JSON.stringify(payload));
+      if (projectId) {
+        void fetch("/api/workflow-drafts/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: projectId,
+            workflowKey: "model-spokesperson-script",
+            title: projectTitle,
+            payload,
+          }),
+        });
+      }
+    }, 800);
     return () => window.clearTimeout(timer);
-  }, [duration, plans, productBrief, productName, result, selectedPlanId, tone, videoPack]);
+  }, [draftHydrated, duration, plans, productBrief, productImages, projectId, projectTitle, result, selectedPlanId, tone, videoPack]);
 
   const saveDraft = () => {
     localStorage.setItem(draftStorageKey, JSON.stringify(draftValue()));
@@ -287,22 +351,40 @@ export function ModelSpokespersonScriptPage() {
     window.setTimeout(() => setNotice(""), 2400);
   };
 
-  const handleImages = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleImages = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || [])
       .filter((file) => file.type.startsWith("image/") && file.size <= 10 * 1024 * 1024)
       .slice(0, Math.max(0, 4 - productImages.length));
     if (!files.length) return;
-    setProductImages((current) => [
-      ...current,
-      ...files.map((file) => ({
-        id: crypto.randomUUID(),
-        name: file.name,
-        preview: URL.createObjectURL(file),
-        file,
-        byteSize: file.size,
-      })),
-    ]);
     event.target.value = "";
+    setImageUploading(true);
+    setError("");
+    setNotice("正在保存商品图...");
+    try {
+      const uploaded = await Promise.all(
+        files.map(async (file) => {
+          const localPreview = URL.createObjectURL(file);
+          const item = {
+            id: crypto.randomUUID(),
+            name: file.name,
+            preview: localPreview,
+            file,
+            byteSize: file.size,
+          };
+          const assetId = await uploadRecreateItem(item);
+          URL.revokeObjectURL(localPreview);
+          return { ...item, assetId, preview: `/api/assets/${assetId}/download/`, file: undefined };
+        }),
+      );
+      setProductImages((current) => [...current, ...uploaded]);
+      setNotice("商品图已保存到当前项目，刷新后会自动恢复");
+      window.setTimeout(() => setNotice(""), 2400);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "商品图保存失败");
+      setNotice("");
+    } finally {
+      setImageUploading(false);
+    }
   };
 
   const removeImage = (id: string) =>
@@ -596,9 +678,9 @@ export function ModelSpokespersonScriptPage() {
               <small>后续会自动生成商品多视图参考板</small>
             </header>
             <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={handleImages} />
-            <button type="button" className="spokesperson-upload-drop" onClick={() => fileInputRef.current?.click()}>
+            <button type="button" className="spokesperson-upload-drop" disabled={imageUploading} onClick={() => fileInputRef.current?.click()}>
               <ImagePlus size={22} />
-              <span>上传商品图</span>
+              <span>{imageUploading ? "正在保存商品图" : "上传商品图"}</span>
               <small>最多 4 张，JPG / PNG / WebP</small>
             </button>
             {productImages.length ? (
