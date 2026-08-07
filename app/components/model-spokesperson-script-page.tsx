@@ -68,6 +68,7 @@ type Draft = {
     byteSize: number;
     assetId?: string;
   }>;
+  stageAssets: Partial<Record<SpokespersonStage, StageAsset>>;
   plans: ScriptPlan[];
   selectedPlanId: string;
   result: ScriptResult | null;
@@ -116,6 +117,14 @@ type VideoTask = {
   errorCode?: string;
   outputs?: Array<{ assetId: string; mimeType?: string; name?: string; url: string }>;
 };
+type StageAsset = {
+  assetId: string;
+  url: string;
+  mimeType?: string;
+  name?: string;
+};
+type SpokespersonStage = "productMultiview" | "modelReference" | "storyboard";
+type StageTask = VideoTask & { stage: SpokespersonStage };
 type SpokespersonCase = {
   id: string;
   title: string;
@@ -221,6 +230,9 @@ export function ModelSpokespersonScriptPage() {
   const [result, setResult] = useState<ScriptResult | null>(null);
   const [videoPack, setVideoPack] = useState<VideoPack | null>(null);
   const [videoTask, setVideoTask] = useState<VideoTask | null>(null);
+  const [stageTasks, setStageTasks] = useState<Partial<Record<SpokespersonStage, StageTask>>>({});
+  const [stageAssets, setStageAssets] = useState<Partial<Record<SpokespersonStage, StageAsset>>>({});
+  const [stageBusy, setStageBusy] = useState<SpokespersonStage | "">("");
   const [videoPhase, setVideoPhase] = useState<"idle" | "uploading" | "generating" | "succeeded" | "failed">("idle");
   const [busy, setBusy] = useState(false);
   const [packBusy, setPackBusy] = useState(false);
@@ -254,6 +266,7 @@ export function ModelSpokespersonScriptPage() {
             .map((image) => ({ ...image, file: undefined })),
         );
       }
+      if (draft.stageAssets && typeof draft.stageAssets === "object") setStageAssets(draft.stageAssets);
       if (Array.isArray(draft.plans)) setPlans(draft.plans);
       if (typeof draft.selectedPlanId === "string") setSelectedPlanId(draft.selectedPlanId);
       if (draft.result?.segments?.length) setResult(draft.result);
@@ -318,6 +331,7 @@ export function ModelSpokespersonScriptPage() {
       byteSize,
       assetId,
     })),
+    stageAssets,
     plans,
     selectedPlanId,
     result,
@@ -343,7 +357,7 @@ export function ModelSpokespersonScriptPage() {
       }
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [draftHydrated, duration, plans, productBrief, productImages, projectId, projectTitle, result, selectedPlanId, tone, videoPack]);
+  }, [draftHydrated, duration, plans, productBrief, productImages, projectId, projectTitle, result, selectedPlanId, stageAssets, tone, videoPack]);
 
   const saveDraft = () => {
     localStorage.setItem(draftStorageKey, JSON.stringify(draftValue()));
@@ -559,6 +573,92 @@ export function ModelSpokespersonScriptPage() {
     }
   };
 
+  const traceStage = (stage: string, details: Record<string, unknown>) => {
+    void fetch("/api/workflows/model-spokesperson-script/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "trace", stage, details }),
+    }).catch(() => undefined);
+  };
+
+  const generateStage = async (stage: SpokespersonStage) => {
+    if (!selectedPlan) {
+      setVideoError("请先选择一个口播方案");
+      return;
+    }
+    if (!productImages.length) {
+      setVideoError("请先上传至少一张商品图片");
+      return;
+    }
+    const pack = videoPack || (await generateVideoPack());
+    if (!pack) return;
+    const originalAssetIds = productImages.map((image) => image.assetId).filter((id): id is string => Boolean(id));
+    const sourceIds =
+      stage === "productMultiview"
+        ? originalAssetIds
+        : stage === "modelReference"
+          ? [stageAssets.productMultiview?.assetId || originalAssetIds[0]].filter(Boolean)
+          : [stageAssets.productMultiview?.assetId, stageAssets.modelReference?.assetId, originalAssetIds[0]].filter(
+              (id): id is string => Boolean(id),
+            );
+    if (!sourceIds.length) {
+      setVideoError("阶段素材还没有准备好，请先完成上一步");
+      return;
+    }
+    const stagePrompt =
+      stage === "productMultiview"
+        ? `商品多视图阶段。只生成同一款${productName}的真实商品多视图参考板，必须包含正面、左右45度、侧面、背面、顶部或底部、材质细节和使用方式小图。保持产品轮廓、材质、颜色、接口、按键、Logo位置和比例一致，不要生成真人，不要生成文字或水印。${pack.productMultiview.summary}`
+        : stage === "modelReference"
+          ? `模特参考阶段。基于商品多视图生成一位隐私安全的虚拟真人模特参考板，必须是完整人体，包含正面、侧面、背面、3/4角度、站姿和手部动作参考。脸部不要逐像素复制真实人物，生成后续可做轻微局部遮挡，保持身体比例、服装穿着关系和动作可执行性。不要输出空衣服、衣架、无头人体或卡通人物。${pack.modelRecommendation.reason}`
+          : `12格分镜参考阶段。把已生成的商品多视图、模特参考和商品原图综合为一张清晰的12格动作分镜板，严格按以下时间顺序表现连续口播动作、身体重心、手势、商品展示方向和镜头运动。每格都要有不同且连续的姿态，不要空白格，不要只生成商品静物，不要生成文字水印。${pack.storyboard.frames.map((frame) => `第${frame.index}格 ${frame.timeRange}：${frame.visual}；动作：${frame.camera}；口播：${frame.narration}`).join("；")}`;
+    setStageBusy(stage);
+    setVideoError("");
+    setStageTasks((current) => ({ ...current, [stage]: { stage, status: "QUEUED" } }));
+    traceStage("stage_started", { stage, sourceIds, productName, selectedPlanId });
+    try {
+      const response = await fetch("/api/tasks/recreate-reference/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+        body: JSON.stringify({
+          draftId: projectId,
+          assetIds: sourceIds,
+          aspectRatio: "16:9",
+          scene: stage === "productMultiview" ? "商品多视图" : stage === "modelReference" ? "人物多视图" : "场景多视图",
+          style: stage === "modelReference" ? "隐私遮挡" : "参考板",
+          prompt: stagePrompt,
+        }),
+      });
+      const created = await response.json().catch(() => null);
+      if (!response.ok || !created?.taskId) throw new Error(created?.message || "阶段任务创建失败");
+      traceStage("stage_task_created", { stage, taskId: created.taskId });
+      const deadline = Date.now() + 15 * 60 * 1000;
+      while (Date.now() < deadline) {
+        const task = await getTaskStatus(created.taskId);
+        setStageTasks((current) => ({ ...current, [stage]: { ...task, stage } }));
+        if (task.status === "SUCCEEDED" && task.outputs?.[0]) {
+          const output = task.outputs[0];
+          const asset = { assetId: output.assetId, url: output.url, mimeType: output.mimeType, name: output.name };
+          setStageAssets((current) => ({ ...current, [stage]: asset }));
+          traceStage("stage_succeeded", { stage, taskId: created.taskId, assetId: output.assetId, mimeType: output.mimeType || "" });
+          setNotice(stage === "productMultiview" ? "商品多视图已生成" : stage === "modelReference" ? "模特参考已生成" : "12格分镜图已生成");
+          return asset;
+        }
+        if (["FAILED", "REJECTED", "CANCELED"].includes(task.status)) {
+          throw new Error(task.errorCode || "阶段生成失败");
+        }
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+      throw new Error("阶段任务仍在生成中，请稍后在任务中心查看");
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "阶段生成失败";
+      setStageTasks((current) => ({ ...current, [stage]: { stage, status: "FAILED", errorCode: message } }));
+      setVideoError(message);
+      traceStage("stage_failed", { stage, message });
+    } finally {
+      setStageBusy("");
+    }
+  };
+
   const pollVideoTask = async (taskId: string) => {
     const deadline = Date.now() + 15 * 60 * 1000;
     setVideoPhase("generating");
@@ -584,6 +684,10 @@ export function ModelSpokespersonScriptPage() {
       setVideoError("请先选择一个口播方案");
       return;
     }
+    if (!stageAssets.storyboard) {
+      setVideoError("请先依次生成商品多视图、模特参考和12格分镜图");
+      return;
+    }
     setSubmitBusy(true);
     setVideoError("");
     try {
@@ -597,6 +701,12 @@ export function ModelSpokespersonScriptPage() {
       );
       if (!uploadedImages.length) throw new Error("请先上传至少一张商品图片");
       setProductImages(uploadedImages);
+      const stagedAssetIds = [
+        stageAssets.productMultiview?.assetId,
+        stageAssets.modelReference?.assetId,
+        stageAssets.storyboard?.assetId,
+        ...uploadedImages.map((image) => image.assetId),
+      ].filter((id): id is string => Boolean(id));
       const response = await fetch("/api/tasks/model-spokesperson-video/", {
         method: "POST",
         headers: {
@@ -604,7 +714,7 @@ export function ModelSpokespersonScriptPage() {
           "Idempotency-Key": crypto.randomUUID(),
         },
         body: JSON.stringify({
-          assetIds: uploadedImages.map((image) => image.assetId).filter((id): id is string => Boolean(id)),
+          assetIds: [...new Set(stagedAssetIds)].slice(0, 6),
           prompt: pack.finalPrompt,
           aspectRatio: "9:16",
           duration,
@@ -950,6 +1060,42 @@ export function ModelSpokespersonScriptPage() {
                     <p>点一下就会先生成任务包，再自动提交视频任务。</p>
                   </div>
                 )}
+                <section className="spokesperson-stage-panel">
+                  <header>
+                    <div>
+                      <strong>分阶段素材</strong>
+                      <small>每一步单独生成并保留结果，方便检查后再进入下一步</small>
+                    </div>
+                    <span>{Object.keys(stageAssets).length}/3 已完成</span>
+                  </header>
+                  <div className="spokesperson-stage-list">
+                    {([
+                      ["productMultiview", "1. 商品多视图", "先确认产品的正侧背、细节和结构。"],
+                      ["modelReference", "2. 模特参考", "生成隐私安全的完整人体和动作参考。"],
+                      ["storyboard", "3. 12 格分镜图", "把口播、姿态、商品展示和镜头顺序合成一张参考图。"],
+                    ] as Array<[SpokespersonStage, string, string]>).map(([stage, title, description]) => {
+                      const task = stageTasks[stage];
+                      const asset = stageAssets[stage];
+                      const locked =
+                        (stage === "modelReference" && !stageAssets.productMultiview) ||
+                        (stage === "storyboard" && !stageAssets.modelReference);
+                      return (
+                        <article key={stage} className={asset ? "ready" : ""}>
+                          <div>
+                            <strong>{title}</strong>
+                            <small>{description}</small>
+                            {task?.status === "FAILED" ? <em>{task.errorCode || "生成失败"}</em> : null}
+                          </div>
+                          {asset ? <img src={asset.url} alt={title} /> : <span className="spokesperson-stage-placeholder">待生成</span>}
+                          <button type="button" onClick={() => void generateStage(stage)} disabled={Boolean(stageBusy) || locked || !selectedPlan}>
+                            {stageBusy === stage ? <LoaderCircle className="generation-spinner" size={14} /> : <Sparkles size={14} />}
+                            {stageBusy === stage ? "生成中" : asset ? "重新生成" : "生成本步"}
+                          </button>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
                 {videoError ? (
                   <p className="creator-error" role="alert">
                     {videoError}
@@ -963,7 +1109,7 @@ export function ModelSpokespersonScriptPage() {
                     durationSeconds={duration}
                   />
                 ) : null}
-                {videoTask?.status === "SUCCEEDED" && videoTask.outputs?.[0] ? (
+                {videoTask?.status === "SUCCEEDED" && videoTask.outputs?.[0] && videoTask.outputs[0].mimeType?.startsWith("video/") ? (
                   <div className="spokesperson-video-preview">
                     <video src={videoTask.outputs[0].url} controls playsInline />
                     <div>
@@ -975,12 +1121,17 @@ export function ModelSpokespersonScriptPage() {
                     </div>
                   </div>
                 ) : null}
+                {videoTask?.status === "SUCCEEDED" && videoTask.outputs?.[0] && !videoTask.outputs[0].mimeType?.startsWith("video/") ? (
+                  <p className="creator-error" role="alert">
+                    任务返回了非视频素材（{videoTask.outputs[0].mimeType || "未知类型"}），已阻止用视频播放器加载。请重新提交任务。
+                  </p>
+                ) : null}
                 <div className="spokesperson-pack-actions">
                   <button type="button" onClick={() => void generateVideoPack()} disabled={packBusy || submitBusy || !selectedPlan}>
                     {packBusy ? <LoaderCircle className="generation-spinner" size={15} /> : <Layers3 size={15} />}
                     {packBusy ? "生成任务包中" : "仅生成任务包"}
                   </button>
-                  <button type="button" onClick={() => void submitVideo()} disabled={submitBusy || packBusy || busy || !selectedPlan || !productImages.length}>
+                  <button type="button" onClick={() => void submitVideo()} disabled={submitBusy || packBusy || busy || Boolean(stageBusy) || !selectedPlan || !productImages.length || !stageAssets.storyboard}>
                     {submitBusy ? <LoaderCircle className="generation-spinner" size={15} /> : <Send size={15} />}
                     {submitBusy ? "提交中" : "生成并提交视频"}
                   </button>

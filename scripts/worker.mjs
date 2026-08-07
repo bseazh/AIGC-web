@@ -626,7 +626,7 @@ const worker = new Worker("generation", async (job) => {
     const inputUrls = await Promise.all(storageKeys.map((key) => cosUrl(key, "GET", 3600)));
     const temporaryOutputs = task.workflow_key === "video-mix"
       ? [await generateMix(inputUrls, task.input_json, task)]
-      : ["product-ad-video", "recreate-video", "seedance-video"].includes(task.workflow_key)
+      : ["product-ad-video", "recreate-video", "seedance-video", "model-spokesperson-video"].includes(task.workflow_key)
       ? [{ url: await generateVideo(inputUrls, task.input_json, task.workflow_key, task.id), temporaryKey: null }]
       : await Promise.all(Array.from({ length: task.input_json.outputs || 4 }, (_, index) => generateOne(inputUrls, task.input_json, index, task.workflow_key, task.id)));
     temporaryKeys = temporaryOutputs.flatMap((output) => output.temporaryKey ? [output.temporaryKey] : []);
@@ -635,7 +635,7 @@ const worker = new Worker("generation", async (job) => {
       const response = await fetch(output.url);
       if (!response.ok) throw new Error(`Could not download provider output ${response.status}`);
       const buffer = Buffer.from(await response.arrayBuffer());
-      const isVideoTask = ["product-ad-video", "recreate-video", "seedance-video", "video-mix"].includes(task.workflow_key);
+      const isVideoTask = ["product-ad-video", "recreate-video", "seedance-video", "model-spokesperson-video", "video-mix"].includes(task.workflow_key);
       const provider = output.provider || (isVideoTask ? "ark" : "sophnet");
       const model = output.model || (isVideoTask ? (process.env.ARK_MODEL || "doubao-seedance-2-0-260128") : process.env.AI_MODEL);
       const contentType = response.headers.get("content-type")?.split(";")[0] || (isVideoTask ? "video/mp4" : "image/png");

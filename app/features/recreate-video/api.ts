@@ -123,7 +123,7 @@ export async function getTaskStatus(taskId: string) {
   if (!response.ok) throw new Error(task?.message || "任务查询失败");
   return task as Result & {
     errorCode?: string;
-    outputs?: Array<{ assetId: string; url: string; name?: string }>;
+    outputs?: Array<{ assetId: string; url: string; name?: string; mimeType?: string }>;
   };
 }
 

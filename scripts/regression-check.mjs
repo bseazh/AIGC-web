@@ -857,6 +857,21 @@ const checks = [
     "视频任务包",
   ],
   [
+    "Model spokesperson video routes through Ark video generation",
+    "scripts/worker.mjs",
+    '"model-spokesperson-video", "video-mix"',
+  ],
+  [
+    "Model spokesperson blocks non-video outputs from video preview",
+    "app/components/model-spokesperson-script-page.tsx",
+    "任务返回了非视频素材",
+  ],
+  [
+    "Model spokesperson exposes staged debug generation",
+    "app/components/model-spokesperson-script-page.tsx",
+    "分阶段素材",
+  ],
+  [
     "Model spokesperson scripts are server generated and rate limited",
     "app/api/workflows/model-spokesperson-script/route.ts",
     "spokesperson-script:attempts",

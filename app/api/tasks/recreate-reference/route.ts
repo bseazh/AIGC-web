@@ -32,5 +32,14 @@ async function logClientTrace(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   if (request.nextUrl.searchParams.get("debug") === "1") return logClientTrace(request);
-  return createImageTask(request, recreateReferenceWorkflow);
+  return createImageTask(
+    request,
+    recreateReferenceWorkflow,
+    (body) => {
+      if (Array.isArray(body.assetIds)) {
+        return body.assetIds.filter((id): id is string => typeof id === "string").slice(0, 4);
+      }
+      return typeof body.assetId === "string" ? [body.assetId] : [];
+    },
+  );
 }

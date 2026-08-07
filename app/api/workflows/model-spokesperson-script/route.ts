@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { audit } from "@/lib/audit";
 import { db } from "@/lib/db";
+import { structuredLog, requestContext } from "@/lib/logger";
 import { redis } from "@/lib/redis";
 import { authenticatedUser } from "@/lib/session";
 
@@ -548,6 +549,17 @@ export async function POST(request: NextRequest) {
   const user = await authenticatedUser(request);
   if (!user)
     return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401 });
+
+  const traceBody = await request.clone().json().catch(() => null);
+  if (traceBody?.mode === "trace") {
+    structuredLog("info", "model_spokesperson_stage_trace", {
+      ...requestContext(request),
+      userId: user.id,
+      stage: text(traceBody.stage, 80) || "unknown",
+      details: traceBody.details && typeof traceBody.details === "object" ? traceBody.details : {},
+    });
+    return NextResponse.json({ ok: true });
+  }
 
   const attemptsKey = `spokesperson-script:attempts:${user.id}`;
   const attempts = await redis.incr(attemptsKey);
