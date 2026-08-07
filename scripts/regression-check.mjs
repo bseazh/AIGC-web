@@ -882,6 +882,31 @@ const checks = [
     "审核安全提交策略",
   ],
   [
+    "Model spokesperson avoids in-video subtitles",
+    "app/components/model-spokesperson-script-page.tsx",
+    "不要在画面中生成字幕",
+  ],
+  [
+    "Model spokesperson storyboard image avoids subtitles",
+    "app/components/model-spokesperson-script-page.tsx",
+    "口播内容只作为内部节奏绑定，不能画进分镜图",
+  ],
+  [
+    "Model spokesperson exposes audio generation toggle",
+    "app/components/model-spokesperson-script-page.tsx",
+    "生成讲解声音",
+  ],
+  [
+    "Model spokesperson passes audio option to tasks",
+    "app/api/tasks/model-spokesperson-video/route.ts",
+    "generateAudio: body.generateAudio !== false",
+  ],
+  [
+    "Ark video generation honors audio option",
+    "scripts/worker.mjs",
+    "generate_audio: input.generateAudio !== false",
+  ],
+  [
     "Model spokesperson stage images open a preview modal",
     "app/components/model-spokesperson-script-page.tsx",
     "spokesperson-preview-modal",

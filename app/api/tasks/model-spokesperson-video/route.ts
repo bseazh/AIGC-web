@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
         specialRequirements: text(body.specialRequirements),
         appliedCaseId: text(body.appliedCaseId, 80),
         selectedPlanId: text(body.selectedPlanId, 80),
+        generateAudio: body.generateAudio !== false,
       };
     },
   );

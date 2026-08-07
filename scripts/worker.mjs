@@ -266,7 +266,7 @@ async function createVideoTask(inputUrls, input, workflowKey, taskId) {
     if (mime === "video/mp4") content.push({ type: "video_url", video_url: { url }, role: "reference_video" });
     if (mime.startsWith("audio/")) content.push({ type: "audio_url", audio_url: { url }, role: "reference_audio" });
   });
-  const requestBody = { model: process.env.ARK_MODEL || "doubao-seedance-2-0-260128", content, generate_audio: true, ratio: input.aspectRatio, duration: input.duration, resolution: input.resolution, watermark: input.promptConfig?.watermark === true };
+  const requestBody = { model: process.env.ARK_MODEL || "doubao-seedance-2-0-260128", content, generate_audio: input.generateAudio !== false, ratio: input.aspectRatio, duration: input.duration, resolution: input.resolution, watermark: input.promptConfig?.watermark === true };
   const sendArkRequest = async (body, assetTypes, retryReason = "") => {
     const response = await fetch("https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks", {
       method: "POST",

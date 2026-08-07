@@ -68,6 +68,7 @@ type Draft = {
   productBrief: string;
   tone: string;
   duration: number;
+  generateAudio: boolean;
   productImages: Array<{
     id: string;
     name: string;
@@ -230,6 +231,7 @@ export function ModelSpokespersonScriptPage() {
   const [productBrief, setProductBrief] = useState("");
   const [tone, setTone] = useState("auto");
   const [duration] = useState(15);
+  const [generateAudio, setGenerateAudio] = useState(true);
   const [variant, setVariant] = useState(0);
   const [productImages, setProductImages] = useState<ProductImage[]>([]);
   const [plans, setPlans] = useState<ScriptPlan[]>([]);
@@ -266,6 +268,7 @@ export function ModelSpokespersonScriptPage() {
       if (cancelled) return;
       setProductName(draft.productName || "");
       setProductBrief(draft.productBrief || "");
+      if (typeof draft.generateAudio === "boolean") setGenerateAudio(draft.generateAudio);
       if (["auto", "natural", "enthusiastic", "professional"].includes(draft.tone || "")) setTone(draft.tone!);
       if (Array.isArray(draft.productImages)) {
         setProductImages(
@@ -332,6 +335,7 @@ export function ModelSpokespersonScriptPage() {
     productBrief,
     tone,
     duration,
+    generateAudio,
     productImages: productImages.map(({ id, name, preview, byteSize, assetId }) => ({
       id,
       name,
@@ -365,7 +369,7 @@ export function ModelSpokespersonScriptPage() {
       }
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [draftHydrated, duration, plans, productBrief, productImages, projectId, projectTitle, result, selectedPlanId, stageAssets, tone, videoPack]);
+  }, [draftHydrated, duration, generateAudio, plans, productBrief, productImages, projectId, projectTitle, result, selectedPlanId, stageAssets, tone, videoPack]);
 
   const saveDraft = () => {
     localStorage.setItem(draftStorageKey, JSON.stringify(draftValue()));
@@ -748,7 +752,7 @@ export function ModelSpokespersonScriptPage() {
         ? `商品多视图阶段。只生成同一款${productName}的真实商品多视图参考板，必须包含正面、左右45度、侧面、背面、顶部或底部、材质细节和使用方式小图。保持产品轮廓、材质、颜色、接口、按键、Logo位置和比例一致，不要生成真人，不要生成文字或水印。${pack.productMultiview.summary}`
         : stage === "modelReference"
           ? `模特参考阶段。基于商品多视图生成一位隐私安全的虚拟真人模特参考板，必须是完整人体，包含正面、侧面、背面、3/4角度、站姿和手部动作参考。脸部不要逐像素复制真实人物，生成后续可做轻微局部遮挡，保持身体比例、服装穿着关系和动作可执行性。不要输出空衣服、衣架、无头人体或卡通人物。${pack.modelRecommendation.reason}`
-          : `12格分镜参考阶段。把已生成的商品多视图、模特参考和商品原图综合为一张清晰的12格动作分镜板，严格按以下时间顺序表现连续口播动作、身体重心、手势、商品展示方向和镜头运动。每格都要有不同且连续的姿态，不要空白格，不要只生成商品静物，不要生成文字水印。${pack.storyboard.frames.map((frame) => `第${frame.index}格 ${frame.timeRange}：${frame.visual}；动作：${frame.camera}；口播：${frame.narration}`).join("；")}`;
+          : `12格分镜参考阶段。把已生成的商品多视图、模特参考和商品原图综合为一张清晰的12格动作分镜板，严格按以下时间顺序表现连续口播动作、身体重心、手势、商品展示方向和镜头运动。每格都要有不同且连续的姿态，不要空白格，不要只生成商品静物。禁止在图片里生成任何字幕、对白文字、口播文字、标题、编号、标签、水印、Logo、价格、贴纸或可读字符；口播内容只作为内部节奏绑定，不能画进分镜图。${pack.storyboard.frames.map((frame) => `第${frame.index}格 ${frame.timeRange}：画面=${frame.visual}；动作镜头=${frame.camera}；内部口播节奏参考，不要写入画面`).join("；")}`;
     setStageBusy(stage);
     setVideoError("");
     setStageTasks((current) => ({ ...current, [stage]: { stage, status: "QUEUED" } }));
@@ -853,6 +857,10 @@ export function ModelSpokespersonScriptPage() {
       ].filter((id): id is string => Boolean(id));
       const safeFinalPrompt = [
         pack.finalPrompt,
+        "画面要求：不要在画面中生成字幕、对白文字、标题条、气泡字、歌词、价格贴纸或任何可读文字；字幕会在后期单独添加。",
+        generateAudio
+          ? "音频要求：请生成自然清晰的中文讲解口播声音，语速适配15秒，声音和画面口型节奏尽量一致。"
+          : "音频要求：不要生成讲解声音或旁白，保持视频无口播音频；后期会单独配音。",
         "审核安全提交策略：模特参考图和12格分镜图只作为前端调试产物，不作为 Ark image content 上传；请仅根据以下文字复刻其结构。",
         stageAssets.modelReference
           ? "模特参考文字化：使用隐私安全虚拟模特，完整人体，正面口播，手势自然，面部不可识别，不复刻真实人脸。"
@@ -878,6 +886,7 @@ export function ModelSpokespersonScriptPage() {
           productInfo: productBrief,
           specialRequirements: selectedPlan.internalPrompt,
           selectedPlanId: selectedPlan.id,
+          generateAudio,
           videoModel: "doubao-seedance-2-0-260128",
           executionMode: "single",
           usageAuthorized: true,
@@ -1287,6 +1296,10 @@ export function ModelSpokespersonScriptPage() {
                   </p>
                 ) : null}
                 <div className="spokesperson-pack-actions">
+                  <label className="spokesperson-audio-toggle">
+                    <input type="checkbox" checked={generateAudio} onChange={(event) => setGenerateAudio(event.target.checked)} />
+                    <span>生成讲解声音</span>
+                  </label>
                   <button type="button" onClick={() => void generateVideoPack()} disabled={packBusy || submitBusy || !selectedPlan}>
                     {packBusy ? <LoaderCircle className="generation-spinner" size={15} /> : <Layers3 size={15} />}
                     {packBusy ? "生成任务包中" : "仅生成任务包"}

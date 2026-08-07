@@ -1158,9 +1158,11 @@ a { color: inherit; text-decoration: none; }
 .spokesperson-storyboard-grid p { margin: 0; color: #5f7187; font-size: 10px; line-height: 1.5; }
 .spokesperson-storyboard-grid p b { display: inline-block; min-width: 26px; margin-right: 3px; color: #32516d; font-size: 9px; }
 .spokesperson-storyboard-grid small { color: #8190a3; font-size: 9px; line-height: 1.4; }
-.spokesperson-pack-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.spokesperson-pack-actions { display: grid; grid-template-columns: minmax(0,1fr) repeat(2,minmax(0,1fr)); gap: 8px; }
 .spokesperson-pack-actions button { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 10px; color: #fff; background: linear-gradient(135deg,#7b5de1,#3d9cd8); font-size: 11px; font-weight: 800; }
-.spokesperson-pack-actions button:first-child { color: #31455d; background: #edf4fb; }
+.spokesperson-pack-actions button:nth-of-type(1) { color: #31455d; background: #edf4fb; }
+.spokesperson-audio-toggle { min-height: 38px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #dce7f1; border-radius: 10px; color: #36506a; background: #fff; font-size: 11px; font-weight: 800; }
+.spokesperson-audio-toggle input { width: 14px; height: 14px; accent-color: #3d9cd8; }
 .spokesperson-stage-panel { padding: 11px; display: grid; gap: 9px; border: 1px solid #dce8f2; border-radius: 11px; background: #fff; }
 .spokesperson-stage-panel > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .spokesperson-stage-panel > header strong, .spokesperson-stage-panel > header small { display: block; }
