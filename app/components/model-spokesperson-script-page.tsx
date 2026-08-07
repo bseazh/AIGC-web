@@ -58,6 +58,8 @@ type ScriptPlan = {
   label: string;
   title: string;
   angle: string;
+  storyArc?: string;
+  actionBeats?: string[];
   sellingPointSummary: string[];
   modelDirection: string;
   productDirection: string;
@@ -106,6 +108,8 @@ type VideoPack = {
     frames: Array<{
       index: number;
       timeRange: string;
+      scene?: string;
+      intent?: string;
       visual: string;
       camera: string;
       narration: string;
@@ -843,7 +847,27 @@ export function ModelSpokespersonScriptPage() {
               "背景为真实白色或浅灰摄影棚无缝纸，柔和棚拍阴影，画面干净但不要过度留白；整张图像是一张真实电商模特多机位参考图，适合作为后续视频口播动作和人体姿态参考使用。",
               pack.modelRecommendation.reason,
             ].join("\n")
-          : `12格分镜参考阶段。把已生成的商品多视图、模特参考和商品原图综合为一张清晰的12格动作分镜板，严格按以下时间顺序表现连续口播动作、身体重心、手势、商品展示方向和镜头运动。每格都要有不同且连续的姿态，不要空白格，不要只生成商品静物。禁止在图片里生成任何字幕、对白文字、口播文字、标题、编号、标签、水印、Logo、价格、贴纸或可读字符；口播内容只作为内部节奏绑定，不能画进分镜图。${pack.storyboard.frames.map((frame) => `第${frame.index}格 ${frame.timeRange}：画面=${frame.visual}；动作镜头=${frame.camera}；内部口播节奏参考，不要写入画面`).join("；")}`;
+          : [
+              "12格分镜参考阶段。把已生成的商品多视图、模特参考和商品原图综合为一张清晰的 4 列 x 3 行连续故事分镜板。",
+              "版式顺序硬规则：画面必须是 4 列 x 3 行；阅读顺序必须从左到右、从上到下，第一行是第1-4格，第二行是第5-8格，第三行是第9-12格；不要蛇形排列，不要乱序，不要交换镜头。",
+              "禁止在图像中写任何数字、序号、角标、箭头、字幕、对白文字、口播文字、标题、标签、水印、Logo、价格、贴纸或可读字符；顺序只能通过画面连续性体现，不能通过写编号体现。",
+              "每一格都必须有人物、商品和具体场景关系，不能空场，不能只生成商品静物，不能只站着指向商品。",
+              "这不是普通动作列表，而是一条 15 秒小广告：先建立生活场景和问题，再引出商品，再展示细节/使用过程，再给出效果反馈，最后自然收尾。",
+              "每格都要表现连续的身体重心、手势、商品展示方向、情绪变化和镜头运动；人物必须是同一位隐私安全虚拟模特，商品外观必须和商品多视图一致。",
+              "口播内容只作为内部节奏绑定，不能画进分镜图；不要生成字幕。",
+              pack.storyboard.frames
+                .map((frame) =>
+                  [
+                    `第${frame.index}格 ${frame.timeRange}`,
+                    frame.scene ? `场景=${frame.scene}` : "",
+                    frame.intent ? `目的=${frame.intent}` : "",
+                    `画面=${frame.visual}`,
+                    `动作镜头=${frame.camera}`,
+                    `内部口播节奏参考=${frame.narration}，不要写入画面`,
+                  ].filter(Boolean).join("；"),
+                )
+                .join("\n"),
+            ].join("\n");
     setStageBusy(stage);
     setVideoError("");
     setStageTasks((current) => ({ ...current, [stage]: { stage, status: "QUEUED" } }));
@@ -957,7 +981,7 @@ export function ModelSpokespersonScriptPage() {
           ? "模特参考文字化：使用隐私安全虚拟模特，完整人体，正面口播，手势自然，面部不可识别，不复刻真实人脸。"
           : "",
         stageAssets.storyboard
-          ? `12格分镜文字化：${pack.storyboard.frames.map((frame) => `第${frame.index}格 ${frame.timeRange}，${frame.visual}，${frame.camera}，口播：${frame.narration}`).join("；")}`
+          ? `12格分镜文字化：严格按 4 列 x 3 行从左到右、从上到下的顺序理解为第1-12格；${pack.storyboard.frames.map((frame) => `第${frame.index}格 ${frame.timeRange}，场景：${frame.scene || "同一广告场景连续推进"}，目的：${frame.intent || "推进卖点叙事"}，画面：${frame.visual}，镜头：${frame.camera}，口播：${frame.narration}`).join("；")}`
           : "",
       ].filter(Boolean).join("\n");
       const response = await fetch("/api/tasks/model-spokesperson-video/", {
@@ -1137,6 +1161,14 @@ export function ModelSpokespersonScriptPage() {
                       <em key={point}>{point}</em>
                     ))}
                   </div>
+                  {plan.storyArc ? <p className="spokesperson-plan-story">{plan.storyArc}</p> : null}
+                  {plan.actionBeats?.length ? (
+                    <ol className="spokesperson-plan-beats">
+                      {plan.actionBeats.map((beat, beatIndex) => (
+                        <li key={`${plan.id}-beat-${beatIndex}`}>{beat}</li>
+                      ))}
+                    </ol>
+                  ) : null}
                 </article>
               ))
             ) : (
@@ -1299,6 +1331,8 @@ export function ModelSpokespersonScriptPage() {
                               <strong>#{String(frame.index).padStart(2, "0")}</strong>
                               <em>{frame.timeRange}</em>
                             </header>
+                            {frame.scene ? <p><b>场景</b>{frame.scene}</p> : null}
+                            {frame.intent ? <p><b>目的</b>{frame.intent}</p> : null}
                             <p><b>画面</b>{frame.visual}</p>
                             <p><b>镜头</b>{frame.camera}</p>
                             <p><b>口播</b>{frame.narration}</p>

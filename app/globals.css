@@ -1121,6 +1121,9 @@ a { color: inherit; text-decoration: none; }
 .spokesperson-plan-list article p { margin: 5px 0 0; color: #6f8095; font-size: 11px; line-height: 1.55; }
 .spokesperson-plan-tags { margin-top: 9px; display: flex; flex-wrap: wrap; gap: 6px; }
 .spokesperson-plan-tags em { padding: 4px 7px; border-radius: 999px; color: #167f99; background: #effcff; font-size: 9px; font-style: normal; font-weight: 900; }
+.spokesperson-plan-story { margin-top: 9px !important; padding: 8px; border-radius: 9px; color: #405973 !important; background: #f7fbff; font-weight: 800; }
+.spokesperson-plan-beats { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; color: #65778d; font-size: 10px; line-height: 1.5; }
+.spokesperson-plan-beats li::marker { color: #19a9bf; font-weight: 900; }
 .spokesperson-case-board.inline { margin-top: auto; padding: 14px; box-shadow: none; }
 .spokesperson-case-grid.compact { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 9px; }
 .spokesperson-case-grid.compact article { border-radius: 11px; }

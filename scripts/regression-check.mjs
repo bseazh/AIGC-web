@@ -845,6 +845,24 @@ const checks = [
     "做同款",
   ],
   [
+    "Model spokesperson plans include story arcs and action beats",
+    "app/api/workflows/model-spokesperson-script/route.ts",
+    "storyArc",
+    "actionBeats",
+  ],
+  [
+    "Model spokesperson plan UI exposes story and action beats",
+    "app/components/model-spokesperson-script-page.tsx",
+    "spokesperson-plan-story",
+    "spokesperson-plan-beats",
+  ],
+  [
+    "Model spokesperson video pack consumes selected plan story",
+    "app/api/workflows/model-spokesperson-script/route.ts",
+    "方案故事弧线",
+    "方案动作节拍",
+  ],
+  [
     "Video center exposes recreate inside the smart commerce group",
     "app/features/video-center/modules.ts",
     'key: "smart-commerce"',
@@ -890,6 +908,23 @@ const checks = [
     "Model spokesperson storyboard image avoids subtitles",
     "app/components/model-spokesperson-script-page.tsx",
     "口播内容只作为内部节奏绑定，不能画进分镜图",
+  ],
+  [
+    "Model spokesperson storyboard locks 4x3 reading order",
+    "app/components/model-spokesperson-script-page.tsx",
+    "第一行是第1-4格",
+    "第三行是第9-12格",
+  ],
+  [
+    "Model spokesperson storyboard forbids visible frame numbers",
+    "app/components/model-spokesperson-script-page.tsx",
+    "禁止在图像中写任何数字、序号、角标",
+  ],
+  [
+    "Model spokesperson storyboard uses scene and story intent",
+    "app/api/workflows/model-spokesperson-script/route.ts",
+    "scene、intent、visual、camera",
+    "一条有情节的 15 秒小广告",
   ],
   [
     "Model spokesperson exposes audio generation toggle",

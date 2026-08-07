@@ -40,6 +40,8 @@ type ScriptPlan = {
   label: string;
   title: string;
   angle: string;
+  storyArc: string;
+  actionBeats: string[];
   sellingPointSummary: string[];
   modelDirection: string;
   productDirection: string;
@@ -51,6 +53,8 @@ type SelectedPlanInput = {
   label?: string;
   title?: string;
   angle?: string;
+  storyArc?: string;
+  actionBeats?: string[];
   sellingPointSummary?: string[];
   modelDirection?: string;
   productDirection?: string;
@@ -83,6 +87,8 @@ type VideoPackResult = {
     frames: Array<{
       index: number;
       timeRange: string;
+      scene?: string;
+      intent?: string;
       visual: string;
       camera: string;
       narration: string;
@@ -234,9 +240,11 @@ function plansPrompt(input: {
   return [
     "请为 AI 模特口播视频生成 A/B/C 三套 15 秒带货方案，输出严格 JSON。",
     "JSON 结构：{ \"plans\": [ ...3项... ] }。",
-    "每个 plan 字段必须为：label、title、angle、sellingPointSummary、modelDirection、productDirection、internalPrompt、script。",
+    "每个 plan 字段必须为：label、title、angle、storyArc、actionBeats、sellingPointSummary、modelDirection、productDirection、internalPrompt、script。",
     "label 必须分别是 A、B、C。",
-    "A 必须是真实种草型，B 必须是痛点转化型，C 必须是专业讲解型。三套不能只是换皮，切入角度、卖点排序、动作设计都要不同。",
+    "A 必须是真实种草型，B 必须是痛点转化型，C 必须是专业讲解型。三套不能只是换皮，切入角度、卖点排序、故事情节、场景变化和动作设计都要不同。",
+    "storyArc 必须用一句话讲清楚这条广告的情节：谁在什么场景遇到什么问题，商品如何被引出，哪个动作证明卖点，最后获得什么改善。",
+    "actionBeats 必须正好 4 条，对应 0-3秒、3-8秒、8-12秒、12-15秒；每条都必须包含场景、人物动作、商品位置、镜头运动和卖点目的。",
     "script 字段必须包含：title、tone、segments、alternativeOpeners。",
     "segments 必须正好 4 段，字段：stage、timeRange、narration、visual。",
     "4 段时间固定为：0-3秒、3-8秒、8-12秒、12-15秒。",
@@ -245,8 +253,8 @@ function plansPrompt(input: {
     "必须出现商品名或商品类型，最多讲 2 个核心卖点，必须有一个具体使用场景。",
     "visual 要写清楚模特动作、商品入镜方式、镜头景别和细节特写，不要泛泛写展示商品。",
     "productDirection 必须说明商品多视图参考板如何生成和使用：正面、侧面、材质/功能细节、使用状态、包装/比例锁定。",
-    "modelDirection 必须说明模特动作：注视、拿起、指向、靠近镜头、收尾动作。",
-    "internalPrompt 必须是隐藏给视频模型的中文提示词，包含商品多视图、虚拟模特多视图、动作导演脚本、字幕节奏；不得给用户显示。",
+    "modelDirection 必须说明模特动作链路：从场景问题、拿起/靠近/操作商品、细节证明、情绪反馈到收尾；禁止只写注视、拿起、指向。",
+    "internalPrompt 必须是隐藏给视频模型的中文提示词，包含商品多视图、虚拟模特多视图、动作导演脚本、故事弧线、字幕节奏；不得给用户显示。",
     "如果用户上传了真人/模特图，internalPrompt 必须要求先合规安检、隐私化、虚拟模特多视图，不得直接提交可识别真人脸。",
     `商品名称：${input.productName}`,
     `用户描述/卖点：${input.sellingPoints}`,
@@ -298,8 +306,13 @@ function packPrompt(input: {
     "productMultiview.views 每项包含：name、purpose、prompt、note；prompt 必须写成能直接给图像模型使用的中文提示词。",
     "modelRecommendation 包含：mode、label、reason、maskingAdvice；mode 只能是 auto、asset_library、blurred_reference 之一。",
     "如果素材里出现真人、模特或可识别脸部，优先建议 blurred_reference 或 asset_library，不得直接暴露真人脸。",
-    "storyboard.summary 要简短说明 12 宫格的节奏和镜头逻辑；frames 必须正好 12 条，按 0-15 秒顺序排列。",
-    "storyboard.frames 每项包含：index、timeRange、visual、camera、narration、assetUse；必须让画面、口播和动作彼此对应。",
+    "storyboard.summary 要简短说明 12 宫格的故事弧线、使用场景和镜头逻辑；frames 必须正好 12 条，按 0-15 秒顺序排列。",
+    "storyboard.frames 每项包含：index、timeRange、scene、intent、visual、camera、narration、assetUse；必须让画面、口播、动作、场景和卖点彼此对应。",
+    "12 格必须是一条有情节的 15 秒小广告：1-2 格建立使用场景/问题，3-5 格引出商品和核心卖点，6-8 格展示细节或使用过程，9-10 格体现效果/情绪反馈，11-12 格收尾和购买引导。",
+    "每格 intent 必须说明这一格为什么存在：痛点、引出、卖点证明、细节放大、使用示范、效果反馈、信任增强或行动引导之一；不能只写动作。",
+    "每格 scene 必须说明具体场景关系，例如客厅、办公桌、厨房台面、浴室、户外包内、收纳前后等；不能只写棚拍或背景。",
+    "visual 必须写出人物在场景里的具体行为、商品在画面里的位置、前后动作连续性和情绪变化；禁止 12 格都是站立指向商品。",
+    "camera 必须有镜头变化：近景、半身、中景、过肩、推近、转场、细节 macro、手部操作特写至少混合 4 类。",
     "每一格 frames 都必须有非空 narration；narration 可以重复该时间段绑定的短口播，但绝不能省略、留空或只写‘同上’。",
     "bindings 必须把 4 段口播与 12 宫格分镜绑定起来，每段至少绑定 2-4 个镜头，字段：segmentId、timeRange、narration、frameIndexes、note。",
     "finalPrompt 是给视频生成模型的完整中文提示词，不要输出给用户可编辑版本；必须一次性合并商品多视图、模特建议、分镜绑定、口播时长、比例和连续动作要求。",
@@ -313,6 +326,8 @@ function packPrompt(input: {
     `用户上传商品图数量：${input.productImageCount}`,
     `选中方案：${input.selectedPlan.label || "A"} · ${input.selectedPlan.title || ""}`,
     `方案角度：${input.selectedPlan.angle || ""}`,
+    `方案故事弧线：${input.selectedPlan.storyArc || ""}`,
+    `方案动作节拍：${Array.isArray(input.selectedPlan.actionBeats) ? input.selectedPlan.actionBeats.join(" | ") : ""}`,
     `方案商品方向：${input.selectedPlan.productDirection || ""}`,
     `方案模特方向：${input.selectedPlan.modelDirection || ""}`,
     `方案内置提示：${input.selectedPlan.internalPrompt || ""}`,
@@ -377,18 +392,24 @@ function normalizePlans(value: unknown, productName: string, duration: Duration)
     const sellingPointSummary = Array.isArray(plan.sellingPointSummary)
       ? plan.sellingPointSummary.map((point) => compact(point, 18)).filter(Boolean).slice(0, 4)
       : [];
+    const actionBeats = Array.isArray(plan.actionBeats)
+      ? plan.actionBeats.map((beat) => compact(beat, 90)).filter(Boolean).slice(0, 4)
+      : [];
     const angle = compact(plan.angle, 120);
+    const storyArc = compact(plan.storyArc, 180);
     const modelDirection = compact(plan.modelDirection, 180);
     const productDirection = compact(plan.productDirection, 180);
     const internalPrompt = compact(plan.internalPrompt, 900);
-    if (!angle || !modelDirection || !productDirection || !internalPrompt) {
-      throw new Error("LLM 方案缺少动作、多视图或内部提示词");
+    if (!angle || !storyArc || actionBeats.length !== 4 || !modelDirection || !productDirection || !internalPrompt) {
+      throw new Error("LLM 方案缺少故事、动作、多视图或内部提示词");
     }
     return {
       id: `plan-${label.toLowerCase()}`,
       label,
       title: compact(plan.title, 32) || `${label} 方案`,
       angle,
+      storyArc,
+      actionBeats,
       sellingPointSummary,
       modelDirection,
       productDirection,
@@ -486,6 +507,8 @@ function normalizePack(value: unknown, productName: string, duration: Duration, 
     return {
       index: index + 1,
       timeRange: compact(frame.timeRange ?? frame.time ?? frame.duration, 24) || `${Math.round((index * duration) / 12)}-${Math.round(((index + 1) * duration) / 12)}秒`,
+      scene: compact(frame.scene ?? frame.environment ?? frame.setting ?? frame.context, 70),
+      intent: compact(frame.intent ?? frame.purpose ?? frame.storyBeat ?? frame.goal, 70),
       visual,
       camera,
       narration,
