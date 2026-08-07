@@ -15,6 +15,7 @@ assert.ok(source.includes("model_spokesperson_video_pack"), "spokesperson video 
 assert.ok(source.includes("45-65"), "15 second script prompt should enforce compact copy length");
 assert.ok(source.includes("normalizePlans"), "LLM plan output should be normalized before returning");
 assert.ok(source.includes("normalizePack"), "video pack output should be normalized before returning");
+assert.ok(source.includes("narrationByFrame"), "storyboard narration should be recovered from bindings when a frame omits it");
 assert.ok(!source.includes("function createPlans"), "A/B/C plans must not use template fallback generation");
 assert.ok(!source.includes("function createSegments"), "spokesperson scripts must not use template fallback segments");
 assert.ok(!source.includes("template"), "spokesperson route should not describe template-based generation");

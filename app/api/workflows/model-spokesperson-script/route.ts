@@ -299,6 +299,7 @@ function packPrompt(input: {
     "如果素材里出现真人、模特或可识别脸部，优先建议 blurred_reference 或 asset_library，不得直接暴露真人脸。",
     "storyboard.summary 要简短说明 12 宫格的节奏和镜头逻辑；frames 必须正好 12 条，按 0-15 秒顺序排列。",
     "storyboard.frames 每项包含：index、timeRange、visual、camera、narration、assetUse；必须让画面、口播和动作彼此对应。",
+    "每一格 frames 都必须有非空 narration；narration 可以重复该时间段绑定的短口播，但绝不能省略、留空或只写‘同上’。",
     "bindings 必须把 4 段口播与 12 宫格分镜绑定起来，每段至少绑定 2-4 个镜头，字段：segmentId、timeRange、narration、frameIndexes、note。",
     "finalPrompt 是给视频生成模型的完整中文提示词，不要输出给用户可编辑版本；必须一次性合并商品多视图、模特建议、分镜绑定、口播时长、比例和连续动作要求。",
     "finalPrompt 中不得写成模板说明，不要暴露内部推理、不要重复提示词结构标签，只保留真正要提交的内容。",
@@ -418,6 +419,36 @@ function normalizePack(value: unknown, productName: string, duration: Duration, 
   if (rawFrames.length !== 12) throw new Error("视频任务包必须生成 12 宫格分镜");
   if (rawBindings.length !== 4) throw new Error("视频任务包必须生成 4 段文案与分镜绑定");
 
+  const narrationByFrame = new Map<number, string>();
+  for (const item of rawBindings) {
+    const binding = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+    const narration = compact(
+      binding.narration ?? binding.voiceover ?? binding.dialogue ?? binding.copy,
+      80,
+    );
+    const frameIndexes = Array.isArray(binding.frameIndexes)
+      ? binding.frameIndexes.map((value) => Number(value)).filter((value) => Number.isInteger(value) && value >= 1 && value <= 12)
+      : [];
+    if (narration) frameIndexes.forEach((frameIndex) => narrationByFrame.set(frameIndex, narration));
+  }
+  const selectedScriptSegments = Array.isArray(selectedPlan.script?.segments)
+    ? selectedPlan.script.segments
+    : [];
+  const scriptNarrationForFrame = (index: number) => {
+    if (!selectedScriptSegments.length) return "";
+    const segmentIndex = Math.min(
+      selectedScriptSegments.length - 1,
+      Math.floor((index / 12) * selectedScriptSegments.length),
+    );
+    const segment = selectedScriptSegments[segmentIndex];
+    return compact(
+      segment && typeof segment === "object"
+        ? (segment as Record<string, unknown>).narration
+        : "",
+      80,
+    );
+  };
+
   const viewNames = ["正面", "侧面", "45度", "细节特写", "使用状态"];
   const views = rawViews.map((item, index) => {
     const view = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
@@ -442,9 +473,9 @@ function normalizePack(value: unknown, productName: string, duration: Duration, 
       80,
     );
     const narration = compact(
-      frame.narration ?? frame.voiceover ?? frame.dialogue ?? frame.copy ?? frame.script,
+      frame.narration ?? frame.voiceover ?? frame.voiceOver ?? frame.dialogue ?? frame.copy ?? frame.script,
       80,
-    );
+    ) || narrationByFrame.get(index + 1) || scriptNarrationForFrame(index);
     if (!visual || !camera || !narration) {
       const missing = [!visual && "画面", !camera && "镜头/动作", !narration && "口播"]
         .filter(Boolean)
