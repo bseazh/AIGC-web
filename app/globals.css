@@ -1175,9 +1175,14 @@ a { color: inherit; text-decoration: none; }
 .spokesperson-stage-list article strong { color: #38516b; font-size: 11px; }
 .spokesperson-stage-list article small { margin-top: 4px; color: #8190a3; font-size: 10px; line-height: 1.45; }
 .spokesperson-stage-list article em { margin-top: 4px; color: #c54c5a; font-size: 10px; font-style: normal; }
-.spokesperson-stage-list img, .spokesperson-stage-placeholder { width: 76px; height: 54px; display: grid; place-items: center; object-fit: cover; border-radius: 7px; color: #9aaabd; background: #eef4f9; font-size: 9px; }
-.spokesperson-stage-list button { min-height: 29px; padding: 0 8px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border: 1px solid #cbdde9; border-radius: 7px; color: #27738b; background: #f2fbfd; font-size: 10px; font-weight: 800; white-space: nowrap; }
-.spokesperson-stage-list button:disabled { opacity: .45; cursor: not-allowed; }
+.spokesperson-stage-list img, .spokesperson-stage-placeholder, .spokesperson-stage-thumb { width: 76px; height: 54px; display: grid; place-items: center; object-fit: cover; border-radius: 7px; color: #9aaabd; background: #eef4f9; font-size: 9px; }
+.spokesperson-stage-thumb { padding: 0; overflow: hidden; border: 0; cursor: zoom-in; }
+.spokesperson-stage-thumb img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+.spokesperson-stage-list article > button:not(.spokesperson-stage-thumb) { min-height: 29px; padding: 0 8px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border: 1px solid #cbdde9; border-radius: 7px; color: #27738b; background: #f2fbfd; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.spokesperson-stage-list article > button:not(.spokesperson-stage-thumb):disabled { opacity: .45; cursor: not-allowed; }
+.spokesperson-preview-modal { position: fixed; z-index: 80; inset: 0; padding: 28px; display: grid; place-items: center; background: rgba(8,14,24,.72); backdrop-filter: blur(8px); }
+.spokesperson-preview-modal > button { position: fixed; top: 18px; right: 18px; width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 50%; color: #fff; background: rgba(15,23,42,.72); font-size: 24px; line-height: 1; }
+.spokesperson-preview-modal > img { max-width: min(1100px, 94vw); max-height: 88vh; display: block; border-radius: 10px; object-fit: contain; background: #fff; box-shadow: 0 24px 80px rgba(0,0,0,.35); }
 .spokesperson-video-preview { padding: 10px 11px; display: grid; gap: 9px; border: 1px solid #d7e6f1; border-radius: 12px; background: #fff; }
 .spokesperson-video-preview video { width: 100%; aspect-ratio: 9 / 16; display: block; border-radius: 10px; object-fit: cover; background: #0f172a; }
 .spokesperson-video-preview strong { color: #2c4059; font-size: 12px; }

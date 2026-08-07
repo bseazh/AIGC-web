@@ -60,7 +60,8 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
   if (requestError) return NextResponse.json({ code: "INVALID_REQUEST", message: requestError }, { status: 400 });
   const assetIds = [...new Set(selectAssets(body).filter((id) => typeof id === "string" && id.length > 0))];
   if (assetIds.length < (workflow.minAssets ?? 1)) return NextResponse.json({ code: "ASSET_NOT_READY", message: "请补充必传素材" }, { status: 400 });
-  const prompt = typeof body?.prompt === "string" ? body.prompt.trim().slice(0, 1200) : "";
+  const promptLimit = workflow.key.includes("video") ? 5000 : 1200;
+  const prompt = typeof body?.prompt === "string" ? body.prompt.trim().slice(0, promptLimit) : "";
   if ((workflow.minAssets ?? 1) === 0 && !prompt) return NextResponse.json({ code: "INVALID_REQUEST", message: "请输入提示词" }, { status: 400 });
   const requestedAspectRatio = typeof body.aspectRatio === "string" ? body.aspectRatio : "";
   const requestedScene = typeof body.scene === "string" ? body.scene : "";

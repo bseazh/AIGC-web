@@ -240,6 +240,7 @@ export function ModelSpokespersonScriptPage() {
   const [stageTasks, setStageTasks] = useState<Partial<Record<SpokespersonStage, StageTask>>>({});
   const [stageAssets, setStageAssets] = useState<Partial<Record<SpokespersonStage, StageAsset>>>({});
   const [stageBusy, setStageBusy] = useState<SpokespersonStage | "">("");
+  const [previewAsset, setPreviewAsset] = useState<StageAsset | null>(null);
   const [videoPhase, setVideoPhase] = useState<"idle" | "uploading" | "generating" | "succeeded" | "failed">("idle");
   const [busy, setBusy] = useState(false);
   const [packBusy, setPackBusy] = useState(false);
@@ -848,10 +849,18 @@ export function ModelSpokespersonScriptPage() {
       setProductImages(uploadedImages);
       const stagedAssetIds = [
         stageAssets.productMultiview?.assetId,
-        stageAssets.modelReference?.assetId,
-        stageAssets.storyboard?.assetId,
         ...uploadedImages.map((image) => image.assetId),
       ].filter((id): id is string => Boolean(id));
+      const safeFinalPrompt = [
+        pack.finalPrompt,
+        "审核安全提交策略：模特参考图和12格分镜图只作为前端调试产物，不作为 Ark image content 上传；请仅根据以下文字复刻其结构。",
+        stageAssets.modelReference
+          ? "模特参考文字化：使用隐私安全虚拟模特，完整人体，正面口播，手势自然，面部不可识别，不复刻真实人脸。"
+          : "",
+        stageAssets.storyboard
+          ? `12格分镜文字化：${pack.storyboard.frames.map((frame) => `第${frame.index}格 ${frame.timeRange}，${frame.visual}，${frame.camera}，口播：${frame.narration}`).join("；")}`
+          : "",
+      ].filter(Boolean).join("\n");
       const response = await fetch("/api/tasks/model-spokesperson-video/", {
         method: "POST",
         headers: {
@@ -860,7 +869,7 @@ export function ModelSpokespersonScriptPage() {
         },
         body: JSON.stringify({
           assetIds: [...new Set(stagedAssetIds)].slice(0, 6),
-          prompt: pack.finalPrompt,
+          prompt: safeFinalPrompt,
           aspectRatio: "9:16",
           duration,
           resolution: "720p",
@@ -1231,7 +1240,13 @@ export function ModelSpokespersonScriptPage() {
                             <small>{description}</small>
                             {task?.status === "FAILED" ? <em>{task.errorCode || "生成失败"}</em> : null}
                           </div>
-                          {asset ? <img src={asset.url} alt={title} /> : <span className="spokesperson-stage-placeholder">待生成</span>}
+                          {asset ? (
+                            <button type="button" className="spokesperson-stage-thumb" onClick={() => setPreviewAsset(asset)} aria-label={`预览${title}`}>
+                              <img src={asset.url} alt={title} />
+                            </button>
+                          ) : (
+                            <span className="spokesperson-stage-placeholder">待生成</span>
+                          )}
                           <button type="button" onClick={() => void generateStage(stage)} disabled={Boolean(stageBusy) || locked || !selectedPlan}>
                             {stageBusy === stage ? <LoaderCircle className="generation-spinner" size={14} /> : <Sparkles size={14} />}
                             {stageBusy === stage ? "生成中" : asset ? "重新生成" : "生成本步"}
@@ -1301,6 +1316,14 @@ export function ModelSpokespersonScriptPage() {
           <footer>视频阶段会自动合并商品多视图、模特建议、12 宫格分镜和隐藏提示词。发布前请核对商品信息，避免绝对化或未经证实的宣传表述。</footer>
         </section>
       </form>
+      {previewAsset ? (
+        <div className="spokesperson-preview-modal" role="dialog" aria-modal="true" onClick={() => setPreviewAsset(null)}>
+          <button type="button" aria-label="关闭预览" onClick={() => setPreviewAsset(null)}>
+            ×
+          </button>
+          <img src={previewAsset.url} alt={previewAsset.name || "阶段素材预览"} onClick={(event) => event.stopPropagation()} />
+        </div>
+      ) : null}
     </main>
   );
 }

@@ -877,6 +877,21 @@ const checks = [
     "已遮挡模特参考",
   ],
   [
+    "Model spokesperson keeps human reference images out of Ark submit",
+    "app/components/model-spokesperson-script-page.tsx",
+    "审核安全提交策略",
+  ],
+  [
+    "Model spokesperson stage images open a preview modal",
+    "app/components/model-spokesperson-script-page.tsx",
+    "spokesperson-preview-modal",
+  ],
+  [
+    "Video tasks keep long director prompts",
+    "lib/task-creation.ts",
+    "workflow.key.includes(\"video\") ? 5000 : 1200",
+  ],
+  [
     "Model spokesperson scripts are server generated and rate limited",
     "app/api/workflows/model-spokesperson-script/route.ts",
     "spokesperson-script:attempts",
