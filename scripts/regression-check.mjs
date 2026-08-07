@@ -851,14 +851,21 @@ const checks = [
     "复刻爆款带货视频-新版",
   ],
   [
-    "Model spokesperson starts with an editable script workflow",
+    "Model spokesperson includes a hidden video task pack and submit action",
     "app/components/model-spokesperson-script-page.tsx",
-    "使用文案生成口播视频 · 下一阶段",
+    "生成并提交视频",
+    "视频任务包",
   ],
   [
     "Model spokesperson scripts are server generated and rate limited",
     "app/api/workflows/model-spokesperson-script/route.ts",
     "spokesperson-script:attempts",
+  ],
+  [
+    "Model spokesperson pack generation is LLM backed",
+    "app/api/workflows/model-spokesperson-script/route.ts",
+    "model_spokesperson_video_pack",
+    "normalizePack",
   ],
   [
     "Douyin import only accepts allowlisted hosts",

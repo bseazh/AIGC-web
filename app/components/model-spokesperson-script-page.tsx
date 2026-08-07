@@ -6,17 +6,23 @@ import {
   Clipboard,
   FileText,
   ImagePlus,
+  Layers3,
   LoaderCircle,
   MicVocal,
   RefreshCw,
   Save,
+  Send,
   Sparkles,
   Trash2,
+  UserRound,
   Video,
   WandSparkles,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+
+import { VideoGenerationProgress } from "@/app/components/video-generation-progress";
+import { getTaskStatus, uploadRecreateItem, type Item } from "@/app/features/recreate-video";
 
 type Account = {
   user: { isAdministrator?: boolean };
@@ -58,6 +64,50 @@ type Draft = {
   plans: ScriptPlan[];
   selectedPlanId: string;
   result: ScriptResult | null;
+  videoPack: VideoPack | null;
+};
+type VideoPack = {
+  status: string;
+  draftId: string;
+  title: string;
+  selectedPlanId: string;
+  selectedPlanLabel: string;
+  productMultiview: {
+    summary: string;
+    views: Array<{ name: string; purpose: string; prompt: string; note: string }>;
+  };
+  modelRecommendation: {
+    mode: "auto" | "asset_library" | "blurred_reference";
+    label: string;
+    reason: string;
+    maskingAdvice: string;
+  };
+  storyboard: {
+    summary: string;
+    frames: Array<{
+      index: number;
+      timeRange: string;
+      visual: string;
+      camera: string;
+      narration: string;
+      assetUse: string;
+    }>;
+  };
+  bindings: Array<{
+    segmentId: string;
+    timeRange: string;
+    narration: string;
+    frameIndexes: number[];
+    note: string;
+  }>;
+  finalPrompt: string;
+  generatedAt: string;
+};
+type VideoTask = {
+  taskId?: string;
+  status: string;
+  errorCode?: string;
+  outputs?: Array<{ assetId: string; mimeType?: string; name?: string; url: string }>;
 };
 type SpokespersonCase = {
   id: string;
@@ -73,11 +123,7 @@ type SpokespersonCase = {
   tone: string;
   duration: number;
 };
-type ProductImage = {
-  id: string;
-  name: string;
-  preview: string;
-};
+type ProductImage = Item & { id: string };
 
 const draftStorageKey = "aigc-model-spokesperson-script-draft";
 const toneOptions = [
@@ -162,7 +208,13 @@ export function ModelSpokespersonScriptPage() {
   const [plans, setPlans] = useState<ScriptPlan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [result, setResult] = useState<ScriptResult | null>(null);
+  const [videoPack, setVideoPack] = useState<VideoPack | null>(null);
+  const [videoTask, setVideoTask] = useState<VideoTask | null>(null);
+  const [videoPhase, setVideoPhase] = useState<"idle" | "uploading" | "generating" | "succeeded" | "failed">("idle");
   const [busy, setBusy] = useState(false);
+  const [packBusy, setPackBusy] = useState(false);
+  const [submitBusy, setSubmitBusy] = useState(false);
+  const [videoError, setVideoError] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const productImagesRef = useRef<ProductImage[]>([]);
@@ -187,6 +239,7 @@ export function ModelSpokespersonScriptPage() {
       if (Array.isArray(draft.plans)) setPlans(draft.plans);
       if (typeof draft.selectedPlanId === "string") setSelectedPlanId(draft.selectedPlanId);
       if (draft.result?.segments?.length) setResult(draft.result);
+      if (draft.videoPack?.finalPrompt) setVideoPack(draft.videoPack);
     } catch {
       localStorage.removeItem(draftStorageKey);
     }
@@ -218,7 +271,15 @@ export function ModelSpokespersonScriptPage() {
     plans,
     selectedPlanId,
     result,
+    videoPack,
   });
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      localStorage.setItem(draftStorageKey, JSON.stringify(draftValue()));
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [duration, plans, productBrief, productName, result, selectedPlanId, tone, videoPack]);
 
   const saveDraft = () => {
     localStorage.setItem(draftStorageKey, JSON.stringify(draftValue()));
@@ -237,6 +298,8 @@ export function ModelSpokespersonScriptPage() {
         id: crypto.randomUUID(),
         name: file.name,
         preview: URL.createObjectURL(file),
+        file,
+        byteSize: file.size,
       })),
     ]);
     event.target.value = "";
@@ -278,6 +341,10 @@ export function ModelSpokespersonScriptPage() {
       setPlans(body.plans);
       setSelectedPlanId(body.plans[0]?.id || "");
       setResult(body.plans[0]?.script || null);
+      setVideoPack(null);
+      setVideoTask(null);
+      setVideoPhase("idle");
+      setVideoError("");
       localStorage.setItem(
         draftStorageKey,
         JSON.stringify({
@@ -285,6 +352,7 @@ export function ModelSpokespersonScriptPage() {
           plans: body.plans,
           selectedPlanId: body.plans[0]?.id || "",
           result: body.plans[0]?.script || null,
+          videoPack: null,
         }),
       );
       setNotice("已生成 A/B/C 三套口播方案");
@@ -304,6 +372,10 @@ export function ModelSpokespersonScriptPage() {
   const selectPlan = (plan: ScriptPlan) => {
     setSelectedPlanId(plan.id);
     setResult(plan.script);
+    setVideoPack(null);
+    setVideoTask(null);
+    setVideoPhase("idle");
+    setVideoError("");
     setNotice(`已选用 ${plan.label} 方案，可继续编辑讲稿`);
     window.setTimeout(() => setNotice(""), 1800);
   };
@@ -339,6 +411,10 @@ export function ModelSpokespersonScriptPage() {
     setPlans([]);
     setSelectedPlanId("");
     setResult(null);
+    setVideoPack(null);
+    setVideoTask(null);
+    setVideoPhase("idle");
+    setVideoError("");
     setError("");
     setNotice("案例参数已回填，可以生成 A/B/C 方案");
     window.setTimeout(() => setNotice(""), 1800);
@@ -349,6 +425,134 @@ export function ModelSpokespersonScriptPage() {
     await navigator.clipboard.writeText(fullScript);
     setNotice("完整口播讲稿已复制");
     window.setTimeout(() => setNotice(""), 2000);
+  };
+
+  const generateVideoPack = async () => {
+    if (!selectedPlan) {
+      setVideoError("请先选择一个口播方案");
+      return null;
+    }
+    if (!productImages.length) {
+      setVideoError("请先上传至少一张商品图片");
+      return null;
+    }
+    setPackBusy(true);
+    setVideoError("");
+    setVideoTask(null);
+    setVideoPhase("idle");
+    try {
+      const response = await fetch("/api/workflows/model-spokesperson-script/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "pack",
+          productName,
+          sellingPoints: productBrief,
+          tone: tone === "auto" ? "natural" : tone,
+          duration,
+          productImageCount: productImages.length,
+          selectedPlan,
+        }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok || body?.status !== "READY" || !body?.pack?.finalPrompt) {
+        throw new Error(body?.message || "视频任务包生成失败");
+      }
+      setVideoPack(body.pack);
+      localStorage.setItem(
+        draftStorageKey,
+        JSON.stringify({
+          ...draftValue(),
+          videoPack: body.pack,
+        }),
+      );
+      setNotice("视频任务包已生成");
+      window.setTimeout(() => setNotice(""), 1800);
+      return body.pack as VideoPack;
+    } catch (caught) {
+      setVideoError(caught instanceof Error ? caught.message : "视频任务包生成失败");
+      return null;
+    } finally {
+      setPackBusy(false);
+    }
+  };
+
+  const pollVideoTask = async (taskId: string) => {
+    const deadline = Date.now() + 15 * 60 * 1000;
+    setVideoPhase("generating");
+    while (Date.now() < deadline) {
+      const task = await getTaskStatus(taskId);
+      setVideoTask(task);
+      if (task.status === "SUCCEEDED") {
+        setVideoPhase("succeeded");
+        return task;
+      }
+      if (["FAILED", "REJECTED", "CANCELED"].includes(task.status)) {
+        setVideoPhase("failed");
+        throw new Error(task.errorCode || "视频生成失败");
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
+    setVideoPhase("failed");
+    throw new Error("视频仍在生成中，请稍后在任务中心查看");
+  };
+
+  const submitVideo = async () => {
+    if (!selectedPlan) {
+      setVideoError("请先选择一个口播方案");
+      return;
+    }
+    setSubmitBusy(true);
+    setVideoError("");
+    try {
+      const pack = videoPack || (await generateVideoPack());
+      if (!pack?.finalPrompt) return;
+      const uploadedImages = await Promise.all(
+        productImages.map(async (image) => {
+          const assetId = image.assetId || (image.file ? await uploadRecreateItem(image) : null);
+          return assetId ? { ...image, assetId } : image;
+        }),
+      );
+      if (!uploadedImages.length) throw new Error("请先上传至少一张商品图片");
+      setProductImages(uploadedImages);
+      const response = await fetch("/api/tasks/model-spokesperson-video/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": crypto.randomUUID(),
+        },
+        body: JSON.stringify({
+          assetIds: uploadedImages.map((image) => image.assetId).filter((id): id is string => Boolean(id)),
+          prompt: pack.finalPrompt,
+          aspectRatio: "9:16",
+          duration,
+          resolution: "720p",
+          scene: "口播讲解",
+          style: "自然口播",
+          productInfo: productBrief,
+          specialRequirements: selectedPlan.internalPrompt,
+          selectedPlanId: selectedPlan.id,
+          videoModel: "doubao-seedance-2-0-260128",
+          executionMode: "single",
+          usageAuthorized: true,
+        }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok || !body?.taskId) {
+        throw new Error(body?.message || body?.code || "视频任务提交失败");
+      }
+      setVideoPhase("generating");
+      const task = await pollVideoTask(body.taskId);
+      if (task.status === "SUCCEEDED") {
+        setNotice("视频任务已提交，生成完成后可直接预览");
+        window.setTimeout(() => setNotice(""), 2200);
+      }
+    } catch (caught) {
+      setVideoPhase("failed");
+      setVideoError(caught instanceof Error ? caught.message : "视频提交失败");
+    } finally {
+      setSubmitBusy(false);
+    }
   };
 
   if (!account)
@@ -366,7 +570,7 @@ export function ModelSpokespersonScriptPage() {
           <ArrowLeft size={19} />
         </button>
         <div>
-          <span>阶段 1 / 2 · 方案与讲稿</span>
+          <span>阶段 1 / 2 · 方案到视频</span>
           <strong>AI 模特口播</strong>
         </div>
         <em>
@@ -600,19 +804,103 @@ export function ModelSpokespersonScriptPage() {
                 </div>
               )}
 
+              <section className="spokesperson-video-pack">
+                <header>
+                  <div>
+                    <strong>视频任务包</strong>
+                    <small>商品多视图、模特推荐、12 宫格分镜和最终提示词会自动合并</small>
+                  </div>
+                  <span>
+                    <Layers3 size={14} />
+                    内置
+                  </span>
+                </header>
+                {videoPack ? (
+                  <div className="spokesperson-video-pack-body">
+                    <div className="spokesperson-video-pack-summary">
+                      <p>{videoPack.productMultiview.summary}</p>
+                      <p>{videoPack.modelRecommendation.reason}</p>
+                      <small>{videoPack.modelRecommendation.maskingAdvice}</small>
+                    </div>
+                    <div className="spokesperson-video-pack-grid">
+                      <article>
+                        <strong>商品多视图</strong>
+                        {videoPack.productMultiview.views.map((view) => (
+                          <span key={view.name}>{view.name}</span>
+                        ))}
+                      </article>
+                      <article>
+                        <strong>模特推荐</strong>
+                        <span>{videoPack.modelRecommendation.label}</span>
+                        <span>{videoPack.modelRecommendation.mode}</span>
+                      </article>
+                      <article>
+                        <strong>分镜绑定</strong>
+                        {videoPack.bindings.map((binding) => (
+                          <span key={binding.segmentId}>{binding.timeRange}</span>
+                        ))}
+                      </article>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="spokesperson-video-pack-empty">
+                    <UserRound size={18} />
+                    <p>点一下就会先生成任务包，再自动提交视频任务。</p>
+                  </div>
+                )}
+                {videoError ? (
+                  <p className="creator-error" role="alert">
+                    {videoError}
+                  </p>
+                ) : null}
+                {submitBusy || videoPhase === "generating" ? (
+                  <VideoGenerationProgress
+                    phase={submitBusy && !videoTask ? "uploading" : "generating"}
+                    taskStatus={videoTask?.status}
+                    title={videoPack?.title || result?.title || "AI 模特口播视频"}
+                    durationSeconds={duration}
+                  />
+                ) : null}
+                {videoTask?.status === "SUCCEEDED" && videoTask.outputs?.[0] ? (
+                  <div className="spokesperson-video-preview">
+                    <video src={videoTask.outputs[0].url} controls playsInline />
+                    <div>
+                      <strong>视频已生成</strong>
+                      <p>任务结果会保存到资产库中。</p>
+                      <a href={videoTask.outputs[0].url} target="_blank" rel="noreferrer">
+                        全屏预览
+                      </a>
+                    </div>
+                  </div>
+                ) : null}
+                <div className="spokesperson-pack-actions">
+                  <button type="button" onClick={() => void generateVideoPack()} disabled={packBusy || submitBusy || !selectedPlan}>
+                    {packBusy ? <LoaderCircle className="generation-spinner" size={15} /> : <Layers3 size={15} />}
+                    {packBusy ? "生成任务包中" : "仅生成任务包"}
+                  </button>
+                  <button type="button" onClick={() => void submitVideo()} disabled={submitBusy || packBusy || busy || !selectedPlan || !productImages.length}>
+                    {submitBusy ? <LoaderCircle className="generation-spinner" size={15} /> : <Send size={15} />}
+                    {submitBusy ? "提交中" : "生成并提交视频"}
+                  </button>
+                </div>
+              </section>
+
               <div className="spokesperson-result-actions">
                 <button type="button" onClick={regenerate} disabled={busy}>
                   <RefreshCw size={15} />
                   重新生成 A/B/C
                 </button>
-                <button type="button" disabled title="将在第二阶段开放">
+                <button
+                  type="button"
+                  onClick={() => document.querySelector(".spokesperson-video-pack")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                >
                   <Video size={15} />
-                  使用文案生成口播视频 · 下一阶段
+                  查看任务包
                 </button>
               </div>
             </>
           )}
-          <footer>视频阶段会自动使用商品多视图、虚拟模特多视图和动作导演脚本。发布前请核对商品信息，避免绝对化或未经证实的宣传表述。</footer>
+          <footer>视频阶段会自动合并商品多视图、模特建议、12 宫格分镜和隐藏提示词。发布前请核对商品信息，避免绝对化或未经证实的宣传表述。</footer>
         </section>
       </form>
     </main>

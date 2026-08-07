@@ -1132,9 +1132,31 @@ a { color: inherit; text-decoration: none; }
 .spokesperson-internal-plan strong { color: #167f99; font-size: 12px; }
 .spokesperson-internal-plan p { margin: 0; color: #5d7087; font-size: 11px; line-height: 1.6; }
 .spokesperson-internal-plan small { color: #8b9aac; font-size: 10px; }
+.spokesperson-video-pack { margin-top: 14px; padding: 12px; display: grid; gap: 10px; border: 1px solid #dde7f1; border-radius: 12px; background: #fbfdff; }
+.spokesperson-video-pack > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.spokesperson-video-pack > header strong { display: block; color: #2e4159; font-size: 12px; }
+.spokesperson-video-pack > header small { color: #8190a3; font-size: 10px; line-height: 1.5; }
+.spokesperson-video-pack > header > span { padding: 5px 7px; display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; color: #167f99; background: #effcff; font-size: 9px; font-weight: 900; }
+.spokesperson-video-pack-body { display: grid; gap: 10px; }
+.spokesperson-video-pack-summary { padding: 10px 11px; display: grid; gap: 6px; border-radius: 11px; background: #f3fbff; }
+.spokesperson-video-pack-summary p { margin: 0; color: #4f667d; font-size: 11px; line-height: 1.6; }
+.spokesperson-video-pack-summary small { color: #8190a3; font-size: 10px; line-height: 1.5; }
+.spokesperson-video-pack-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+.spokesperson-video-pack-grid article { padding: 9px; display: grid; gap: 6px; border: 1px solid #e3ebf4; border-radius: 10px; background: #fff; }
+.spokesperson-video-pack-grid strong { color: #32516d; font-size: 11px; }
+.spokesperson-video-pack-grid span { color: #5f7187; font-size: 10px; line-height: 1.5; }
+.spokesperson-video-pack-empty { min-height: 68px; padding: 10px 11px; display: flex; align-items: center; gap: 8px; border: 1px dashed #c7d7e7; border-radius: 11px; color: #6e7f93; background: #fff; font-size: 11px; line-height: 1.5; }
+.spokesperson-pack-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.spokesperson-pack-actions button { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 10px; color: #fff; background: linear-gradient(135deg,#7b5de1,#3d9cd8); font-size: 11px; font-weight: 800; }
+.spokesperson-pack-actions button:first-child { color: #31455d; background: #edf4fb; }
+.spokesperson-video-preview { padding: 10px 11px; display: grid; gap: 9px; border: 1px solid #d7e6f1; border-radius: 12px; background: #fff; }
+.spokesperson-video-preview video { width: 100%; aspect-ratio: 9 / 16; display: block; border-radius: 10px; object-fit: cover; background: #0f172a; }
+.spokesperson-video-preview strong { color: #2c4059; font-size: 12px; }
+.spokesperson-video-preview p { margin: 0; color: #7c8b9b; font-size: 10px; }
+.spokesperson-video-preview a { width: fit-content; color: #5f54d8; font-size: 11px; font-weight: 700; }
 .spokesperson-script-warning { margin: 12px 0 0; padding: 9px 11px; border: 1px solid #ffe0a8; border-radius: 10px; color: #8a5c14; background: #fff8e8; font-size: 11px; line-height: 1.6; }
-@media (max-width: 1180px) { .spokesperson-two-column { grid-template-columns: 1fr; }.spokesperson-editor-column { min-height: 620px; }.spokesperson-case-grid.compact { grid-template-columns: repeat(3,minmax(0,1fr)); } }
-@media (max-width: 680px) { .spokesperson-script-page { padding: 18px 14px 42px; }.spokesperson-script-header { grid-template-columns: 40px minmax(0,1fr); }.spokesperson-script-header > em { grid-column: 1/-1; justify-self: start; }.spokesperson-field-grid.compact, .spokesperson-case-grid.compact { grid-template-columns: 1fr; }.spokesperson-product-images { grid-template-columns: repeat(2,minmax(0,1fr)); }.spokesperson-script-result > header { flex-direction: column; }.spokesperson-script-result > header > div:last-child, .spokesperson-result-actions { width: 100%; grid-template-columns: 1fr; flex-direction: column; }.spokesperson-script-result > header button, .spokesperson-result-actions button { width: 100%; } }
+@media (max-width: 1180px) { .spokesperson-two-column { grid-template-columns: 1fr; }.spokesperson-editor-column { min-height: 620px; }.spokesperson-case-grid.compact { grid-template-columns: repeat(3,minmax(0,1fr)); }.spokesperson-video-pack-grid { grid-template-columns: 1fr; } }
+@media (max-width: 680px) { .spokesperson-script-page { padding: 18px 14px 42px; }.spokesperson-script-header { grid-template-columns: 40px minmax(0,1fr); }.spokesperson-script-header > em { grid-column: 1/-1; justify-self: start; }.spokesperson-field-grid.compact, .spokesperson-case-grid.compact, .spokesperson-pack-actions { grid-template-columns: 1fr; }.spokesperson-product-images { grid-template-columns: repeat(2,minmax(0,1fr)); }.spokesperson-script-result > header { flex-direction: column; }.spokesperson-script-result > header > div:last-child, .spokesperson-result-actions { width: 100%; grid-template-columns: 1fr; flex-direction: column; }.spokesperson-script-result > header button, .spokesperson-result-actions button { width: 100%; }.spokesperson-video-pack > header, .spokesperson-video-preview { grid-template-columns: 1fr; } }
 
 @media (max-width: 900px) { .spokesperson-script-page { padding: 16px 14px 42px; }.spokesperson-script-layout { grid-template-columns: 1fr; }.spokesperson-script-result { min-height: 560px; }.spokesperson-result-empty { min-height: 340px; } }
 @media (max-width: 640px) { .spokesperson-script-header { grid-template-columns: 40px minmax(0,1fr); }.spokesperson-script-header > em { grid-column: 1 / -1; justify-self: start; }.spokesperson-script-form, .spokesperson-script-result { padding: 17px; border-radius: 16px; }.spokesperson-script-intro h1 { font-size: 22px; }.spokesperson-field-grid { grid-template-columns: 1fr; }.spokesperson-script-result > header { flex-direction: column; }.spokesperson-script-result > header > div:last-child { width: 100%; }.spokesperson-script-result > header button { flex: 1; }.spokesperson-segments article { padding-left: 40px; }.spokesperson-result-actions { grid-template-columns: 1fr; } }

@@ -153,4 +153,13 @@ export const seedanceVideoWorkflow = {
   styles: ["轻快节奏", "质感广告", "真实记录", "电影感"],
 } as const;
 
+export const modelSpokespersonVideoWorkflow = {
+  ...videoWorkflowBase,
+  key: "model-spokesperson-video",
+  name: "AI 模特口播视频",
+  minAssets: 1,
+  scenes: ["口播讲解", "商品展示", "多视图讲解", "种草转化"],
+  styles: ["自然口播", "专业讲解", "清晰转化", "镜头连贯"],
+} as const;
+
 export const videoMixWorkflow = { ...videoWorkflowBase, key: "video-mix", name: "智能混剪", minAssets: 2, durations: [15, 30, 45, 60], resolutions: ["720p", "1080p"], scenes: ["原音频混剪"], styles: ["自然转场"], pointsPerTask: Number(process.env.VIDEO_MIX_TASK_POINTS || 40) } as const;

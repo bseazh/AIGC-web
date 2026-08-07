@@ -11,8 +11,10 @@ assert.ok(source.includes("DEEPSEEK_API_KEY"), "spokesperson script generation s
 assert.ok(source.includes("SOPHNET_CHAT_API_KEY"), "spokesperson script generation should support SophNet Chat credentials");
 assert.ok(source.includes("LLM_NOT_CONFIGURED"), "spokesperson script generation must fail clearly without an LLM");
 assert.ok(source.includes("model_spokesperson_script_plans"), "spokesperson plan generation should log provider calls");
+assert.ok(source.includes("model_spokesperson_video_pack"), "spokesperson video pack generation should log provider calls");
 assert.ok(source.includes("45-65"), "15 second script prompt should enforce compact copy length");
 assert.ok(source.includes("normalizePlans"), "LLM plan output should be normalized before returning");
+assert.ok(source.includes("normalizePack"), "video pack output should be normalized before returning");
 assert.ok(!source.includes("function createPlans"), "A/B/C plans must not use template fallback generation");
 assert.ok(!source.includes("function createSegments"), "spokesperson scripts must not use template fallback segments");
 assert.ok(!source.includes("template"), "spokesperson route should not describe template-based generation");

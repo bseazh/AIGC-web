@@ -45,6 +45,59 @@ type ScriptPlan = {
   internalPrompt: string;
   script: ScriptResult;
 };
+type SelectedPlanInput = {
+  id?: string;
+  label?: string;
+  title?: string;
+  angle?: string;
+  sellingPointSummary?: string[];
+  modelDirection?: string;
+  productDirection?: string;
+  internalPrompt?: string;
+  script?: ScriptResult;
+};
+type VideoPackResult = {
+  status: "READY";
+  draftId: string;
+  title: string;
+  selectedPlanId: string;
+  selectedPlanLabel: string;
+  productMultiview: {
+    summary: string;
+    views: Array<{
+      name: string;
+      purpose: string;
+      prompt: string;
+      note: string;
+    }>;
+  };
+  modelRecommendation: {
+    mode: "auto" | "asset_library" | "blurred_reference";
+    label: string;
+    reason: string;
+    maskingAdvice: string;
+  };
+  storyboard: {
+    summary: string;
+    frames: Array<{
+      index: number;
+      timeRange: string;
+      visual: string;
+      camera: string;
+      narration: string;
+      assetUse: string;
+    }>;
+  };
+  bindings: Array<{
+    segmentId: string;
+    timeRange: string;
+    narration: string;
+    frameIndexes: number[];
+    note: string;
+  }>;
+  finalPrompt: string;
+  generatedAt: string;
+};
 
 function text(value: unknown, maxLength: number) {
   return typeof value === "string"
@@ -221,7 +274,47 @@ function scriptPrompt(input: {
     `用户描述/卖点：${input.sellingPoints}`,
     `拆分卖点：${input.points.join("、")}`,
     `口吻：${toneLabels[input.tone]}`,
+  `目标时长：${input.duration} 秒`,
+  ].join("\n");
+}
+
+function packPrompt(input: {
+  productName: string;
+  sellingPoints: string;
+  points: string[];
+  tone: Tone;
+  duration: Duration;
+  productImageCount: number;
+  selectedPlan: SelectedPlanInput;
+}) {
+  const scriptSegments = Array.isArray(input.selectedPlan.script?.segments)
+    ? input.selectedPlan.script?.segments
+    : [];
+  return [
+    "请为 AI 模特口播生成一个可直接提交的视频任务包，输出严格 JSON。",
+    "JSON 结构必须包含：summary、productMultiview、modelRecommendation、storyboard、bindings、finalPrompt。",
+    "productMultiview.summary 要用一句话概括商品多视图将如何生成；views 必须正好 5 条，依次为正面、侧面、45度、细节特写、使用状态。",
+    "productMultiview.views 每项包含：name、purpose、prompt、note；prompt 必须写成能直接给图像模型使用的中文提示词。",
+    "modelRecommendation 包含：mode、label、reason、maskingAdvice；mode 只能是 auto、asset_library、blurred_reference 之一。",
+    "如果素材里出现真人、模特或可识别脸部，优先建议 blurred_reference 或 asset_library，不得直接暴露真人脸。",
+    "storyboard.summary 要简短说明 12 宫格的节奏和镜头逻辑；frames 必须正好 12 条，按 0-15 秒顺序排列。",
+    "storyboard.frames 每项包含：index、timeRange、visual、camera、narration、assetUse；必须让画面、口播和动作彼此对应。",
+    "bindings 必须把 4 段口播与 12 宫格分镜绑定起来，每段至少绑定 2-4 个镜头，字段：segmentId、timeRange、narration、frameIndexes、note。",
+    "finalPrompt 是给视频生成模型的完整中文提示词，不要输出给用户可编辑版本；必须一次性合并商品多视图、模特建议、分镜绑定、口播时长、比例和连续动作要求。",
+    "finalPrompt 中不得写成模板说明，不要暴露内部推理、不要重复提示词结构标签，只保留真正要提交的内容。",
+    "要求：生成原创视频，不复制原人物脸、原商品、品牌、Logo、水印或字幕。",
+    `商品名称：${input.productName}`,
+    `用户描述/卖点：${input.sellingPoints}`,
+    `拆分卖点：${input.points.join("、")}`,
+    `用户选择口吻：${toneLabels[input.tone]}`,
     `目标时长：${input.duration} 秒`,
+    `用户上传商品图数量：${input.productImageCount}`,
+    `选中方案：${input.selectedPlan.label || "A"} · ${input.selectedPlan.title || ""}`,
+    `方案角度：${input.selectedPlan.angle || ""}`,
+    `方案商品方向：${input.selectedPlan.productDirection || ""}`,
+    `方案模特方向：${input.selectedPlan.modelDirection || ""}`,
+    `方案内置提示：${input.selectedPlan.internalPrompt || ""}`,
+    `方案讲稿：${scriptSegments.map((segment) => segment.narration).join(" | ")}`,
   ].join("\n");
 }
 
@@ -303,6 +396,105 @@ function normalizePlans(value: unknown, productName: string, duration: Duration)
   });
 }
 
+function normalizePack(value: unknown, productName: string, duration: Duration, selectedPlan: SelectedPlanInput): VideoPackResult {
+  const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const multiview = record.productMultiview && typeof record.productMultiview === "object"
+    ? (record.productMultiview as Record<string, unknown>)
+    : {};
+  const recommendation = record.modelRecommendation && typeof record.modelRecommendation === "object"
+    ? (record.modelRecommendation as Record<string, unknown>)
+    : {};
+  const storyboard = record.storyboard && typeof record.storyboard === "object"
+    ? (record.storyboard as Record<string, unknown>)
+    : {};
+  const rawViews = Array.isArray(multiview.views) ? multiview.views.slice(0, 5) : [];
+  const rawFrames = Array.isArray(storyboard.frames) ? storyboard.frames.slice(0, 12) : [];
+  const rawBindings = Array.isArray(record.bindings) ? record.bindings.slice(0, 4) : [];
+  if (rawViews.length !== 5) throw new Error("视频任务包必须生成 5 个商品多视图");
+  if (rawFrames.length !== 12) throw new Error("视频任务包必须生成 12 宫格分镜");
+  if (rawBindings.length !== 4) throw new Error("视频任务包必须生成 4 段文案与分镜绑定");
+
+  const viewNames = ["正面", "侧面", "45度", "细节特写", "使用状态"];
+  const views = rawViews.map((item, index) => {
+    const view = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+    const prompt = compact(view.prompt, 280);
+    if (!prompt) throw new Error("商品多视图提示词缺失");
+    return {
+      name: compact(view.name, 18) || viewNames[index],
+      purpose: compact(view.purpose, 60) || "用于商品多视图参考",
+      prompt,
+      note: compact(view.note, 120) || "生成后仅用于视频任务内部参考",
+    };
+  });
+
+  const frames = rawFrames.map((item, index) => {
+    const frame = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+    const visual = compact(frame.visual, 120);
+    const camera = compact(frame.camera, 80);
+    const narration = compact(frame.narration, 80);
+    if (!visual || !camera || !narration) throw new Error("分镜内容缺失");
+    return {
+      index: index + 1,
+      timeRange: compact(frame.timeRange, 24) || `${Math.round((index * duration) / 12)}-${Math.round(((index + 1) * duration) / 12)}秒`,
+      visual,
+      camera,
+      narration,
+      assetUse: compact(frame.assetUse, 80) || "商品、多视图和模特参考",
+    };
+  });
+
+  const bindings = rawBindings.map((item, index) => {
+    const binding = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+    const frameIndexes = Array.isArray(binding.frameIndexes)
+      ? binding.frameIndexes
+          .map((value) => Number(value))
+          .filter((value) => Number.isInteger(value) && value >= 1 && value <= 12)
+      : [];
+    const timeRange = compact(binding.timeRange, 24);
+    const narration = compact(binding.narration, 80);
+    if (!timeRange || !narration || !frameIndexes.length) throw new Error("文案与分镜绑定缺失");
+    return {
+      segmentId: compact(binding.segmentId, 40) || `segment-${index + 1}`,
+      timeRange,
+      narration,
+      frameIndexes,
+      note: compact(binding.note, 140) || "将对应讲稿和镜头顺序绑定到同一段视频任务中",
+    };
+  });
+
+  const finalPrompt = text(record.finalPrompt, 5000);
+  if (!finalPrompt) throw new Error("最终视频提示词缺失");
+
+  const recommendationMode = ["auto", "asset_library", "blurred_reference"].includes(String(recommendation.mode))
+    ? (recommendation.mode as "auto" | "asset_library" | "blurred_reference")
+    : "auto";
+
+  return {
+    status: "READY",
+    draftId: randomUUID(),
+    title: compact(record.title, 40) || `${productName} · 视频任务包`,
+    selectedPlanId: compact(selectedPlan.id || "selected", 40),
+    selectedPlanLabel: compact(selectedPlan.label || "A", 8) || "A",
+    productMultiview: {
+      summary: compact(multiview.summary, 120) || "商品多视图将自动补全正侧背与细节镜头。",
+      views,
+    },
+    modelRecommendation: {
+      mode: recommendationMode,
+      label: compact(recommendation.label, 40) || "自动推荐模特方式",
+      reason: compact(recommendation.reason, 120) || "系统会根据素材与口播方向自动选择最稳妥的模特策略。",
+      maskingAdvice: compact(recommendation.maskingAdvice, 120) || "如出现真人参考，会先进行遮挡或隐私化处理。",
+    },
+    storyboard: {
+      summary: compact(storyboard.summary, 120) || "12 宫格分镜已按口播节奏生成。",
+      frames,
+    },
+    bindings,
+    finalPrompt,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 export async function POST(request: NextRequest) {
   const user = await authenticatedUser(request);
   if (!user)
@@ -321,13 +513,14 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const productName = text(body?.productName, 80);
   const sellingPoints = text(body?.sellingPoints, 1000);
-  const mode = body?.mode === "plans" ? "plans" : "script";
+  const mode = body?.mode === "plans" || body?.mode === "pack" ? body.mode : "script";
   const tone = tones.includes(body?.tone) ? (body.tone as Tone) : "natural";
   const duration = durations.includes(Number(body?.duration) as Duration)
     ? (Number(body.duration) as Duration)
     : 15;
   const points = splitPoints(sellingPoints);
   const productImageCount = Math.max(0, Math.min(8, Number(body?.productImageCount) || 0));
+  const selectedPlan = body?.selectedPlan && typeof body.selectedPlan === "object" ? (body.selectedPlan as SelectedPlanInput) : null;
 
   if (!productName || !points.length) {
     return NextResponse.json(
@@ -370,6 +563,58 @@ export async function POST(request: NextRequest) {
         status: "READY",
         provider: "llm",
         plans,
+        generatedAt: new Date().toISOString(),
+      });
+    }
+
+    if (mode === "pack") {
+      if (!selectedPlan?.script?.segments?.length) {
+        return NextResponse.json(
+          {
+            code: "SCRIPT_INPUT_REQUIRED",
+            message: "请先选择一个口播方案再生成视频任务包",
+          },
+          { status: 400 },
+        );
+      }
+      const raw = await callScriptLLM({
+        operation: "model_spokesperson_video_pack",
+        prompt: packPrompt({
+          productName,
+          sellingPoints,
+          points,
+          tone,
+          duration,
+          productImageCount,
+          selectedPlan,
+        }),
+        requestLog: {
+          mode,
+          productName,
+          sellingPointCount: points.length,
+          tone,
+          duration,
+          productImageCount,
+          selectedPlanId: selectedPlan.id || null,
+          selectedPlanLabel: selectedPlan.label || null,
+        },
+      });
+      const pack = normalizePack(raw, productName, duration, selectedPlan);
+      await audit(user.id, "MODEL_SPOKESPERSON_VIDEO_PACK_GENERATED", request, {
+        type: "video_pack",
+        id: pack.draftId,
+      }, {
+        duration,
+        llmRequired: true,
+        selectedPlanId: pack.selectedPlanId,
+        viewCount: pack.productMultiview.views.length,
+        frameCount: pack.storyboard.frames.length,
+        bindingCount: pack.bindings.length,
+      });
+      return NextResponse.json({
+        status: "READY",
+        provider: "llm",
+        pack,
         generatedAt: new Date().toISOString(),
       });
     }
