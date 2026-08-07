@@ -841,6 +841,26 @@ export function ModelSpokespersonScriptPage() {
                         ))}
                       </article>
                     </div>
+                    <div className="spokesperson-storyboard">
+                      <div className="spokesperson-storyboard-heading">
+                        <strong>12 格动作分镜</strong>
+                        <span>{videoPack.storyboard.summary}</span>
+                      </div>
+                      <div className="spokesperson-storyboard-grid">
+                        {videoPack.storyboard.frames.map((frame) => (
+                          <article key={frame.index}>
+                            <header>
+                              <strong>#{String(frame.index).padStart(2, "0")}</strong>
+                              <em>{frame.timeRange}</em>
+                            </header>
+                            <p><b>画面</b>{frame.visual}</p>
+                            <p><b>镜头</b>{frame.camera}</p>
+                            <p><b>口播</b>{frame.narration}</p>
+                            <small>{frame.assetUse}</small>
+                          </article>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="spokesperson-video-pack-empty">

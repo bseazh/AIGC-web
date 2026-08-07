@@ -408,7 +408,11 @@ function normalizePack(value: unknown, productName: string, duration: Duration, 
     ? (record.storyboard as Record<string, unknown>)
     : {};
   const rawViews = Array.isArray(multiview.views) ? multiview.views.slice(0, 5) : [];
-  const rawFrames = Array.isArray(storyboard.frames) ? storyboard.frames.slice(0, 12) : [];
+  const rawFrames = Array.isArray(storyboard.frames)
+    ? storyboard.frames.slice(0, 12)
+    : Array.isArray(record.storyboard)
+      ? record.storyboard.slice(0, 12)
+      : [];
   const rawBindings = Array.isArray(record.bindings) ? record.bindings.slice(0, 4) : [];
   if (rawViews.length !== 5) throw new Error("视频任务包必须生成 5 个商品多视图");
   if (rawFrames.length !== 12) throw new Error("视频任务包必须生成 12 宫格分镜");
@@ -429,17 +433,31 @@ function normalizePack(value: unknown, productName: string, duration: Duration, 
 
   const frames = rawFrames.map((item, index) => {
     const frame = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
-    const visual = compact(frame.visual, 120);
-    const camera = compact(frame.camera, 80);
-    const narration = compact(frame.narration, 80);
-    if (!visual || !camera || !narration) throw new Error("分镜内容缺失");
+    const visual = compact(
+      frame.visual ?? frame.visualDescription ?? frame.description ?? frame.shot ?? frame.action,
+      120,
+    );
+    const camera = compact(
+      frame.camera ?? frame.cameraShot ?? frame.shotType ?? frame.framing ?? frame.motion,
+      80,
+    );
+    const narration = compact(
+      frame.narration ?? frame.voiceover ?? frame.dialogue ?? frame.copy ?? frame.script,
+      80,
+    );
+    if (!visual || !camera || !narration) {
+      const missing = [!visual && "画面", !camera && "镜头/动作", !narration && "口播"]
+        .filter(Boolean)
+        .join("、");
+      throw new Error(`第 ${index + 1} 格分镜内容缺失：${missing}`);
+    }
     return {
       index: index + 1,
-      timeRange: compact(frame.timeRange, 24) || `${Math.round((index * duration) / 12)}-${Math.round(((index + 1) * duration) / 12)}秒`,
+      timeRange: compact(frame.timeRange ?? frame.time ?? frame.duration, 24) || `${Math.round((index * duration) / 12)}-${Math.round(((index + 1) * duration) / 12)}秒`,
       visual,
       camera,
       narration,
-      assetUse: compact(frame.assetUse, 80) || "商品、多视图和模特参考",
+      assetUse: compact(frame.assetUse ?? frame.assets ?? frame.reference, 80) || "商品多视图、模特和场景参考",
     };
   });
 
