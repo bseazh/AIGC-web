@@ -912,6 +912,30 @@ const checks = [
     "spokesperson-preview-modal",
   ],
   [
+    "Model spokesperson exposes model source controls",
+    "app/components/model-spokesperson-script-page.tsx",
+    "模特来源",
+    "上传模特",
+    "资产库",
+  ],
+  [
+    "Model spokesperson persists selected model source in drafts",
+    "app/components/model-spokesperson-script-page.tsx",
+    "modelSourceMode",
+    "modelSource",
+  ],
+  [
+    "Model spokesperson uses selected model source for reference generation",
+    "app/components/model-spokesperson-script-page.tsx",
+    "modelSource?.assetId || stageAssets.productMultiview?.assetId",
+  ],
+  [
+    "Model spokesperson model prompt requires realistic contact sheet output",
+    "app/components/model-spokesperson-script-page.tsx",
+    "真实摄影棚多机位试衣参考图",
+    "不能是动漫、插画、手绘、3D 渲染",
+  ],
+  [
     "Video tasks keep long director prompts",
     "lib/task-creation.ts",
     "workflow.key.includes(\"video\") ? 5000 : 1200",

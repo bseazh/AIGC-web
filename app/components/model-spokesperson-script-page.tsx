@@ -9,6 +9,7 @@ import {
   Layers3,
   LoaderCircle,
   MicVocal,
+  Upload,
   RefreshCw,
   Save,
   Send,
@@ -77,6 +78,8 @@ type Draft = {
     assetId?: string;
   }>;
   stageAssets: Partial<Record<SpokespersonStage, StageAsset>>;
+  modelSource: StageAsset | null;
+  modelSourceMode: ModelSourceMode;
   plans: ScriptPlan[];
   selectedPlanId: string;
   result: ScriptResult | null;
@@ -148,6 +151,14 @@ type SpokespersonCase = {
   duration: number;
 };
 type ProductImage = Item & { id: string };
+type LibraryAsset = {
+  id: string;
+  mimeType: string;
+  byteSize: number;
+  originalName: string;
+  url: string;
+};
+type ModelSourceMode = "auto" | "upload" | "library";
 
 const draftStorageKey = "aigc-model-spokesperson-script-draft";
 const toneOptions = [
@@ -224,6 +235,7 @@ export function ModelSpokespersonScriptPage() {
   const searchParams = useSearchParams();
   const projectId = searchParams?.get("projectId") || null;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const modelFileInputRef = useRef<HTMLInputElement | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
   const [projectTitle, setProjectTitle] = useState("模特口播项目");
   const [draftHydrated, setDraftHydrated] = useState(false);
@@ -243,6 +255,11 @@ export function ModelSpokespersonScriptPage() {
   const [stageAssets, setStageAssets] = useState<Partial<Record<SpokespersonStage, StageAsset>>>({});
   const [stageBusy, setStageBusy] = useState<SpokespersonStage | "">("");
   const [previewAsset, setPreviewAsset] = useState<StageAsset | null>(null);
+  const [modelSourceMode, setModelSourceMode] = useState<ModelSourceMode>("auto");
+  const [modelSource, setModelSource] = useState<StageAsset | null>(null);
+  const [assets, setAssets] = useState<LibraryAsset[]>([]);
+  const [assetsLoading, setAssetsLoading] = useState(false);
+  const [modelUploading, setModelUploading] = useState(false);
   const [videoPhase, setVideoPhase] = useState<"idle" | "uploading" | "generating" | "succeeded" | "failed">("idle");
   const [busy, setBusy] = useState(false);
   const [packBusy, setPackBusy] = useState(false);
@@ -278,6 +295,8 @@ export function ModelSpokespersonScriptPage() {
         );
       }
       if (draft.stageAssets && typeof draft.stageAssets === "object") setStageAssets(draft.stageAssets);
+      if (draft.modelSource?.assetId && draft.modelSource.url) setModelSource(draft.modelSource);
+      if (["auto", "upload", "library"].includes(draft.modelSourceMode || "")) setModelSourceMode(draft.modelSourceMode!);
       if (Array.isArray(draft.plans)) setPlans(draft.plans);
       if (typeof draft.selectedPlanId === "string") setSelectedPlanId(draft.selectedPlanId);
       if (draft.result?.segments?.length) setResult(draft.result);
@@ -344,6 +363,8 @@ export function ModelSpokespersonScriptPage() {
       assetId,
     })),
     stageAssets,
+    modelSource,
+    modelSourceMode,
     plans,
     selectedPlanId,
     result,
@@ -369,7 +390,7 @@ export function ModelSpokespersonScriptPage() {
       }
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [draftHydrated, duration, generateAudio, plans, productBrief, productImages, projectId, projectTitle, result, selectedPlanId, stageAssets, tone, videoPack]);
+  }, [draftHydrated, duration, generateAudio, modelSource, modelSourceMode, plans, productBrief, productImages, projectId, projectTitle, result, selectedPlanId, stageAssets, tone, videoPack]);
 
   const saveDraft = () => {
     localStorage.setItem(draftStorageKey, JSON.stringify(draftValue()));
@@ -419,6 +440,55 @@ export function ModelSpokespersonScriptPage() {
       if (target) URL.revokeObjectURL(target.preview);
       return current.filter((image) => image.id !== id);
     });
+
+  const loadAssets = async () => {
+    setAssetsLoading(true);
+    try {
+      const response = await fetch("/api/assets/?kind=ALL", { cache: "no-store" });
+      const body = await response.json().catch(() => null);
+      const imageAssets = Array.isArray(body?.assets)
+        ? body.assets.filter((asset: LibraryAsset) => asset.mimeType?.startsWith("image/")).slice(0, 24)
+        : [];
+      setAssets(imageAssets);
+    } finally {
+      setAssetsLoading(false);
+    }
+  };
+
+  const chooseModelSourceMode = (mode: ModelSourceMode) => {
+    setModelSourceMode(mode);
+    if (mode === "library") void loadAssets();
+    if (mode === "auto") setModelSource(null);
+  };
+
+  const handleModelFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = Array.from(event.target.files || []).find((item) => item.type.startsWith("image/") && item.size <= 10 * 1024 * 1024);
+    event.target.value = "";
+    if (!file) return;
+    setModelUploading(true);
+    setVideoError("");
+    try {
+      const preview = URL.createObjectURL(file);
+      const assetId = await uploadRecreateItem({ file, preview, name: file.name, byteSize: file.size });
+      const url = await resolveAssetPreviewUrl(assetId, preview);
+      if (url !== preview) URL.revokeObjectURL(preview);
+      setModelSource({ assetId, url, mimeType: file.type, name: file.name });
+      setModelSourceMode("upload");
+      setNotice("模特源图已保存，生成模特参考时会优先使用");
+      window.setTimeout(() => setNotice(""), 2200);
+    } catch (caught) {
+      setVideoError(caught instanceof Error ? caught.message : "模特源图上传失败");
+    } finally {
+      setModelUploading(false);
+    }
+  };
+
+  const selectModelAsset = (asset: LibraryAsset) => {
+    setModelSource({ assetId: asset.id, url: asset.url, mimeType: asset.mimeType, name: asset.originalName });
+    setModelSourceMode("library");
+    setNotice("已选择资产库模特图");
+    window.setTimeout(() => setNotice(""), 1800);
+  };
 
   const generatePlans = async (event?: FormEvent, nextVariant = variant) => {
     event?.preventDefault();
@@ -739,7 +809,7 @@ export function ModelSpokespersonScriptPage() {
       stage === "productMultiview"
         ? originalAssetIds
         : stage === "modelReference"
-          ? [stageAssets.productMultiview?.assetId || originalAssetIds[0]].filter(Boolean)
+          ? [modelSource?.assetId || stageAssets.productMultiview?.assetId || originalAssetIds[0]].filter((id): id is string => Boolean(id))
           : [stageAssets.productMultiview?.assetId, stageAssets.modelReference?.assetId, originalAssetIds[0]].filter(
               (id): id is string => Boolean(id),
             );
@@ -751,7 +821,28 @@ export function ModelSpokespersonScriptPage() {
       stage === "productMultiview"
         ? `商品多视图阶段。只生成同一款${productName}的真实商品多视图参考板，必须包含正面、左右45度、侧面、背面、顶部或底部、材质细节和使用方式小图。保持产品轮廓、材质、颜色、接口、按键、Logo位置和比例一致，不要生成真人，不要生成文字或水印。${pack.productMultiview.summary}`
         : stage === "modelReference"
-          ? `模特参考阶段。基于商品多视图生成一位隐私安全的虚拟真人模特参考板，必须是完整人体，包含正面、侧面、背面、3/4角度、站姿和手部动作参考。脸部不要逐像素复制真实人物，生成后续可做轻微局部遮挡，保持身体比例、服装穿着关系和动作可执行性。不要输出空衣服、衣架、无头人体或卡通人物。${pack.modelRecommendation.reason}`
+          ? [
+              "任务类型：模特/人物多视图参考，不是商品图生成。",
+              modelSource
+                ? "用户已提供模特源图：必须以该模特图作为人物身份、发型轮廓、身形比例、穿搭气质和姿态气质的强参考。"
+                : "用户未提供模特源图：请生成一位隐私安全、真实摄影质感的原创虚拟真人模特。",
+              "主体锁定规则：只要输入图里出现真人、模特、人体轮廓、头发、脸、手臂、腿或穿在人身上的服装，就必须把完整人物/模特作为唯一主主体；衣服、裙子、包、鞋只是人物身上的附着物。",
+              "创建一张 16:9 真实摄影棚多机位试衣参考图，像同一位真人模特在白色摄影棚完成一次 fitting 拍摄后整理出的 contact sheet；必须是真人摄影质感，真实皮肤纹理、真实布料、自然站姿、相机透视和棚拍柔光，不能是动漫、插画、手绘、3D 渲染、游戏建模、瓷娃娃、塑料皮肤或概念设定图。",
+              "先提取身份锚点：脸型外轮廓、脸长脸宽比例、下颌线、颧骨位置、额头高度、眼距、眼型大致走向、鼻梁长度、鼻头宽度、嘴型厚度、肤色与年龄感、身材比例、体态、发型轮廓和穿搭关系；不要继承原图背景、光线、拍摄角度或当下表情。",
+              "请以输入人物脸部结构和五官相对位置为强参考，生成一位隐私安全的相似虚拟真人模特：脸型、五官比例、发型轮廓、身形比例和姿态气质要接近输入，不要换成通用网红脸、瓷娃娃脸、AI 模特脸、游戏角色脸或完全陌生的漂亮脸。",
+              "即使输入图只有裙子、衣服或局部穿搭，也必须补全为完整虚拟真人模特：头部、肩颈、躯干、手臂、腿部、脚部都要出现。",
+              "第一步必须先生成完整头部和完整脸部轮廓：脸型外轮廓、头发轮廓、额头、眼鼻口的大致位置关系需要存在，不能省略头部，不能把头部画成空白块、无脸人或裁掉。",
+              "人物身份必须隐私安全，不要逐像素复制真实五官；但必须保留输入人物可用于参考的脸型轮廓、五官相对比例、年龄感、发型轮廓和头身比例，整体相似度优先于美化。",
+              "布局像专业电商真人模特试衣拍摄的照片 contact sheet：中央一个真实棚拍全身正面站姿大图，旁边包含背面全身、侧面全身、3/4 角度全身、上半身近景、服装材质/裙摆细节和 2-3 张自然头肩近景。不要使用黑色剪影研究、角色设定轮廓稿、建模三视图或游戏资产展示。",
+              "脸部/头部近景控制在 2-3 个即可：正面头肩近景、3/4 头肩近景、可选侧面头肩近景；这些近景必须像真实相机拍摄，有皮肤细节、发丝层次、轻微镜头景深和自然光影，不要磨皮过度，不要生成蜡像感。",
+              "每个视角都必须是同一位相似虚拟真人模特，保持相同脸型轮廓、眼距鼻型嘴型比例、发型轮廓、身体比例、服装轮廓和姿态气质；每个视角都要清晰分离，不要重叠，不要像拼贴插画。",
+              "每个主要视图都必须是衣服穿在模特身上的效果，不允许出现空心裙、衣架、平铺服装、单件裙子、商品白底图或只有服装没有人体。",
+              "如果输出结果只有衣服、长裙、服装商品图、空白分格或没有人体，则方向错误，必须重新生成完整人物多视图。",
+              "禁止输出单件服装多视图、商品展示图、裙子独立展示图、3D 模型渲染、AI 娃娃脸、过度对称五官、塑料皮肤、游戏角色、二次元、插画或设计稿。",
+              "不要在生图阶段提前遮挡脸部；生成完成后由系统二次做极轻微模糊，并按不同脸部小图局部遮挡额头、眼睛、鼻口、下巴或脸颊中的某一小部分，五官比例仍可辨认但真实身份不清晰，保留脸型、发型和头部轮廓。",
+              "背景为真实白色或浅灰摄影棚无缝纸，柔和棚拍阴影，画面干净但不要过度留白；整张图像是一张真实电商模特多机位参考图，适合作为后续视频口播动作和人体姿态参考使用。",
+              pack.modelRecommendation.reason,
+            ].join("\n")
           : `12格分镜参考阶段。把已生成的商品多视图、模特参考和商品原图综合为一张清晰的12格动作分镜板，严格按以下时间顺序表现连续口播动作、身体重心、手势、商品展示方向和镜头运动。每格都要有不同且连续的姿态，不要空白格，不要只生成商品静物。禁止在图片里生成任何字幕、对白文字、口播文字、标题、编号、标签、水印、Logo、价格、贴纸或可读字符；口播内容只作为内部节奏绑定，不能画进分镜图。${pack.storyboard.frames.map((frame) => `第${frame.index}格 ${frame.timeRange}：画面=${frame.visual}；动作镜头=${frame.camera}；内部口播节奏参考，不要写入画面`).join("；")}`;
     setStageBusy(stage);
     setVideoError("");
@@ -1231,6 +1322,57 @@ export function ModelSpokespersonScriptPage() {
                     </div>
                     <span>{Object.keys(stageAssets).length}/3 已完成</span>
                   </header>
+                  <section className="spokesperson-model-source">
+                    <header>
+                      <strong>模特来源</strong>
+                      <small>{modelSource ? modelSource.name || "已选择模特图" : "可上传或从资产库选择，不选则自动生成"}</small>
+                    </header>
+                    <div className="spokesperson-model-source-tabs">
+                      {([
+                        ["auto", "自动生成"],
+                        ["upload", "上传模特"],
+                        ["library", "资产库"],
+                      ] as Array<[ModelSourceMode, string]>).map(([mode, label]) => (
+                        <button type="button" className={modelSourceMode === mode ? "active" : ""} onClick={() => chooseModelSourceMode(mode)} key={mode}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {modelSourceMode === "upload" ? (
+                      <>
+                        <input ref={modelFileInputRef} type="file" accept="image/*" hidden onChange={handleModelFile} />
+                        <button type="button" className="spokesperson-model-upload" disabled={modelUploading} onClick={() => modelFileInputRef.current?.click()}>
+                          {modelUploading ? <LoaderCircle className="generation-spinner" size={14} /> : <Upload size={14} />}
+                          {modelUploading ? "上传中" : "选择模特图"}
+                        </button>
+                      </>
+                    ) : null}
+                    {modelSourceMode === "library" ? (
+                      <div className="spokesperson-model-library">
+                        {assetsLoading ? (
+                          <p><LoaderCircle className="generation-spinner" size={14} />正在加载素材</p>
+                        ) : assets.length ? (
+                          assets.map((asset) => (
+                            <button type="button" className={modelSource?.assetId === asset.id ? "active" : ""} onClick={() => selectModelAsset(asset)} key={asset.id}>
+                              <img src={asset.url} alt={asset.originalName} />
+                              <span>{asset.originalName}</span>
+                            </button>
+                          ))
+                        ) : (
+                          <p>暂无可用图片素材</p>
+                        )}
+                      </div>
+                    ) : null}
+                    {modelSource ? (
+                      <div className="spokesperson-model-selected">
+                        <button type="button" onClick={() => setPreviewAsset(modelSource)}>
+                          <img src={modelSource.url} alt={modelSource.name || "模特源图"} />
+                        </button>
+                        <span>{modelSource.name || "模特源图"}</span>
+                        <button type="button" onClick={() => setModelSource(null)}>移除</button>
+                      </div>
+                    ) : null}
+                  </section>
                   <div className="spokesperson-stage-list">
                     {([
                       ["productMultiview", "1. 商品多视图", "先确认产品的正侧背、细节和结构。"],

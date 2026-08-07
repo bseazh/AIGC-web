@@ -1169,6 +1169,26 @@ a { color: inherit; text-decoration: none; }
 .spokesperson-stage-panel > header strong { color: #2e4159; font-size: 12px; }
 .spokesperson-stage-panel > header small { margin-top: 4px; color: #8190a3; font-size: 10px; }
 .spokesperson-stage-panel > header > span { color: #16879c; font-size: 10px; font-weight: 800; }
+.spokesperson-model-source { padding: 9px; display: grid; gap: 8px; border: 1px solid #e2ecf5; border-radius: 9px; background: #fbfdff; }
+.spokesperson-model-source > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.spokesperson-model-source > header strong, .spokesperson-model-source > header small { display: block; }
+.spokesperson-model-source > header strong { color: #38516b; font-size: 11px; }
+.spokesperson-model-source > header small { overflow: hidden; max-width: 58%; color: #8190a3; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.spokesperson-model-source-tabs { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
+.spokesperson-model-source-tabs button, .spokesperson-model-upload, .spokesperson-model-selected > button:last-child { min-height: 30px; border: 1px solid #dce7f1; border-radius: 8px; color: #4b637b; background: #fff; font-size: 10px; font-weight: 800; }
+.spokesperson-model-source-tabs button.active { border-color: #98d8e1; color: #167f99; background: #effcff; }
+.spokesperson-model-upload { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.spokesperson-model-library { max-height: 150px; overflow-y: auto; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 7px; }
+.spokesperson-model-library > p { grid-column: 1/-1; margin: 0; display: flex; align-items: center; justify-content: center; gap: 6px; color: #8190a3; font-size: 10px; }
+.spokesperson-model-library button { min-width: 0; overflow: hidden; padding: 0 0 4px; border: 1px solid #e2e9f2; border-radius: 8px; color: #617188; background: #fff; text-align: left; }
+.spokesperson-model-library button.active { border-color: #98d8e1; box-shadow: 0 0 0 2px rgba(22,127,153,.08); }
+.spokesperson-model-library img { width: 100%; aspect-ratio: 1; display: block; object-fit: cover; }
+.spokesperson-model-library span { overflow: hidden; display: block; margin: 4px 5px 0; font-size: 9px; white-space: nowrap; text-overflow: ellipsis; }
+.spokesperson-model-selected { min-width: 0; display: grid; grid-template-columns: 44px minmax(0,1fr) auto; align-items: center; gap: 8px; }
+.spokesperson-model-selected > button:first-child { overflow: hidden; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 8px; cursor: zoom-in; }
+.spokesperson-model-selected img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.spokesperson-model-selected span { overflow: hidden; color: #526b83; font-size: 10px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.spokesperson-model-selected > button:last-child { padding: 0 9px; color: #c35263; }
 .spokesperson-stage-list { display: grid; gap: 8px; }
 .spokesperson-stage-list article { min-width: 0; display: grid; grid-template-columns: minmax(0,1fr) 76px auto; align-items: center; gap: 9px; padding: 8px; border: 1px solid #e4ecf4; border-radius: 9px; background: #fbfdff; }
 .spokesperson-stage-list article.ready { border-color: #a9dfe3; background: #f5feff; }
