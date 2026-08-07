@@ -22,7 +22,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { VideoGenerationProgress } from "@/app/components/video-generation-progress";
-import { getTaskStatus, uploadRecreateItem, type Item } from "@/app/features/recreate-video";
+import {
+  getTaskStatus,
+  loadImageForCanvas,
+  resolveAssetPreviewUrl,
+  uploadRecreateItem,
+  type FaceMaskRegion,
+  type Item,
+} from "@/app/features/recreate-video";
 
 type Account = {
   user: { isAdministrator?: boolean };
@@ -581,6 +588,136 @@ export function ModelSpokespersonScriptPage() {
     }).catch(() => undefined);
   };
 
+  const analyzeFaceMaskRegions = async (assetId?: string): Promise<FaceMaskRegion[]> => {
+    if (!assetId) return [];
+    const response = await fetch("/api/workflows/recreate-face-mask-analysis/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assetId }),
+    }).catch(() => null);
+    if (!response?.ok) return [];
+    const body = await response.json().catch(() => null);
+    return Array.isArray(body?.faceRegions)
+      ? body.faceRegions
+          .map((region: Partial<FaceMaskRegion>) => ({
+            x: Number(region.x),
+            y: Number(region.y),
+            width: Number(region.width),
+            height: Number(region.height),
+            confidence: Number(region.confidence) || 0.5,
+            view: typeof region.view === "string" ? region.view : "",
+          }))
+          .filter((region: FaceMaskRegion) =>
+            [region.x, region.y, region.width, region.height].every(Number.isFinite) &&
+            region.width > 0 &&
+            region.height > 0,
+          )
+          .slice(0, 24)
+      : [];
+  };
+
+  const drawFaceMask = (
+    context: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    variant: number,
+  ) => {
+    const maskX = Math.max(0, x + width * 0.08);
+    const maskY = Math.max(0, y + height * 0.08);
+    const maskWidth = Math.min(context.canvas.width - maskX, width * 0.84);
+    const maskHeight = Math.min(context.canvas.height - maskY, height * 0.68);
+    if (maskWidth <= 1 || maskHeight <= 1) return;
+
+    const source = document.createElement("canvas");
+    source.width = Math.max(1, Math.ceil(maskWidth));
+    source.height = Math.max(1, Math.ceil(maskHeight));
+    source.getContext("2d")?.drawImage(context.canvas, maskX, maskY, maskWidth, maskHeight, 0, 0, source.width, source.height);
+
+    context.save();
+    context.filter = `blur(${Math.max(0.35, Math.min(1.1, maskWidth / 260))}px)`;
+    context.drawImage(source, 0, 0, source.width, source.height, maskX, maskY, maskWidth, maskHeight);
+    context.restore();
+
+    const partials = [
+      { x: 0.18, y: 0.04, width: 0.64, height: 0.18 },
+      { x: 0.16, y: 0.3, width: 0.68, height: 0.16 },
+      { x: 0.26, y: 0.45, width: 0.48, height: 0.18 },
+      { x: 0.28, y: 0.68, width: 0.44, height: 0.16 },
+      { x: 0.1, y: 0.38, width: 0.22, height: 0.26 },
+      { x: 0.68, y: 0.38, width: 0.22, height: 0.26 },
+    ];
+    const partial = partials[variant % partials.length];
+    const partialX = maskX + maskWidth * partial.x;
+    const partialY = maskY + maskHeight * partial.y;
+    const partialWidth = maskWidth * partial.width;
+    const partialHeight = maskHeight * partial.height;
+    const block = Math.max(3, Math.min(partialWidth, partialHeight) / 7);
+    for (let yy = partialY; yy < partialY + partialHeight; yy += block) {
+      for (let xx = partialX; xx < partialX + partialWidth; xx += block) {
+        const tone = 225 + ((Math.floor(xx / block) + Math.floor(yy / block) + variant) % 3) * 8;
+        context.fillStyle = `rgba(${tone}, ${tone}, ${Math.min(255, tone + 4)}, 0.22)`;
+        context.fillRect(xx, yy, block + 1, block + 1);
+      }
+    }
+    context.fillStyle = "rgba(255, 255, 255, 0.1)";
+    context.fillRect(partialX, partialY, partialWidth, partialHeight);
+    context.strokeStyle = "rgba(15, 23, 42, 0.12)";
+    context.lineWidth = Math.max(1, partialWidth / 50);
+    context.strokeRect(partialX, partialY, partialWidth, partialHeight);
+  };
+
+  const fallbackFaceRegions = (width: number, height: number) => {
+    const landscape = width >= height;
+    const columns = landscape ? 4 : 2;
+    const rows = landscape ? 2 : 4;
+    const regions: FaceMaskRegion[] = [];
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        regions.push({
+          x: column / columns + 0.35 / columns,
+          y: row / rows + 0.15 / rows,
+          width: 0.3 / columns,
+          height: 0.16 / rows,
+          confidence: 0.2,
+          view: "fallback",
+        });
+      }
+    }
+    return regions;
+  };
+
+  const createFaceMaskedReferenceAsset = async (source: StageAsset) => {
+    const image = await loadImageForCanvas(source.url);
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("模特遮挡处理失败");
+    context.drawImage(image, 0, 0);
+    const detectedRegions = await analyzeFaceMaskRegions(source.assetId);
+    const regions = detectedRegions.length ? detectedRegions : fallbackFaceRegions(canvas.width, canvas.height);
+    regions.forEach((region, index) =>
+      drawFaceMask(
+        context,
+        region.x * canvas.width,
+        region.y * canvas.height,
+        region.width * canvas.width,
+        region.height * canvas.height,
+        index,
+      ),
+    );
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+    if (!blob) throw new Error("模特遮挡图导出失败");
+    const file = new File([blob], "spokesperson-model-reference-masked.jpg", { type: "image/jpeg" });
+    const preview = URL.createObjectURL(file);
+    const assetId = await uploadRecreateItem({ file, preview, name: "已遮挡模特参考", byteSize: file.size });
+    const url = await resolveAssetPreviewUrl(assetId, preview);
+    if (url !== preview) URL.revokeObjectURL(preview);
+    return { assetId, url, mimeType: "image/jpeg", name: "已遮挡模特参考" };
+  };
+
   const generateStage = async (stage: SpokespersonStage) => {
     if (!selectedPlan) {
       setVideoError("请先选择一个口播方案");
@@ -637,10 +774,18 @@ export function ModelSpokespersonScriptPage() {
         setStageTasks((current) => ({ ...current, [stage]: { ...task, stage } }));
         if (task.status === "SUCCEEDED" && task.outputs?.[0]) {
           const output = task.outputs[0];
-          const asset = { assetId: output.assetId, url: output.url, mimeType: output.mimeType, name: output.name };
+          const generatedAsset = { assetId: output.assetId, url: output.url, mimeType: output.mimeType, name: output.name };
+          const asset = stage === "modelReference" ? await createFaceMaskedReferenceAsset(generatedAsset) : generatedAsset;
           setStageAssets((current) => ({ ...current, [stage]: asset }));
-          traceStage("stage_succeeded", { stage, taskId: created.taskId, assetId: output.assetId, mimeType: output.mimeType || "" });
-          setNotice(stage === "productMultiview" ? "商品多视图已生成" : stage === "modelReference" ? "模特参考已生成" : "12格分镜图已生成");
+          traceStage("stage_succeeded", {
+            stage,
+            taskId: created.taskId,
+            assetId: asset.assetId,
+            sourceAssetId: output.assetId,
+            mimeType: asset.mimeType || output.mimeType || "",
+            faceMasked: stage === "modelReference",
+          });
+          setNotice(stage === "productMultiview" ? "商品多视图已生成" : stage === "modelReference" ? "模特参考已生成并完成遮挡" : "12格分镜图已生成");
           return asset;
         }
         if (["FAILED", "REJECTED", "CANCELED"].includes(task.status)) {

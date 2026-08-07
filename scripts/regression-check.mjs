@@ -872,6 +872,11 @@ const checks = [
     "分阶段素材",
   ],
   [
+    "Model spokesperson masks generated model reference",
+    "app/components/model-spokesperson-script-page.tsx",
+    "已遮挡模特参考",
+  ],
+  [
     "Model spokesperson scripts are server generated and rate limited",
     "app/api/workflows/model-spokesperson-script/route.ts",
     "spokesperson-script:attempts",
