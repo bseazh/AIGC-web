@@ -42,8 +42,8 @@ export const videoModules: VideoModule[] = [
         sourceFile: "app/create/product-ad-video/page.tsx",
       },
       {
-        title: "模特口播文案",
-        text: "先生成可编辑的分镜口播稿，后续衔接口型、配音与人物视频生成。",
+        title: "商品口播导演",
+        text: "先识别商品和场景，再生成可编辑的故事分镜、口播和视频任务包。",
         href: "/create/model-spokesperson-video",
         workflowKey: "model-spokesperson-script",
         icon: Video,

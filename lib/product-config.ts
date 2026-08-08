@@ -156,7 +156,7 @@ export const seedanceVideoWorkflow = {
 export const modelSpokespersonVideoWorkflow = {
   ...videoWorkflowBase,
   key: "model-spokesperson-video",
-  name: "AI 模特口播视频",
+  name: "商品导演视频",
   minAssets: 1,
   scenes: ["口播讲解", "商品展示", "多视图讲解", "种草转化"],
   styles: ["自然口播", "专业讲解", "清晰转化", "镜头连贯"],

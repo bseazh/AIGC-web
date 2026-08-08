@@ -1124,6 +1124,20 @@ a { color: inherit; text-decoration: none; }
 .spokesperson-plan-story { margin-top: 9px !important; padding: 8px; border-radius: 9px; color: #405973 !important; background: #f7fbff; font-weight: 800; }
 .spokesperson-plan-beats { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; color: #65778d; font-size: 10px; line-height: 1.5; }
 .spokesperson-plan-beats li::marker { color: #19a9bf; font-weight: 900; }
+.spokesperson-director-brief { margin-top: 13px; padding: 12px; display: grid; gap: 11px; border: 1px solid #e0eaf4; border-radius: 13px; background: #fbfdff; }
+.spokesperson-director-brief > header { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+.spokesperson-director-brief > header strong { color: #31465f; font-size: 12px; }
+.spokesperson-director-brief > header small, .spokesperson-director-question small { color: #8794a7; font-size: 10px; }
+.spokesperson-understanding-card { padding: 9px; border-radius: 10px; background: #f2f7fb; }
+.spokesperson-understanding-card > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.spokesperson-understanding-card b { color: #3f5873; font-size: 11px; }
+.spokesperson-understanding-card button { min-height: 28px; padding: 0 8px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid #a9dfe5; border-radius: 999px; color: #157f96; background: #effcff; font-size: 10px; font-weight: 900; }
+.spokesperson-understanding-card p { margin: 5px 0 0; white-space: pre-line; color: #697b91; font-size: 10px; line-height: 1.55; }
+.spokesperson-director-question { display: grid; gap: 7px; }
+.spokesperson-director-question > span { color: #53667d; font-size: 11px; font-weight: 800; }
+.spokesperson-director-question nav { display: flex; flex-wrap: wrap; gap: 6px; }
+.spokesperson-director-question button { min-height: 29px; padding: 0 8px; border: 1px solid #d8e2ee; border-radius: 999px; color: #61738a; background: #fff; font-size: 10px; font-weight: 800; }
+.spokesperson-director-question button.active { border-color: #8061e1; color: #6747ca; background: #f2efff; }
 .spokesperson-case-board.inline { margin-top: auto; padding: 14px; box-shadow: none; }
 .spokesperson-case-grid.compact { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 9px; }
 .spokesperson-case-grid.compact article { border-radius: 11px; }

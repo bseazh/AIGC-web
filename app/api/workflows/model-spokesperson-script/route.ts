@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import { audit } from "@/lib/audit";
+import { createSignedObjectUrl } from "@/lib/cos";
 import { db } from "@/lib/db";
 import { structuredLog, requestContext } from "@/lib/logger";
 import { redis } from "@/lib/redis";
@@ -60,6 +61,14 @@ type SelectedPlanInput = {
   productDirection?: string;
   internalPrompt?: string;
   script?: ScriptResult;
+};
+type DirectorBriefInput = {
+  audience?: string;
+  usageScene?: string;
+  valueFocus?: string;
+  storyStyle?: string;
+  peopleMode?: string;
+  productUnderstanding?: string;
 };
 type VideoPackResult = {
   status: "READY";
@@ -229,6 +238,81 @@ async function callScriptLLM(options: {
   return parseJsonObject(raw);
 }
 
+async function callDirectorVision(options: {
+  productName: string;
+  sellingPoints: string;
+  imageUrls: string[];
+  requestLog: Record<string, unknown>;
+}) {
+  const config = providerConfig();
+  if (!config) {
+    throw Object.assign(new Error("请先配置 DeepSeek 或 SophNet Chat 大模型后再识别商品"), {
+      code: "LLM_NOT_CONFIGURED",
+      status: 503,
+    });
+  }
+  const content: Array<Record<string, unknown>> = [
+    {
+      type: "text",
+      text: [
+        "你是电商短视频商品导演。请根据用户上传的商品图和少量文字，识别商品并推荐广告拍摄方向。",
+        "只输出严格 JSON，不要 Markdown，不要解释。",
+        "JSON 字段：productName、productUnderstanding、audience、usageScene、valueFocus、storyStyle、peopleMode、sellingPoints。",
+        "productName：尽量给出具体商品名或商品类型；如果看不清，输出用户上传商品。",
+        "productUnderstanding：用 80-160 字讲清楚商品是什么、适合谁、解决什么问题、为什么值得拍。",
+        "audience 必须是以下之一：系统推荐、工程采购、活动主办方、商铺老板、展厅/门店负责人、家庭用户。",
+        "usageScene 必须是以下之一：系统推荐、会议室、展厅、商铺、活动现场、客厅、办公空间。",
+        "valueFocus 必须是以下之一：系统推荐、空间更整洁、声音覆盖、安装美观、采购省心、高级质感、性价比。",
+        "storyStyle 必须是以下之一：系统推荐、采购决策、场景痛点、前后对比、高级空间感、专业讲解。",
+        "peopleMode 必须是 no_people、hands_or_back、spokesperson 之一；默认优先 no_people 或 hands_or_back，不要主动推荐清晰真人出镜。",
+        "sellingPoints 是数组，输出 3-5 个可拍摄卖点，每个不超过 18 字。",
+        `用户填写商品名：${options.productName || "未填写"}`,
+        `用户补充：${options.sellingPoints || "未填写"}`,
+      ].join("\n"),
+    },
+    ...options.imageUrls.slice(0, 4).map((url) => ({ type: "image_url", image_url: { url } })),
+  ];
+  const response = await fetch(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: config.model,
+      stream: false,
+      temperature: 0.5,
+      messages: [{ role: "user", content }],
+      response_format: { type: "json_object" },
+    }),
+    signal: AbortSignal.timeout(60_000),
+  });
+  const payload = await response.json().catch(() => null);
+  await db.query(
+    `INSERT INTO provider_call_logs (provider, operation, request_json, response_status, response_json, error_code, provider_request_id)
+     VALUES ($1, 'model_spokesperson_director_brief', $2::jsonb, $3, $4::jsonb, $5, $6)`,
+    [
+      config.provider,
+      JSON.stringify({ ...options.requestLog, model: config.model, imageCount: options.imageUrls.length }),
+      response.status,
+      JSON.stringify(payload || {}),
+      response.ok ? null : "LLM_CHAT_HTTP_ERROR",
+      payload?.id || response.headers.get("x-request-id"),
+    ],
+  );
+  if (!response.ok) {
+    throw Object.assign(
+      new Error(payload?.message || payload?.error?.message || `LLM HTTP ${response.status}`),
+      { code: "LLM_CHAT_FAILED", status: 502 },
+    );
+  }
+  const raw = payload?.choices?.[0]?.message?.content;
+  if (typeof raw !== "string") {
+    throw Object.assign(new Error("大模型没有返回可用商品识别文本"), {
+      code: "LLM_EMPTY_RESPONSE",
+      status: 502,
+    });
+  }
+  return parseJsonObject(raw);
+}
+
 function plansPrompt(input: {
   productName: string;
   sellingPoints: string;
@@ -236,9 +320,11 @@ function plansPrompt(input: {
   tone: Tone;
   duration: Duration;
   productImageCount: number;
+  directorBrief: DirectorBriefInput;
 }) {
+  const directorLines = directorBriefLines(input.directorBrief);
   return [
-    "请为 AI 模特口播视频生成 A/B/C 三套 15 秒带货方案，输出严格 JSON。",
+    "请为商品口播导演视频生成 A/B/C 三套 15 秒带货方案，输出严格 JSON。",
     "JSON 结构：{ \"plans\": [ ...3项... ] }。",
     "每个 plan 字段必须为：label、title、angle、storyArc、actionBeats、sellingPointSummary、modelDirection、productDirection、internalPrompt、script。",
     "label 必须分别是 A、B、C。",
@@ -256,13 +342,51 @@ function plansPrompt(input: {
     "modelDirection 必须说明模特动作链路：从场景问题、拿起/靠近/操作商品、细节证明、情绪反馈到收尾；禁止只写注视、拿起、指向。",
     "internalPrompt 必须是隐藏给视频模型的中文提示词，包含商品多视图、虚拟模特多视图、动作导演脚本、故事弧线、字幕节奏；不得给用户显示。",
     "如果用户上传了真人/模特图，internalPrompt 必须要求先合规安检、隐私化、虚拟模特多视图，不得直接提交可识别真人脸。",
+    "请先像广告导演一样理解商品价值，再把卖点变成故事动作，不要把方案写成单纯口播稿。",
+    "如果用户选择不需要真人，方案和分镜必须以商品、空间、安装/操作过程、场景前后变化为主；最终视频可只使用手部、背影或无人物镜头。",
     `商品名称：${input.productName}`,
     `用户描述/卖点：${input.sellingPoints}`,
     `拆分卖点：${input.points.join("、")}`,
     `用户选择口吻：${toneLabels[input.tone]}`,
     `目标时长：${input.duration} 秒`,
     `用户上传商品图数量：${input.productImageCount}`,
+    ...directorLines,
   ].join("\n");
+}
+
+function directorBriefLines(brief: DirectorBriefInput) {
+  return [
+    "导演问答/商品理解：",
+    `- 商品理解：${compact(brief.productUnderstanding, 260) || "由商品名称、描述和图片数量推断商品用途、目标用户和场景价值"}`,
+    `- 目标用户：${compact(brief.audience, 80) || "系统推荐"}`,
+    `- 使用场景：${compact(brief.usageScene, 80) || "系统推荐"}`,
+    `- 价值重点：${compact(brief.valueFocus, 80) || "系统推荐"}`,
+    `- 故事表达：${compact(brief.storyStyle, 80) || "系统推荐"}`,
+    `- 人物参与：${compact(brief.peopleMode, 80) || "no_people"}`,
+  ];
+}
+
+function oneOf(value: unknown, allowed: string[], fallback: string) {
+  return typeof value === "string" && allowed.includes(value) ? value : fallback;
+}
+
+function normalizeDirectorBrief(value: unknown, fallback: DirectorBriefInput) {
+  const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const sellingPoints = Array.isArray(record.sellingPoints)
+    ? record.sellingPoints.map((item) => compact(item, 18)).filter(Boolean).slice(0, 5)
+    : [];
+  return {
+    productName: compact(record.productName, 80),
+    directorBrief: {
+      productUnderstanding: compact(record.productUnderstanding, 260) || compact(fallback.productUnderstanding, 260),
+      audience: oneOf(record.audience, ["系统推荐", "工程采购", "活动主办方", "商铺老板", "展厅/门店负责人", "家庭用户"], "系统推荐"),
+      usageScene: oneOf(record.usageScene, ["系统推荐", "会议室", "展厅", "商铺", "活动现场", "客厅", "办公空间"], "系统推荐"),
+      valueFocus: oneOf(record.valueFocus, ["系统推荐", "空间更整洁", "声音覆盖", "安装美观", "采购省心", "高级质感", "性价比"], "系统推荐"),
+      storyStyle: oneOf(record.storyStyle, ["系统推荐", "采购决策", "场景痛点", "前后对比", "高级空间感", "专业讲解"], "系统推荐"),
+      peopleMode: oneOf(record.peopleMode, ["no_people", "hands_or_back", "spokesperson"], "no_people"),
+    },
+    sellingPoints,
+  };
 }
 
 function scriptPrompt(input: {
@@ -273,7 +397,7 @@ function scriptPrompt(input: {
   duration: Duration;
 }) {
   return [
-    "请生成一版 AI 模特口播讲稿，输出严格 JSON。",
+    "请生成一版商品口播讲稿，输出严格 JSON。",
     "JSON 字段：title、tone、segments、alternativeOpeners。",
     "segments 正好 4 段，字段：stage、timeRange、narration、visual。",
     "时间固定为：0-3秒、3-8秒、8-12秒、12-15秒。",
@@ -295,12 +419,14 @@ function packPrompt(input: {
   duration: Duration;
   productImageCount: number;
   selectedPlan: SelectedPlanInput;
+  directorBrief: DirectorBriefInput;
 }) {
   const scriptSegments = Array.isArray(input.selectedPlan.script?.segments)
     ? input.selectedPlan.script?.segments
     : [];
+  const directorLines = directorBriefLines(input.directorBrief);
   return [
-    "请为 AI 模特口播生成一个可直接提交的视频任务包，输出严格 JSON。",
+    "请为商品口播导演视频生成一个可直接提交的视频任务包，输出严格 JSON。",
     "JSON 结构必须包含：summary、productMultiview、modelRecommendation、storyboard、bindings、finalPrompt。",
     "productMultiview.summary 要用一句话概括商品多视图将如何生成；views 必须正好 5 条，依次为正面、侧面、45度、细节特写、使用状态。",
     "productMultiview.views 每项包含：name、purpose、prompt、note；prompt 必须写成能直接给图像模型使用的中文提示词。",
@@ -313,6 +439,7 @@ function packPrompt(input: {
     "每格 scene 必须说明具体场景关系，例如客厅、办公桌、厨房台面、浴室、户外包内、收纳前后等；不能只写棚拍或背景。",
     "visual 必须写出人物在场景里的具体行为、商品在画面里的位置、前后动作连续性和情绪变化；禁止 12 格都是站立指向商品。",
     "camera 必须有镜头变化：近景、半身、中景、过肩、推近、转场、细节 macro、手部操作特写至少混合 4 类。",
+    "人物参与规则必须服从导演问答：no_people 表示 12 宫格不出现真人，最终视频也以商品和空间为主；hands_or_back 表示 12 宫格可出现手部/背影/安装动作但不能出现可识别人脸；spokesperson 表示最终视频可有讲解者，但分镜图仍避免清晰人脸。",
     "每一格 frames 都必须有非空 narration；narration 可以重复该时间段绑定的短口播，但绝不能省略、留空或只写‘同上’。",
     "bindings 必须把 4 段口播与 12 宫格分镜绑定起来，每段至少绑定 2-4 个镜头，字段：segmentId、timeRange、narration、frameIndexes、note。",
     "finalPrompt 是给视频生成模型的完整中文提示词，不要输出给用户可编辑版本；必须一次性合并商品多视图、模特建议、分镜绑定、口播时长、比例和连续动作要求。",
@@ -332,6 +459,7 @@ function packPrompt(input: {
     `方案模特方向：${input.selectedPlan.modelDirection || ""}`,
     `方案内置提示：${input.selectedPlan.internalPrompt || ""}`,
     `方案讲稿：${scriptSegments.map((segment) => segment.narration).join(" | ")}`,
+    ...directorLines,
   ].join("\n");
 }
 
@@ -597,40 +725,99 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const productName = text(body?.productName, 80);
   const sellingPoints = text(body?.sellingPoints, 1000);
-  const mode = body?.mode === "plans" || body?.mode === "pack" ? body.mode : "script";
+  const directorBrief = body?.directorBrief && typeof body.directorBrief === "object"
+    ? (body.directorBrief as DirectorBriefInput)
+    : {};
+  const mode = body?.mode === "director" || body?.mode === "plans" || body?.mode === "pack" ? body.mode : "script";
   const tone = tones.includes(body?.tone) ? (body.tone as Tone) : "natural";
   const duration = durations.includes(Number(body?.duration) as Duration)
     ? (Number(body.duration) as Duration)
     : 15;
-  const points = splitPoints(sellingPoints);
+  const requestAssetIds = Array.isArray(body?.assetIds)
+    ? body.assetIds.filter((id: unknown): id is string => typeof id === "string").slice(0, 4)
+    : [];
   const productImageCount = Math.max(0, Math.min(8, Number(body?.productImageCount) || 0));
+  const normalizedProductName = productName || (productImageCount || requestAssetIds.length ? "用户上传商品" : "");
+  const points = splitPoints(
+    sellingPoints ||
+      [
+        directorBrief.productUnderstanding,
+        directorBrief.audience && `目标用户：${directorBrief.audience}`,
+        directorBrief.usageScene && `使用场景：${directorBrief.usageScene}`,
+        directorBrief.valueFocus && `价值重点：${directorBrief.valueFocus}`,
+      ].filter(Boolean).join("；"),
+  );
   const selectedPlan = body?.selectedPlan && typeof body.selectedPlan === "object" ? (body.selectedPlan as SelectedPlanInput) : null;
 
-  if (!productName || !points.length) {
+  if (mode !== "director" && (!normalizedProductName || !points.length)) {
     return NextResponse.json(
       {
         code: "SCRIPT_INPUT_REQUIRED",
-        message: "请填写商品名称和至少一个核心卖点",
+        message: "请至少上传商品图，或填写商品名称/一句话描述",
       },
       { status: 400 },
     );
   }
 
   try {
+    if (mode === "director") {
+      const assetIds = requestAssetIds;
+      if (!assetIds.length && !productName && !sellingPoints) {
+        return NextResponse.json(
+          { code: "SCRIPT_INPUT_REQUIRED", message: "请先上传商品图，或填写商品名称/一句话描述" },
+          { status: 400 },
+        );
+      }
+      const assets = assetIds.length
+        ? await db.query<{ id: string; storage_key: string; mime_type: string; original_name: string | null }>(
+            "SELECT id, storage_key, mime_type, original_name FROM assets WHERE id = ANY($1::uuid[]) AND owner_id = $2 AND audit_status = 'READY'",
+            [assetIds, user.id],
+          )
+        : { rows: [] };
+      const imageUrls = await Promise.all(
+        assets.rows
+          .filter((asset) => asset.mime_type.startsWith("image/"))
+          .slice(0, 4)
+          .map((asset) => createSignedObjectUrl(asset.storage_key, "GET", 900)),
+      );
+      const raw = await callDirectorVision({
+        productName,
+        sellingPoints,
+        imageUrls,
+        requestLog: { mode, productName, hasSellingPoints: Boolean(sellingPoints), assetCount: assetIds.length, imageCount: imageUrls.length },
+      });
+      const analysis = normalizeDirectorBrief(raw, directorBrief);
+      await audit(user.id, "MODEL_SPOKESPERSON_DIRECTOR_BRIEF_GENERATED", request, {
+        type: "director_brief",
+        id: randomUUID(),
+      }, {
+        productName: analysis.productName || normalizedProductName,
+        imageCount: imageUrls.length,
+        peopleMode: analysis.directorBrief.peopleMode,
+      });
+      return NextResponse.json({
+        status: "READY",
+        provider: "llm",
+        ...analysis,
+        generatedAt: new Date().toISOString(),
+      });
+    }
+
     if (mode === "plans") {
       const raw = await callScriptLLM({
         operation: "model_spokesperson_script_plans",
-        prompt: plansPrompt({ productName, sellingPoints, points, tone, duration, productImageCount }),
+        prompt: plansPrompt({ productName: normalizedProductName, sellingPoints, points, tone, duration, productImageCount, directorBrief }),
         requestLog: {
           mode,
-          productName,
+          productName: normalizedProductName,
           sellingPointCount: points.length,
           tone,
           duration,
           productImageCount,
+          directorBrief,
         },
       });
-      const plans = normalizePlans(raw, productName, duration);
+      const plans = normalizePlans(raw, normalizedProductName, duration);
       await audit(user.id, "MODEL_SPOKESPERSON_SCRIPT_PLANS_GENERATED", request, {
         type: "script_plan_set",
         id: randomUUID(),
@@ -664,26 +851,28 @@ export async function POST(request: NextRequest) {
       const raw = await callScriptLLM({
         operation: "model_spokesperson_video_pack",
         prompt: packPrompt({
-          productName,
+          productName: normalizedProductName,
           sellingPoints,
           points,
           tone,
           duration,
           productImageCount,
           selectedPlan,
+          directorBrief,
         }),
         requestLog: {
           mode,
-          productName,
+          productName: normalizedProductName,
           sellingPointCount: points.length,
           tone,
           duration,
           productImageCount,
           selectedPlanId: selectedPlan.id || null,
           selectedPlanLabel: selectedPlan.label || null,
+          directorBrief,
         },
       });
-      const pack = normalizePack(raw, productName, duration, selectedPlan);
+      const pack = normalizePack(raw, normalizedProductName, duration, selectedPlan);
       await audit(user.id, "MODEL_SPOKESPERSON_VIDEO_PACK_GENERATED", request, {
         type: "video_pack",
         id: pack.draftId,

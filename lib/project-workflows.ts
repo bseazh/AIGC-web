@@ -13,7 +13,7 @@ export const projectWorkflows = {
   "product-ad-video": { title: "产品广告大片", startPath: "/create/product-ad-video" },
   "recreate-video": { title: "复刻带货视频", startPath: "/create/recreate-video" },
   "video-mix": { title: "智能混剪", startPath: "/create/video-mix" },
-  "model-spokesperson-script": { title: "模特口播文案", startPath: "/create/model-spokesperson-video" },
+  "model-spokesperson-script": { title: "商品口播导演", startPath: "/create/model-spokesperson-video" },
   "seedance-video": { title: "Seedance2 视频", startPath: "/create/seedance-video" },
 } as const;
 

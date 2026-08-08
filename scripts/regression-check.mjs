@@ -833,9 +833,9 @@ const checks = [
     "/create/model-spokesperson-video",
   ],
   [
-    "Video center labels model spokesperson as script phase before video generation",
+    "Video center labels model spokesperson as product director workflow",
     "app/features/video-center/modules.ts",
-    "模特口播文案",
+    "商品口播导演",
     "文案工作台",
   ],
   [
@@ -851,10 +851,46 @@ const checks = [
     "actionBeats",
   ],
   [
+    "Model spokesperson plans consume director brief",
+    "app/api/workflows/model-spokesperson-script/route.ts",
+    "directorBrief",
+    "导演问答/商品理解",
+  ],
+  [
+    "Model spokesperson allows minimal product input",
+    "app/api/workflows/model-spokesperson-script/route.ts",
+    "请至少上传商品图，或填写商品名称/一句话描述",
+    "用户上传商品",
+  ],
+  [
+    "Model spokesperson can auto-recognize product director brief from images",
+    "app/api/workflows/model-spokesperson-script/route.ts",
+    "model_spokesperson_director_brief",
+    "image_url",
+  ],
+  [
     "Model spokesperson plan UI exposes story and action beats",
     "app/components/model-spokesperson-script-page.tsx",
     "spokesperson-plan-story",
     "spokesperson-plan-beats",
+  ],
+  [
+    "Model spokesperson UI exposes auto product recognition",
+    "app/components/model-spokesperson-script-page.tsx",
+    "自动识别/推荐",
+    "analyzeDirectorBrief",
+  ],
+  [
+    "Model spokesperson exposes director question controls",
+    "app/components/model-spokesperson-script-page.tsx",
+    "商品导演问答",
+    "人物参与",
+  ],
+  [
+    "Model spokesperson supports product-only scene director mode",
+    "app/components/model-spokesperson-script-page.tsx",
+    "场景导演参考",
+    "用户选择无真人",
   ],
   [
     "Model spokesperson video pack consumes selected plan story",
@@ -935,6 +971,12 @@ const checks = [
     "Model spokesperson passes audio option to tasks",
     "app/api/tasks/model-spokesperson-video/route.ts",
     "generateAudio: body.generateAudio !== false",
+  ],
+  [
+    "Model spokesperson backend enforces no-person video mode",
+    "app/api/tasks/model-spokesperson-video/route.ts",
+    "用户已选择无真人模式",
+    "peopleMode",
   ],
   [
     "Ark video generation honors audio option",

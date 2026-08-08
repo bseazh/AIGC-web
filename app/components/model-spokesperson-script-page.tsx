@@ -66,12 +66,21 @@ type ScriptPlan = {
   internalPrompt: string;
   script: ScriptResult;
 };
+type DirectorBrief = {
+  audience: string;
+  usageScene: string;
+  valueFocus: string;
+  storyStyle: string;
+  peopleMode: "no_people" | "hands_or_back" | "spokesperson";
+  productUnderstanding: string;
+};
 type Draft = {
   productName: string;
   productBrief: string;
   tone: string;
   duration: number;
   generateAudio: boolean;
+  directorBrief: DirectorBrief;
   productImages: Array<{
     id: string;
     name: string;
@@ -165,11 +174,21 @@ type LibraryAsset = {
 type ModelSourceMode = "auto" | "upload" | "library";
 
 const draftStorageKey = "aigc-model-spokesperson-script-draft";
+const systemRecommended = "系统推荐";
 const toneOptions = [
   ["auto", "智能匹配"],
   ["natural", "自然种草"],
   ["enthusiastic", "强带货"],
   ["professional", "专业讲解"],
+];
+const audienceOptions = [systemRecommended, "工程采购", "活动主办方", "商铺老板", "展厅/门店负责人", "家庭用户"];
+const usageSceneOptions = [systemRecommended, "会议室", "展厅", "商铺", "活动现场", "客厅", "办公空间"];
+const valueFocusOptions = [systemRecommended, "空间更整洁", "声音覆盖", "安装美观", "采购省心", "高级质感", "性价比"];
+const storyStyleOptions = [systemRecommended, "采购决策", "场景痛点", "前后对比", "高级空间感", "专业讲解"];
+const peopleModeOptions: Array<[DirectorBrief["peopleMode"], string]> = [
+  ["no_people", "无真人"],
+  ["hands_or_back", "手部/背影"],
+  ["spokesperson", "真人讲解"],
 ];
 
 const spokespersonCases: SpokespersonCase[] = [
@@ -234,6 +253,17 @@ function createBriefFromCase(item: SpokespersonCase) {
   ].filter(Boolean).join("\n");
 }
 
+function defaultDirectorBrief(): DirectorBrief {
+  return {
+    audience: systemRecommended,
+    usageScene: systemRecommended,
+    valueFocus: systemRecommended,
+    storyStyle: systemRecommended,
+    peopleMode: "no_people",
+    productUnderstanding: "",
+  };
+}
+
 export function ModelSpokespersonScriptPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -248,6 +278,7 @@ export function ModelSpokespersonScriptPage() {
   const [tone, setTone] = useState("auto");
   const [duration] = useState(15);
   const [generateAudio, setGenerateAudio] = useState(true);
+  const [directorBrief, setDirectorBrief] = useState<DirectorBrief>(() => defaultDirectorBrief());
   const [variant, setVariant] = useState(0);
   const [productImages, setProductImages] = useState<ProductImage[]>([]);
   const [plans, setPlans] = useState<ScriptPlan[]>([]);
@@ -266,6 +297,7 @@ export function ModelSpokespersonScriptPage() {
   const [modelUploading, setModelUploading] = useState(false);
   const [videoPhase, setVideoPhase] = useState<"idle" | "uploading" | "generating" | "succeeded" | "failed">("idle");
   const [busy, setBusy] = useState(false);
+  const [directorBusy, setDirectorBusy] = useState(false);
   const [packBusy, setPackBusy] = useState(false);
   const [submitBusy, setSubmitBusy] = useState(false);
   const [videoError, setVideoError] = useState("");
@@ -290,6 +322,7 @@ export function ModelSpokespersonScriptPage() {
       setProductName(draft.productName || "");
       setProductBrief(draft.productBrief || "");
       if (typeof draft.generateAudio === "boolean") setGenerateAudio(draft.generateAudio);
+      setDirectorBrief({ ...defaultDirectorBrief(), ...(draft.directorBrief || {}) });
       if (["auto", "natural", "enthusiastic", "professional"].includes(draft.tone || "")) setTone(draft.tone!);
       if (Array.isArray(draft.productImages)) {
         setProductImages(
@@ -351,7 +384,27 @@ export function ModelSpokespersonScriptPage() {
   const characterCount = fullScript.replace(/\s/g, "").length;
   const estimatedSeconds = estimateSeconds(characterCount);
   const overTarget = !!result && estimatedSeconds > 15;
-  const canGeneratePlans = productName.trim().length > 0 && productBrief.trim().length > 0 && !busy;
+  const canGeneratePlans = (productName.trim().length > 0 || productBrief.trim().length > 0 || productImages.length > 0) && !busy;
+  const productUnderstanding = useMemo(
+    () =>
+      [
+        productName.trim() ? `商品：${productName.trim()}` : productImages.length ? "商品：已上传商品图，等待系统识别用途" : "",
+        directorBrief.productUnderstanding.trim() ? `识别理解：${directorBrief.productUnderstanding.trim()}` : "",
+        productBrief.trim() ? `用户补充：${productBrief.trim()}` : "用户补充：较少，系统需要自动推断广告方向",
+        directorBrief.audience !== systemRecommended ? `目标用户：${directorBrief.audience}` : "目标用户：系统推荐",
+        directorBrief.usageScene !== systemRecommended ? `使用场景：${directorBrief.usageScene}` : "使用场景：系统推荐",
+        directorBrief.valueFocus !== systemRecommended ? `价值重点：${directorBrief.valueFocus}` : "价值重点：系统推荐",
+        directorBrief.storyStyle !== systemRecommended ? `表达方式：${directorBrief.storyStyle}` : "表达方式：系统推荐",
+      ].filter(Boolean).join("\n"),
+    [directorBrief.audience, directorBrief.productUnderstanding, directorBrief.storyStyle, directorBrief.usageScene, directorBrief.valueFocus, productBrief, productImages.length, productName],
+  );
+  const updateDirectorBrief = <Key extends keyof DirectorBrief>(key: Key, value: DirectorBrief[Key]) => {
+    setDirectorBrief((current) => ({ ...current, [key]: value }));
+    setPlans([]);
+    setSelectedPlanId("");
+    setResult(null);
+    setVideoPack(null);
+  };
 
   const draftValue = (): Draft => ({
     productName,
@@ -359,6 +412,7 @@ export function ModelSpokespersonScriptPage() {
     tone,
     duration,
     generateAudio,
+    directorBrief,
     productImages: productImages.map(({ id, name, preview, byteSize, assetId }) => ({
       id,
       name,
@@ -394,7 +448,7 @@ export function ModelSpokespersonScriptPage() {
       }
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [draftHydrated, duration, generateAudio, modelSource, modelSourceMode, plans, productBrief, productImages, projectId, projectTitle, result, selectedPlanId, stageAssets, tone, videoPack]);
+  }, [directorBrief, draftHydrated, duration, generateAudio, modelSource, modelSourceMode, plans, productBrief, productImages, projectId, projectTitle, result, selectedPlanId, stageAssets, tone, videoPack]);
 
   const saveDraft = () => {
     localStorage.setItem(draftStorageKey, JSON.stringify(draftValue()));
@@ -508,6 +562,7 @@ export function ModelSpokespersonScriptPage() {
           mode: "plans",
           productName,
           sellingPoints: productBrief,
+          directorBrief: { ...directorBrief, productUnderstanding },
           audience: "",
           usageScene: "",
           callToAction: "",
@@ -589,6 +644,15 @@ export function ModelSpokespersonScriptPage() {
   const applyCase = (item: SpokespersonCase) => {
     setProductName(item.productName);
     setProductBrief(createBriefFromCase(item));
+    setDirectorBrief({
+      ...defaultDirectorBrief(),
+      audience: item.audience || systemRecommended,
+      usageScene: item.usageScene || systemRecommended,
+      valueFocus: systemRecommended,
+      storyStyle: "场景痛点",
+      peopleMode: "hands_or_back",
+      productUnderstanding: `${item.productName}：${item.sellingPoints}`,
+    });
     if (["natural", "enthusiastic", "professional"].includes(item.tone)) setTone(item.tone);
     setPlans([]);
     setSelectedPlanId("");
@@ -600,6 +664,60 @@ export function ModelSpokespersonScriptPage() {
     setError("");
     setNotice("案例参数已回填，可以生成 A/B/C 方案");
     window.setTimeout(() => setNotice(""), 1800);
+  };
+
+  const analyzeDirectorBrief = async () => {
+    if (!productImages.length && !productName.trim() && !productBrief.trim()) {
+      setError("请先上传商品图，或填写商品名称/一句话描述");
+      return;
+    }
+    setDirectorBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const uploadedImages = await Promise.all(
+        productImages.map(async (image) => {
+          const assetId = image.assetId || (image.file ? await uploadRecreateItem(image) : null);
+          return assetId ? { ...image, assetId, preview: `/api/assets/${assetId}/download/`, file: undefined } : image;
+        }),
+      );
+      setProductImages(uploadedImages);
+      const assetIds = uploadedImages.map((image) => image.assetId).filter((id): id is string => Boolean(id));
+      const response = await fetch("/api/workflows/model-spokesperson-script/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "director",
+          productName,
+          sellingPoints: productBrief,
+          assetIds,
+          productImageCount: uploadedImages.length,
+          directorBrief: { ...directorBrief, productUnderstanding },
+        }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok || body?.status !== "READY" || !body?.directorBrief) {
+        throw new Error(body?.message || "商品识别失败");
+      }
+      const nextBrief = { ...defaultDirectorBrief(), ...body.directorBrief } as DirectorBrief;
+      setDirectorBrief(nextBrief);
+      if (!productName.trim() && typeof body.productName === "string" && body.productName.trim()) setProductName(body.productName.trim());
+      if (!productBrief.trim() && Array.isArray(body.sellingPoints) && body.sellingPoints.length) {
+        setProductBrief(body.sellingPoints.join("；"));
+      }
+      setPlans([]);
+      setSelectedPlanId("");
+      setResult(null);
+      setVideoPack(null);
+      setVideoTask(null);
+      setVideoPhase("idle");
+      setNotice("已完成商品识别和导演推荐");
+      window.setTimeout(() => setNotice(""), 2200);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "商品识别失败");
+    } finally {
+      setDirectorBusy(false);
+    }
   };
 
   const copyScript = async () => {
@@ -633,6 +751,7 @@ export function ModelSpokespersonScriptPage() {
           tone: tone === "auto" ? "natural" : tone,
           duration,
           productImageCount: productImages.length,
+          directorBrief: { ...directorBrief, productUnderstanding },
           selectedPlan,
         }),
       });
@@ -825,7 +944,19 @@ export function ModelSpokespersonScriptPage() {
       stage === "productMultiview"
         ? `商品多视图阶段。只生成同一款${productName}的真实商品多视图参考板，必须包含正面、左右45度、侧面、背面、顶部或底部、材质细节和使用方式小图。保持产品轮廓、材质、颜色、接口、按键、Logo位置和比例一致，不要生成真人，不要生成文字或水印。${pack.productMultiview.summary}`
         : stage === "modelReference"
-          ? [
+          ? directorBrief.peopleMode === "no_people"
+            ? [
+                "任务类型：商品场景导演参考板，不是人物模特图生成。",
+                "根据商品多视图、用户商品描述和导演问答，生成一张 16:9 商品广告场景参考板。",
+                "画面必须以商品、空间、安装/摆放关系、使用前后变化、材质细节和镜头路径为主；不要生成真人、清晰人脸、模特、角色设定或口播人物。",
+                "参考板需要包含：主场景大图、商品安装/摆放位置、空间远景、商品近景、功能/材质细节、使用前后对比、收尾效果氛围。",
+                "必须讲清楚商品在什么场景里解决什么问题，以及它的价值如何通过画面被看见。",
+                "禁止生成字幕、编号、可读文字、Logo、水印、价格贴纸。",
+                `导演问答：目标用户=${directorBrief.audience}；使用场景=${directorBrief.usageScene}；价值重点=${directorBrief.valueFocus}；故事表达=${directorBrief.storyStyle}`,
+                productUnderstanding,
+                pack.modelRecommendation.reason,
+              ].join("\n")
+            : [
               "任务类型：模特/人物多视图参考，不是商品图生成。",
               modelSource
                 ? "用户已提供模特源图：必须以该模特图作为人物身份、发型轮廓、身形比例、穿搭气质和姿态气质的强参考。"
@@ -852,6 +983,11 @@ export function ModelSpokespersonScriptPage() {
               "版式顺序硬规则：画面必须是 4 列 x 3 行；阅读顺序必须从左到右、从上到下，第一行是第1-4格，第二行是第5-8格，第三行是第9-12格；不要蛇形排列，不要乱序，不要交换镜头。",
               "禁止在图像中写任何数字、序号、角标、箭头、字幕、对白文字、口播文字、标题、标签、水印、Logo、价格、贴纸或可读字符；顺序只能通过画面连续性体现，不能通过写编号体现。",
               "每一格都必须有人物、商品和具体场景关系，不能空场，不能只生成商品静物，不能只站着指向商品。",
+              directorBrief.peopleMode === "no_people"
+                ? "人物参与规则：用户选择无真人；12 宫格不要出现真人、模特或清晰人脸，改用商品、空间、安装/摆放关系、镜头路径和场景前后变化讲故事。"
+                : directorBrief.peopleMode === "hands_or_back"
+                  ? "人物参与规则：只能出现手部、背影、安装动作或局部操作，不要出现可识别人脸。"
+                  : "人物参与规则：可以出现讲解者动作，但避免清晰可识别人脸，重点仍是商品和场景。",
               "这不是普通动作列表，而是一条 15 秒小广告：先建立生活场景和问题，再引出商品，再展示细节/使用过程，再给出效果反馈，最后自然收尾。",
               "每格都要表现连续的身体重心、手势、商品展示方向、情绪变化和镜头运动；人物必须是同一位隐私安全虚拟模特，商品外观必须和商品多视图一致。",
               "口播内容只作为内部节奏绑定，不能画进分镜图；不要生成字幕。",
@@ -880,8 +1016,8 @@ export function ModelSpokespersonScriptPage() {
           draftId: projectId,
           assetIds: sourceIds,
           aspectRatio: "16:9",
-          scene: stage === "productMultiview" ? "商品多视图" : stage === "modelReference" ? "人物多视图" : "场景多视图",
-          style: stage === "modelReference" ? "隐私遮挡" : "参考板",
+          scene: stage === "productMultiview" ? "商品多视图" : stage === "modelReference" ? (directorBrief.peopleMode === "no_people" ? "场景导演参考" : "人物多视图") : "场景多视图",
+          style: stage === "modelReference" ? (directorBrief.peopleMode === "no_people" ? "商品场景" : "隐私遮挡") : "参考板",
           prompt: stagePrompt,
         }),
       });
@@ -895,7 +1031,7 @@ export function ModelSpokespersonScriptPage() {
         if (task.status === "SUCCEEDED" && task.outputs?.[0]) {
           const output = task.outputs[0];
           const generatedAsset = { assetId: output.assetId, url: output.url, mimeType: output.mimeType, name: output.name };
-          const asset = stage === "modelReference" ? await createFaceMaskedReferenceAsset(generatedAsset) : generatedAsset;
+          const asset = stage === "modelReference" && directorBrief.peopleMode !== "no_people" ? await createFaceMaskedReferenceAsset(generatedAsset) : generatedAsset;
           setStageAssets((current) => ({ ...current, [stage]: asset }));
           traceStage("stage_succeeded", {
             stage,
@@ -977,8 +1113,15 @@ export function ModelSpokespersonScriptPage() {
           ? "音频要求：请生成自然清晰的中文讲解口播声音，语速适配15秒，声音和画面口型节奏尽量一致。"
           : "音频要求：不要生成讲解声音或旁白，保持视频无口播音频；后期会单独配音。",
         "审核安全提交策略：模特参考图和12格分镜图只作为前端调试产物，不作为 Ark image content 上传；请仅根据以下文字复刻其结构。",
+        directorBrief.peopleMode === "no_people"
+          ? "人物参与：不需要真人出镜，视频以商品、空间场景、安装/摆放、细节和前后变化为主。"
+          : directorBrief.peopleMode === "hands_or_back"
+            ? "人物参与：可以出现手部、背影、安装或操作动作，不出现可识别人脸。"
+            : "人物参与：可以出现讲解者，但不要复刻真实人脸，重点仍是商品价值和场景证明。",
         stageAssets.modelReference
-          ? "模特参考文字化：使用隐私安全虚拟模特，完整人体，正面口播，手势自然，面部不可识别，不复刻真实人脸。"
+          ? directorBrief.peopleMode === "no_people"
+            ? "场景导演参考文字化：使用商品场景参考板，商品是主角，通过空间关系、细节特写和使用前后变化推进故事。"
+            : "模特参考文字化：使用隐私安全虚拟模特，完整人体，正面口播，手势自然，面部不可识别，不复刻真实人脸。"
           : "",
         stageAssets.storyboard
           ? `12格分镜文字化：严格按 4 列 x 3 行从左到右、从上到下的顺序理解为第1-12格；${pack.storyboard.frames.map((frame) => `第${frame.index}格 ${frame.timeRange}，场景：${frame.scene || "同一广告场景连续推进"}，目的：${frame.intent || "推进卖点叙事"}，画面：${frame.visual}，镜头：${frame.camera}，口播：${frame.narration}`).join("；")}`
@@ -998,9 +1141,10 @@ export function ModelSpokespersonScriptPage() {
           resolution: "720p",
           scene: "口播讲解",
           style: "自然口播",
-          productInfo: productBrief,
+          productInfo: [productBrief, productUnderstanding].filter(Boolean).join("\n"),
           specialRequirements: selectedPlan.internalPrompt,
           selectedPlanId: selectedPlan.id,
+          peopleMode: directorBrief.peopleMode,
           generateAudio,
           videoModel: "doubao-seedance-2-0-260128",
           executionMode: "single",
@@ -1029,7 +1173,7 @@ export function ModelSpokespersonScriptPage() {
     return (
       <main className="workspace-loading">
         <Sparkles size={22} />
-        <p>正在载入 AI 模特口播工作台</p>
+        <p>正在载入商品口播导演工作台</p>
       </main>
     );
 
@@ -1041,7 +1185,7 @@ export function ModelSpokespersonScriptPage() {
         </button>
         <div>
           <span>阶段 1 / 2 · 方案到视频</span>
-          <strong>AI 模特口播</strong>
+          <strong>商品口播导演</strong>
         </div>
         <em>
           <FileText size={15} />
@@ -1054,10 +1198,10 @@ export function ModelSpokespersonScriptPage() {
           <div className="spokesperson-script-intro">
             <span>
               <MicVocal size={18} />
-              SPOKESPERSON PLAN
+              PRODUCT DIRECTOR
             </span>
-            <h1>上传商品，先生成 A/B/C 口播方案</h1>
-            <p>用户只需要给商品图和一句描述，系统会内置卖点提炼、多视图策略和 15 秒动作导演脚本。</p>
+            <h1>上传商品，先生成 A/B/C 导演方案</h1>
+            <p>用户只需要给商品图和一句描述，系统会识别商品、推荐场景，并内置 15 秒广告导演脚本。</p>
           </div>
 
           <section className="spokesperson-product-upload">
@@ -1087,7 +1231,7 @@ export function ModelSpokespersonScriptPage() {
 
           <div className="spokesperson-field-grid compact">
             <label>
-              商品名称 <em>*</em>
+              商品名称
               <input value={productName} onChange={(event) => setProductName(event.target.value)} maxLength={80} placeholder="例如：轻氧便携榨汁杯" />
             </label>
             <label>
@@ -1103,7 +1247,7 @@ export function ModelSpokespersonScriptPage() {
           </div>
 
           <label className="spokesperson-wide-field">
-            一句话描述 / 补充卖点 <em>*</em>
+            一句话描述 / 补充卖点
             <textarea
               value={productBrief}
               onChange={(event) => setProductBrief(event.target.value)}
@@ -1112,6 +1256,61 @@ export function ModelSpokespersonScriptPage() {
             />
             <small>{productBrief.length}/600</small>
           </label>
+
+          <section className="spokesperson-director-brief">
+            <header>
+              <strong>商品导演问答</strong>
+              <small>不懂怎么拍就保持系统推荐</small>
+            </header>
+            <div className="spokesperson-understanding-card">
+              <div>
+                <b>商品理解卡</b>
+                <button type="button" onClick={() => void analyzeDirectorBrief()} disabled={directorBusy || imageUploading}>
+                  {directorBusy ? <LoaderCircle className="generation-spinner" size={13} /> : <Sparkles size={13} />}
+                  {directorBusy ? "识别中" : "自动识别/推荐"}
+                </button>
+              </div>
+              <p>{productUnderstanding}</p>
+            </div>
+            {([
+              ["audience", "想打动谁", audienceOptions],
+              ["usageScene", "主要场景", usageSceneOptions],
+              ["valueFocus", "突出价值", valueFocusOptions],
+              ["storyStyle", "故事方式", storyStyleOptions],
+            ] as Array<[keyof DirectorBrief, string, string[]]>).map(([key, label, options]) => (
+              <div className="spokesperson-director-question" key={key}>
+                <span>{label}</span>
+                <nav>
+                  {options.map((option) => (
+                    <button
+                      type="button"
+                      className={directorBrief[key] === option ? "active" : ""}
+                      onClick={() => updateDirectorBrief(key, option as never)}
+                      key={option}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+            ))}
+            <div className="spokesperson-director-question">
+              <span>人物参与</span>
+              <nav>
+                {peopleModeOptions.map(([value, label]) => (
+                  <button
+                    type="button"
+                    className={directorBrief.peopleMode === value ? "active" : ""}
+                    onClick={() => updateDirectorBrief("peopleMode", value)}
+                    key={value}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </nav>
+              <small>默认分镜不出现可识别人脸；最终视频按这里决定是否加入手部、背影或讲解者。</small>
+            </div>
+          </section>
 
           <div className="spokesperson-options compact">
             <div>
@@ -1356,6 +1555,7 @@ export function ModelSpokespersonScriptPage() {
                     </div>
                     <span>{Object.keys(stageAssets).length}/3 已完成</span>
                   </header>
+                  {directorBrief.peopleMode !== "no_people" ? (
                   <section className="spokesperson-model-source">
                     <header>
                       <strong>模特来源</strong>
@@ -1407,10 +1607,15 @@ export function ModelSpokespersonScriptPage() {
                       </div>
                     ) : null}
                   </section>
+                  ) : null}
                   <div className="spokesperson-stage-list">
                     {([
                       ["productMultiview", "1. 商品多视图", "先确认产品的正侧背、细节和结构。"],
-                      ["modelReference", "2. 模特参考", "生成隐私安全的完整人体和动作参考。"],
+                      [
+                        "modelReference",
+                        directorBrief.peopleMode === "no_people" ? "2. 场景导演参考" : "2. 模特参考",
+                        directorBrief.peopleMode === "no_people" ? "生成商品场景、镜头路径和价值证明参考板。" : "生成隐私安全的完整人体和动作参考。",
+                      ],
                       ["storyboard", "3. 12 格分镜图", "把口播、姿态、商品展示和镜头顺序合成一张参考图。"],
                     ] as Array<[SpokespersonStage, string, string]>).map(([stage, title, description]) => {
                       const task = stageTasks[stage];
@@ -1450,7 +1655,7 @@ export function ModelSpokespersonScriptPage() {
                   <VideoGenerationProgress
                     phase={submitBusy && !videoTask ? "uploading" : "generating"}
                     taskStatus={videoTask?.status}
-                    title={videoPack?.title || result?.title || "AI 模特口播视频"}
+                    title={videoPack?.title || result?.title || "商品导演视频"}
                     durationSeconds={duration}
                   />
                 ) : null}
