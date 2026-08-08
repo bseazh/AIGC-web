@@ -74,6 +74,11 @@ type DirectorBrief = {
   peopleMode: "no_people" | "hands_or_back" | "spokesperson";
   productUnderstanding: string;
 };
+type DirectorChatMessage = {
+  role: "assistant" | "user";
+  content: string;
+  quickReplies?: string[];
+};
 type Draft = {
   productName: string;
   productBrief: string;
@@ -81,6 +86,7 @@ type Draft = {
   duration: number;
   generateAudio: boolean;
   directorBrief: DirectorBrief;
+  directorMessages?: DirectorChatMessage[];
   productImages: Array<{
     id: string;
     name: string;
@@ -276,6 +282,9 @@ export function ModelSpokespersonScriptPage() {
   const [duration] = useState(15);
   const [generateAudio, setGenerateAudio] = useState(true);
   const [directorBrief, setDirectorBrief] = useState<DirectorBrief>(() => defaultDirectorBrief());
+  const [directorMessages, setDirectorMessages] = useState<DirectorChatMessage[]>([]);
+  const [directorInput, setDirectorInput] = useState("");
+  const [directorChatBusy, setDirectorChatBusy] = useState(false);
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>("brief");
   const [variant, setVariant] = useState(0);
   const [productImages, setProductImages] = useState<ProductImage[]>([]);
@@ -321,6 +330,7 @@ export function ModelSpokespersonScriptPage() {
       setProductBrief(draft.productBrief || "");
       if (typeof draft.generateAudio === "boolean") setGenerateAudio(draft.generateAudio);
       setDirectorBrief({ ...defaultDirectorBrief(), ...(draft.directorBrief || {}) });
+      if (Array.isArray(draft.directorMessages)) setDirectorMessages(draft.directorMessages.slice(-12));
       if (["auto", "natural", "enthusiastic", "professional"].includes(draft.tone || "")) setTone(draft.tone!);
       if (Array.isArray(draft.productImages)) {
         setProductImages(
@@ -412,6 +422,7 @@ export function ModelSpokespersonScriptPage() {
     duration,
     generateAudio,
     directorBrief,
+    directorMessages,
     productImages: productImages.map(({ id, name, preview, byteSize, assetId }) => ({
       id,
       name,
@@ -447,7 +458,7 @@ export function ModelSpokespersonScriptPage() {
       }
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [directorBrief, draftHydrated, duration, generateAudio, modelSource, modelSourceMode, plans, productBrief, productImages, projectId, projectTitle, result, selectedPlanId, stageAssets, tone, videoPack]);
+  }, [directorBrief, directorMessages, draftHydrated, duration, generateAudio, modelSource, modelSourceMode, plans, productBrief, productImages, projectId, projectTitle, result, selectedPlanId, stageAssets, tone, videoPack]);
 
   const saveDraft = () => {
     localStorage.setItem(draftStorageKey, JSON.stringify(draftValue()));
@@ -663,8 +674,65 @@ export function ModelSpokespersonScriptPage() {
     setVideoPhase("idle");
     setVideoError("");
     setError("");
+    setDirectorMessages([]);
     setNotice("案例参数已回填，可以生成 A/B/C 方案");
     window.setTimeout(() => setNotice(""), 1800);
+  };
+
+  const runDirectorChat = async (message: string) => {
+    const userMessage = message.trim();
+    if (!userMessage && !productImages.length && !productName.trim() && !productBrief.trim()) {
+      setError("请先上传商品图，或简单说一下商品是什么");
+      return;
+    }
+    const nextMessages: DirectorChatMessage[] = userMessage
+      ? [...directorMessages, { role: "user", content: userMessage }]
+      : directorMessages;
+    setDirectorMessages(nextMessages);
+    setDirectorInput("");
+    setDirectorChatBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/workflows/model-spokesperson-script/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "director_chat",
+          productName,
+          sellingPoints: productBrief,
+          directorBrief: { ...directorBrief, productUnderstanding },
+          messages: nextMessages,
+          message: userMessage,
+          productImageCount: productImages.length,
+        }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok || body?.status !== "READY") throw new Error(body?.message || "AI 导演对话失败");
+      const nextBrief = { ...defaultDirectorBrief(), ...directorBrief, ...(body.directorBrief || {}) };
+      setDirectorBrief(nextBrief);
+      if (typeof body.productBriefSuggestion === "string" && body.productBriefSuggestion.trim() && !productBrief.trim()) {
+        setProductBrief(body.productBriefSuggestion.trim());
+      }
+      setDirectorMessages([
+        ...nextMessages,
+        {
+          role: "assistant" as const,
+          content: String(body.reply || "我已更新导演理解，可以继续补充或生成方案。"),
+          quickReplies: Array.isArray(body.quickReplies) ? body.quickReplies.slice(0, 5) : [],
+        },
+      ].slice(-12));
+      setPlans([]);
+      setSelectedPlanId("");
+      setResult(null);
+      setVideoPack(null);
+      setNotice(body.readyToGenerate ? "导演意图已比较清楚，可以生成 A/B/C 方案" : "已更新导演理解，可继续校正");
+      window.setTimeout(() => setNotice(""), 2200);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "AI 导演对话失败");
+      setDirectorMessages(directorMessages);
+    } finally {
+      setDirectorChatBusy(false);
+    }
   };
 
   const renderCaseReferences = () => (
@@ -977,7 +1045,15 @@ export function ModelSpokespersonScriptPage() {
     }
     const stagePrompt =
       stage === "productMultiview"
-        ? `商品多视图阶段。只生成同一款${productName}的真实商品多视图参考板，必须包含正面、左右45度、侧面、背面、顶部或底部、材质细节和使用方式小图。保持产品轮廓、材质、颜色、接口、按键、Logo位置和比例一致，不要生成真人，不要生成文字或水印。${pack.productMultiview.summary}`
+        ? [
+            "商品多视图阶段。只生成同一款真实商品本体参考板，不生成广告场景图。",
+            `商品名称仅作为识别线索：${productName || "用户上传商品"}`,
+            "必须包含正面、左右45度、侧面、背面、顶部或底部、材质/功能细节、接口/按键/结构细节。",
+            "背景必须是纯白、浅灰或干净摄影棚背景；不要放入客厅、厨房、办公室、户外、租房、展会、人物手部或任何故事场景。",
+            "保持产品轮廓、材质、颜色、接口、按键、Logo位置和比例一致；不得因为用户输入的使用场景改变商品造型、材质或摆放环境。",
+            "不要生成真人，不要生成文字、标签、编号、价格或水印。",
+            pack.productMultiview.summary,
+          ].join("\n")
         : stage === "modelReference"
           ? directorBrief.peopleMode === "no_people"
             ? [
@@ -1321,6 +1397,53 @@ export function ModelSpokespersonScriptPage() {
               </div>
               <p>{productUnderstanding}</p>
             </div>
+            <section className="spokesperson-director-chat">
+              <header>
+                <strong>AI 导演对话</strong>
+                <small>不断校正到满意后再生成方案</small>
+              </header>
+              <div className="spokesperson-director-messages">
+                {directorMessages.length ? (
+                  directorMessages.map((message, index) => (
+                    <article className={message.role} key={`${message.role}-${index}`}>
+                      <p>{message.content}</p>
+                      {message.quickReplies?.length ? (
+                        <nav>
+                          {message.quickReplies.map((reply) => (
+                            <button type="button" onClick={() => void runDirectorChat(reply)} disabled={directorChatBusy} key={reply}>
+                              {reply}
+                            </button>
+                          ))}
+                        </nav>
+                      ) : null}
+                    </article>
+                  ))
+                ) : (
+                  <article className="assistant">
+                    <p>我会先帮你判断商品、受众、价值场景和故事方向。你可以直接点下面选项，或者说“不要租房场景，改成工程采购”。</p>
+                    <nav>
+                      {["帮我推荐适合场景", "突出产品价值", "生成更有故事的方向"].map((reply) => (
+                        <button type="button" onClick={() => void runDirectorChat(reply)} disabled={directorChatBusy} key={reply}>
+                          {reply}
+                        </button>
+                      ))}
+                    </nav>
+                  </article>
+                )}
+              </div>
+              <div className="spokesperson-director-input">
+                <input
+                  value={directorInput}
+                  onChange={(event) => setDirectorInput(event.target.value)}
+                  placeholder="例如：不要家庭场景，面向工程采购商，突出安装效率和成本"
+                  disabled={directorChatBusy}
+                />
+                <button type="button" onClick={() => void runDirectorChat(directorInput)} disabled={directorChatBusy || (!directorInput.trim() && !canGeneratePlans)}>
+                  {directorChatBusy ? <LoaderCircle className="generation-spinner" size={14} /> : <Send size={14} />}
+                  {directorChatBusy ? "沟通中" : "发送"}
+                </button>
+              </div>
+            </section>
             <div className="spokesperson-director-question">
               <span>人物参与</span>
               <nav>

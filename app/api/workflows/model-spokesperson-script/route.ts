@@ -70,6 +70,10 @@ type DirectorBriefInput = {
   peopleMode?: string;
   productUnderstanding?: string;
 };
+type DirectorChatMessage = {
+  role?: string;
+  content?: string;
+};
 type VideoPackResult = {
   status: "READY";
   draftId: string;
@@ -338,7 +342,7 @@ function plansPrompt(input: {
     "讲稿必须短、口语、具体、能真人自然说出口；禁止空泛套话，禁止长句，禁止绝对化宣传。",
     "必须出现商品名或商品类型，最多讲 2 个核心卖点，必须有一个具体使用场景。",
     "visual 要写清楚模特动作、商品入镜方式、镜头景别和细节特写，不要泛泛写展示商品。",
-    "productDirection 必须说明商品多视图参考板如何生成和使用：正面、侧面、材质/功能细节、使用状态、包装/比例锁定。",
+    "productDirection 必须说明商品本体多视图参考板如何生成和使用：正面、侧面、45度、背面/顶部/底部、材质/功能细节、包装/比例锁定；不得把目标用户或广告使用场景写进商品多视图。",
     "modelDirection 必须说明模特动作链路：从场景问题、拿起/靠近/操作商品、细节证明、情绪反馈到收尾；禁止只写注视、拿起、指向。",
     "internalPrompt 必须是隐藏给视频模型的中文提示词，包含商品多视图、虚拟模特多视图、动作导演脚本、故事弧线、字幕节奏；不得给用户显示。",
     "如果用户上传了真人/模特图，internalPrompt 必须要求先合规安检、隐私化、虚拟模特多视图，不得直接提交可识别真人脸。",
@@ -372,7 +376,7 @@ function plansRepairPrompt(input: {
     "每个 plan 必须包含：label、title、angle、storyArc、actionBeats、sellingPointSummary、modelDirection、productDirection、internalPrompt、script。",
     "storyArc 必须非空，讲清楚广告情节：场景问题、商品引出、动作证明、改善结果。",
     "actionBeats 必须正好 4 条，分别对应 0-3秒、3-8秒、8-12秒、12-15秒；每条必须同时写场景、动作、商品位置、镜头运动和卖点目的。",
-    "productDirection 必须非空，说明商品多视图参考板：正面、侧面、材质/功能细节、使用状态、比例锁定。",
+    "productDirection 必须非空，说明商品本体多视图参考板：正面、侧面、45度、背面/顶部/底部、材质/功能细节、比例锁定；不得混入广告使用场景。",
     "modelDirection 必须非空，说明人物或无人物镜头动作链路；如果人物参与是 no_people，就写商品和空间场景动作链路。",
     "internalPrompt 必须非空，是隐藏给视频模型的中文提示词，合并商品多视图、动作导演脚本、故事弧线、15秒节奏、无字幕要求和合规隐私要求。",
     "script.segments 必须正好 4 段，时间固定 0-3秒、3-8秒、8-12秒、12-15秒；每段必须有 narration 和 visual。",
@@ -402,6 +406,56 @@ function directorBriefLines(brief: DirectorBriefInput) {
   ];
 }
 
+function directorChatPrompt(input: {
+  productName: string;
+  sellingPoints: string;
+  points: string[];
+  productImageCount: number;
+  directorBrief: DirectorBriefInput;
+  messages: DirectorChatMessage[];
+  userMessage: string;
+}) {
+  const history = input.messages
+    .slice(-8)
+    .map((message) => `${message.role === "assistant" ? "AI导演" : "用户"}：${compact(message.content, 260)}`)
+    .filter(Boolean)
+    .join("\n");
+  return [
+    "你是电商短视频商品导演，请通过对话帮助用户不断校正商品广告意图。",
+    "目标不是立刻写完整方案，而是理解商品、指出缺失信息、给出可点击选择，并在用户满意后沉淀为导演 brief。",
+    "只输出严格 JSON，不要 Markdown，不要解释。",
+    "JSON 字段：reply、quickReplies、directorBrief、readyToGenerate、productBriefSuggestion。",
+    "reply 是对用户的一段自然中文回复，必须先总结你理解的商品和当前拍摄方向，再提出最多一个关键问题。",
+    "quickReplies 必须是 3-5 个短选项，给用户下一步直接点击选择；选项必须贴合商品，禁止泛泛写家庭用户、租房党等不相关场景。",
+    "directorBrief 必须包含 productUnderstanding、audience、usageScene、valueFocus、storyStyle、peopleMode。",
+    "readyToGenerate 表示信息已足够生成 A/B/C 时为 true；如果目标用户、使用场景、价值重点仍不明确则为 false。",
+    "productBriefSuggestion 是可合并进用户描述的一句话，不超过 120 字。",
+    "如果用户要求修改、否定或纠偏，必须吸收这次意见并覆盖旧方向。",
+    `商品名称：${input.productName || "用户上传商品"}`,
+    `用户描述/卖点：${input.sellingPoints || "用户描述较少，需要根据图片和对话推断"}`,
+    `拆分卖点：${input.points.join("、") || "暂无"}`,
+    `用户上传商品图数量：${input.productImageCount}`,
+    ...directorBriefLines(input.directorBrief),
+    history ? `历史对话：\n${history}` : "历史对话：暂无",
+    `用户最新输入：${input.userMessage}`,
+  ].join("\n");
+}
+
+function normalizeDirectorChat(value: unknown, fallback: DirectorBriefInput) {
+  const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const quickReplies = Array.isArray(record.quickReplies)
+    ? record.quickReplies.map((item) => compact(item, 34)).filter(Boolean).slice(0, 5)
+    : [];
+  const nextBrief = normalizeDirectorBrief(record.directorBrief, fallback).directorBrief;
+  return {
+    reply: compact(record.reply, 420) || "我先按当前商品信息整理方向。你可以补充目标用户或使用场景，我会继续帮你校正。",
+    quickReplies: quickReplies.length ? quickReplies : ["突出核心卖点", "换一个使用场景", "更像真实种草", "更专业讲解"],
+    directorBrief: nextBrief,
+    readyToGenerate: Boolean(record.readyToGenerate),
+    productBriefSuggestion: compact(record.productBriefSuggestion, 180),
+  };
+}
+
 function normalizeDirectorBrief(value: unknown, fallback: DirectorBriefInput) {
   const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
   const sellingPoints = Array.isArray(record.sellingPoints)
@@ -411,11 +465,15 @@ function normalizeDirectorBrief(value: unknown, fallback: DirectorBriefInput) {
     productName: compact(record.productName, 80),
     directorBrief: {
       productUnderstanding: compact(record.productUnderstanding, 260) || compact(fallback.productUnderstanding, 260),
-      audience: compact(record.audience, 80) || "系统推荐",
-      usageScene: compact(record.usageScene, 80) || "系统推荐",
-      valueFocus: compact(record.valueFocus, 80) || "系统推荐",
-      storyStyle: compact(record.storyStyle, 80) || "系统推荐",
-      peopleMode: ["no_people", "hands_or_back", "spokesperson"].includes(String(record.peopleMode)) ? String(record.peopleMode) : "no_people",
+      audience: compact(record.audience, 80) || compact(fallback.audience, 80) || "系统推荐",
+      usageScene: compact(record.usageScene, 80) || compact(fallback.usageScene, 80) || "系统推荐",
+      valueFocus: compact(record.valueFocus, 80) || compact(fallback.valueFocus, 80) || "系统推荐",
+      storyStyle: compact(record.storyStyle, 80) || compact(fallback.storyStyle, 80) || "系统推荐",
+      peopleMode: ["no_people", "hands_or_back", "spokesperson"].includes(String(record.peopleMode))
+        ? String(record.peopleMode)
+        : ["no_people", "hands_or_back", "spokesperson"].includes(String(fallback.peopleMode))
+          ? String(fallback.peopleMode)
+          : "no_people",
     },
     sellingPoints,
   };
@@ -460,8 +518,9 @@ function packPrompt(input: {
   return [
     "请为商品口播导演视频生成一个可直接提交的视频任务包，输出严格 JSON。",
     "JSON 结构必须包含：summary、productMultiview、modelRecommendation、storyboard、bindings、finalPrompt。",
-    "productMultiview.summary 要用一句话概括商品多视图将如何生成；views 必须正好 5 条，依次为正面、侧面、45度、细节特写、使用状态。",
+    "productMultiview.summary 要用一句话概括商品本体多视图将如何生成；views 必须正好 5 条，依次为正面、侧面、45度、背面/顶部/底部、细节特写。",
     "productMultiview.views 每项包含：name、purpose、prompt、note；prompt 必须写成能直接给图像模型使用的中文提示词。",
+    "商品多视图只服务于识别和锁定物品本身，必须使用干净白底/浅灰底/透明棚拍背景；不得根据用户描述里的场景、目标人群或故事设定把商品放进客厅、厨房、办公室、户外、租房、展会等广告场景。",
     "modelRecommendation 包含：mode、label、reason、maskingAdvice；mode 只能是 auto、asset_library、blurred_reference 之一。",
     "如果素材里出现真人、模特或可识别脸部，优先建议 blurred_reference 或 asset_library，不得直接暴露真人脸。",
     "storyboard.summary 要简短说明 12 宫格的故事弧线、使用场景和镜头逻辑；frames 必须正好 12 条，按 0-15 秒顺序排列。",
@@ -648,7 +707,7 @@ function normalizePack(value: unknown, productName: string, duration: Duration, 
     );
   };
 
-  const viewNames = ["正面", "侧面", "45度", "细节特写", "使用状态"];
+  const viewNames = ["正面", "侧面", "45度", "背面/顶部/底部", "细节特写"];
   const views = rawViews.map((item, index) => {
     const view = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
     const prompt = compact(view.prompt, 280);
@@ -777,7 +836,7 @@ export async function POST(request: NextRequest) {
   const directorBrief = body?.directorBrief && typeof body.directorBrief === "object"
     ? (body.directorBrief as DirectorBriefInput)
     : {};
-  const mode = body?.mode === "director" || body?.mode === "plans" || body?.mode === "pack" ? body.mode : "script";
+  const mode = body?.mode === "director" || body?.mode === "director_chat" || body?.mode === "plans" || body?.mode === "pack" ? body.mode : "script";
   const tone = tones.includes(body?.tone) ? (body.tone as Tone) : "natural";
   const duration = durations.includes(Number(body?.duration) as Duration)
     ? (Number(body.duration) as Duration)
@@ -809,6 +868,55 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    if (mode === "director_chat") {
+      const userMessage = text(body?.message, 600);
+      const messages = Array.isArray(body?.messages)
+        ? body.messages
+            .filter((message: unknown): message is DirectorChatMessage => Boolean(message) && typeof message === "object")
+            .slice(-10)
+        : [];
+      if (!userMessage && !normalizedProductName && !points.length) {
+        return NextResponse.json(
+          { code: "SCRIPT_INPUT_REQUIRED", message: "请先上传商品图，或简单说一下商品是什么" },
+          { status: 400 },
+        );
+      }
+      const raw = await callScriptLLM({
+        operation: "model_spokesperson_director_chat",
+        prompt: directorChatPrompt({
+          productName: normalizedProductName,
+          sellingPoints,
+          points,
+          productImageCount,
+          directorBrief,
+          messages,
+          userMessage: userMessage || "请基于当前商品信息提出下一步导演选择题",
+        }),
+        requestLog: {
+          mode,
+          productName: normalizedProductName,
+          sellingPointCount: points.length,
+          productImageCount,
+          directorBrief,
+          messageCount: messages.length,
+        },
+      });
+      const chat = normalizeDirectorChat(raw, directorBrief);
+      await audit(user.id, "MODEL_SPOKESPERSON_DIRECTOR_CHAT", request, {
+        type: "director_chat",
+        id: randomUUID(),
+      }, {
+        readyToGenerate: chat.readyToGenerate,
+        quickReplyCount: chat.quickReplies.length,
+      });
+      return NextResponse.json({
+        status: "READY",
+        provider: "llm",
+        ...chat,
+        generatedAt: new Date().toISOString(),
+      });
+    }
+
     if (mode === "director") {
       const assetIds = requestAssetIds;
       if (!assetIds.length && !productName && !sellingPoints) {

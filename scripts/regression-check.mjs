@@ -881,6 +881,26 @@ const checks = [
     "image_url",
   ],
   [
+    "Model spokesperson supports iterative director chat",
+    "app/api/workflows/model-spokesperson-script/route.ts",
+    "model_spokesperson_director_chat",
+    "quickReplies",
+    "readyToGenerate",
+  ],
+  [
+    "Model spokesperson exposes director chat UI",
+    "app/components/model-spokesperson-script-page.tsx",
+    "AI 导演对话",
+    "runDirectorChat",
+    "directorMessages",
+  ],
+  [
+    "Model spokesperson product multiview ignores ad scenes",
+    "app/components/model-spokesperson-script-page.tsx",
+    "只生成同一款真实商品本体参考板",
+    "不要放入客厅、厨房、办公室、户外、租房、展会",
+  ],
+  [
     "Model spokesperson plan UI exposes story and action beats",
     "app/components/model-spokesperson-script-page.tsx",
     "spokesperson-plan-story",

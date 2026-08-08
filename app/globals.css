@@ -1133,6 +1133,21 @@ a { color: inherit; text-decoration: none; }
 .spokesperson-understanding-card b { color: #3f5873; font-size: 11px; }
 .spokesperson-understanding-card button { min-height: 28px; padding: 0 8px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid #a9dfe5; border-radius: 999px; color: #157f96; background: #effcff; font-size: 10px; font-weight: 900; }
 .spokesperson-understanding-card p { margin: 5px 0 0; white-space: pre-line; color: #697b91; font-size: 10px; line-height: 1.55; }
+.spokesperson-director-chat { display: grid; gap: 9px; padding: 10px; border: 1px solid #ddeaf3; border-radius: 12px; background: #fff; }
+.spokesperson-director-chat > header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.spokesperson-director-chat > header strong { color: #31465f; font-size: 12px; }
+.spokesperson-director-chat > header small { color: #8794a7; font-size: 10px; }
+.spokesperson-director-messages { max-height: 260px; overflow-y: auto; display: grid; gap: 8px; padding-right: 2px; }
+.spokesperson-director-messages article { max-width: 92%; padding: 8px 9px; display: grid; gap: 7px; border-radius: 11px; font-size: 10px; line-height: 1.55; }
+.spokesperson-director-messages article.assistant { justify-self: start; color: #526a83; background: #f3f8fc; }
+.spokesperson-director-messages article.user { justify-self: end; color: #36506a; background: #effcff; }
+.spokesperson-director-messages p { margin: 0; white-space: pre-line; }
+.spokesperson-director-messages nav { display: flex; flex-wrap: wrap; gap: 6px; }
+.spokesperson-director-messages button { min-height: 27px; padding: 0 8px; border: 1px solid #a9dfe5; border-radius: 999px; color: #157f96; background: #fff; font-size: 10px; font-weight: 900; }
+.spokesperson-director-input { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 7px; }
+.spokesperson-director-input input { height: 34px; border-radius: 9px; font-size: 11px; }
+.spokesperson-director-input button { min-height: 34px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 0; border-radius: 9px; color: #fff; background: linear-gradient(135deg,#7b5de1,#26a9d8); font-size: 11px; font-weight: 900; }
+.spokesperson-director-input button:disabled { opacity: .48; }
 .spokesperson-director-question { display: grid; gap: 7px; }
 .spokesperson-director-question > span { color: #53667d; font-size: 11px; font-weight: 800; }
 .spokesperson-director-question nav { display: flex; flex-wrap: wrap; gap: 6px; }
