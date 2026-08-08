@@ -256,6 +256,40 @@ function createBriefFromCase(item: SpokespersonCase) {
   ].filter(Boolean).join("\n");
 }
 
+function splitSummaryPoints(value: unknown) {
+  if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 4);
+  if (typeof value !== "string") return [];
+  return value
+    .split(/[\n，,；;。]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
+function normalizeActionBeatText(value: unknown) {
+  if (typeof value === "string") return value.trim();
+  if (!value || typeof value !== "object") return "";
+  const record = value as Record<string, unknown>;
+  return [
+    record.timeRange || record.time || record.duration,
+    record.scene || record.environment || record.setting,
+    record.action || record.motion || record.behavior,
+    record.product || record.productPosition || record.assetUse,
+    record.lens || record.camera || record.cameraShot,
+    record.purpose || record.intent || record.goal,
+  ].map((item) => String(item || "").trim()).filter(Boolean).join("；");
+}
+
+function normalizeDraftPlan(plan: ScriptPlan) {
+  return {
+    ...plan,
+    sellingPointSummary: splitSummaryPoints(plan.sellingPointSummary),
+    actionBeats: Array.isArray(plan.actionBeats)
+      ? plan.actionBeats.map((beat) => normalizeActionBeatText(beat)).filter(Boolean).slice(0, 4)
+      : [],
+  };
+}
+
 function defaultDirectorBrief(): DirectorBrief {
   return {
     audience: systemRecommended,
@@ -342,7 +376,7 @@ export function ModelSpokespersonScriptPage() {
       if (draft.stageAssets && typeof draft.stageAssets === "object") setStageAssets(draft.stageAssets);
       if (draft.modelSource?.assetId && draft.modelSource.url) setModelSource(draft.modelSource);
       if (["auto", "upload", "library"].includes(draft.modelSourceMode || "")) setModelSourceMode(draft.modelSourceMode!);
-      if (Array.isArray(draft.plans)) setPlans(draft.plans);
+      if (Array.isArray(draft.plans)) setPlans(draft.plans.map((plan) => normalizeDraftPlan(plan as ScriptPlan)));
       if (typeof draft.selectedPlanId === "string") setSelectedPlanId(draft.selectedPlanId);
       if (draft.result?.segments?.length) setResult(draft.result);
       if (draft.videoPack?.finalPrompt) setVideoPack(draft.videoPack);
@@ -585,9 +619,10 @@ export function ModelSpokespersonScriptPage() {
       const body = await response.json().catch(() => null);
       if (!response.ok || body?.status !== "READY" || !Array.isArray(body?.plans))
         throw new Error(body?.message || "口播方案生成失败");
-      setPlans(body.plans);
-      setSelectedPlanId(body.plans[0]?.id || "");
-      setResult(body.plans[0]?.script || null);
+      const normalizedPlans = body.plans.map((plan: ScriptPlan) => normalizeDraftPlan(plan));
+      setPlans(normalizedPlans);
+      setSelectedPlanId(normalizedPlans[0]?.id || "");
+      setResult(normalizedPlans[0]?.script || null);
       setWorkflowStep("plans");
       setVideoPack(null);
       setVideoTask(null);
@@ -597,9 +632,9 @@ export function ModelSpokespersonScriptPage() {
         draftStorageKey,
         JSON.stringify({
           ...draftValue(),
-          plans: body.plans,
-          selectedPlanId: body.plans[0]?.id || "",
-          result: body.plans[0]?.script || null,
+          plans: normalizedPlans,
+          selectedPlanId: normalizedPlans[0]?.id || "",
+          result: normalizedPlans[0]?.script || null,
           videoPack: null,
         }),
       );
@@ -1506,14 +1541,14 @@ export function ModelSpokespersonScriptPage() {
                     </div>
                   </button>
                   <div className="spokesperson-plan-tags">
-                    {plan.sellingPointSummary.slice(0, 3).map((point) => (
+                    {splitSummaryPoints(plan.sellingPointSummary).slice(0, 3).map((point) => (
                       <em key={point}>{point}</em>
                     ))}
                   </div>
                   {plan.storyArc ? <p className="spokesperson-plan-story">{plan.storyArc}</p> : null}
                   {plan.actionBeats?.length ? (
                     <ol className="spokesperson-plan-beats">
-                      {plan.actionBeats.map((beat, beatIndex) => (
+                      {plan.actionBeats.map((beat, beatIndex) => normalizeActionBeatText(beat)).filter(Boolean).map((beat, beatIndex) => (
                         <li key={`${plan.id}-beat-${beatIndex}`}>{beat}</li>
                       ))}
                     </ol>

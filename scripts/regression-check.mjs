@@ -907,6 +907,13 @@ const checks = [
     "spokesperson-plan-beats",
   ],
   [
+    "Model spokesperson restores legacy plan summaries safely",
+    "app/components/model-spokesperson-script-page.tsx",
+    "splitSummaryPoints",
+    "normalizeDraftPlan",
+    "normalizeActionBeatText",
+  ],
+  [
     "Model spokesperson UI exposes auto product recognition",
     "app/components/model-spokesperson-script-page.tsx",
     "自动识别/推荐",
