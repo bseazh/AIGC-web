@@ -354,6 +354,42 @@ function plansPrompt(input: {
   ].join("\n");
 }
 
+function plansRepairPrompt(input: {
+  productName: string;
+  sellingPoints: string;
+  points: string[];
+  tone: Tone;
+  duration: Duration;
+  productImageCount: number;
+  directorBrief: DirectorBriefInput;
+  rawPlans: unknown;
+  normalizeError: string;
+}) {
+  return [
+    "上一轮 A/B/C 商品口播导演方案 JSON 没有通过结构校验，请在保留原方案创意的基础上补齐字段并重新输出严格 JSON。",
+    "只输出 JSON：{ \"plans\": [ ...3项... ] }。",
+    "必须正好 3 个 plan，label 依次为 A、B、C。",
+    "每个 plan 必须包含：label、title、angle、storyArc、actionBeats、sellingPointSummary、modelDirection、productDirection、internalPrompt、script。",
+    "storyArc 必须非空，讲清楚广告情节：场景问题、商品引出、动作证明、改善结果。",
+    "actionBeats 必须正好 4 条，分别对应 0-3秒、3-8秒、8-12秒、12-15秒；每条必须同时写场景、动作、商品位置、镜头运动和卖点目的。",
+    "productDirection 必须非空，说明商品多视图参考板：正面、侧面、材质/功能细节、使用状态、比例锁定。",
+    "modelDirection 必须非空，说明人物或无人物镜头动作链路；如果人物参与是 no_people，就写商品和空间场景动作链路。",
+    "internalPrompt 必须非空，是隐藏给视频模型的中文提示词，合并商品多视图、动作导演脚本、故事弧线、15秒节奏、无字幕要求和合规隐私要求。",
+    "script.segments 必须正好 4 段，时间固定 0-3秒、3-8秒、8-12秒、12-15秒；每段必须有 narration 和 visual。",
+    "所有 narration 合计控制在 45-65 个中文字，每段不超过 18 个中文字。",
+    "不得输出 Markdown，不得解释。",
+    `校验错误：${input.normalizeError}`,
+    `商品名称：${input.productName}`,
+    `用户描述/卖点：${input.sellingPoints}`,
+    `拆分卖点：${input.points.join("、")}`,
+    `用户选择口吻：${toneLabels[input.tone]}`,
+    `目标时长：${input.duration} 秒`,
+    `用户上传商品图数量：${input.productImageCount}`,
+    ...directorBriefLines(input.directorBrief),
+    `上一轮 JSON：${JSON.stringify(input.rawPlans).slice(0, 12000)}`,
+  ].join("\n");
+}
+
 function directorBriefLines(brief: DirectorBriefInput) {
   return [
     "导演问答/商品理解：",
@@ -500,6 +536,23 @@ function normalizeScript(value: unknown, fallbackTitle: string, duration: Durati
   };
 }
 
+function normalizeActionBeat(value: unknown) {
+  if (typeof value === "string") return compact(value, 90);
+  if (!value || typeof value !== "object") return "";
+  const record = value as Record<string, unknown>;
+  return compact(
+    [
+      compact(record.timeRange ?? record.time ?? record.duration, 18),
+      compact(record.scene ?? record.environment ?? record.setting, 24),
+      compact(record.action ?? record.motion ?? record.behavior, 28),
+      compact(record.product ?? record.productPosition ?? record.assetUse, 28),
+      compact(record.lens ?? record.camera ?? record.cameraShot, 22),
+      compact(record.purpose ?? record.intent ?? record.goal, 28),
+    ].filter(Boolean).join("；"),
+    90,
+  );
+}
+
 function normalizePlans(value: unknown, productName: string, duration: Duration): ScriptPlan[] {
   const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
   const rawPlans = Array.isArray(record.plans) ? record.plans.slice(0, 3) : [];
@@ -515,9 +568,9 @@ function normalizePlans(value: unknown, productName: string, duration: Duration)
     );
     const sellingPointSummary = Array.isArray(plan.sellingPointSummary)
       ? plan.sellingPointSummary.map((point) => compact(point, 18)).filter(Boolean).slice(0, 4)
-      : [];
+      : splitPoints(compact(plan.sellingPointSummary, 120)).map((point) => compact(point, 18)).filter(Boolean).slice(0, 4);
     const actionBeats = Array.isArray(plan.actionBeats)
-      ? plan.actionBeats.map((beat) => compact(beat, 90)).filter(Boolean).slice(0, 4)
+      ? plan.actionBeats.map((beat) => normalizeActionBeat(beat)).filter(Boolean).slice(0, 4)
       : [];
     const angle = compact(plan.angle, 120);
     const storyArc = compact(plan.storyArc, 180);
@@ -813,7 +866,43 @@ export async function POST(request: NextRequest) {
           directorBrief,
         },
       });
-      const plans = normalizePlans(raw, normalizedProductName, duration);
+      let plans: ScriptPlan[];
+      try {
+        plans = normalizePlans(raw, normalizedProductName, duration);
+      } catch (caught) {
+        const normalizeError = caught instanceof Error ? caught.message : "LLM 方案结构不完整";
+        structuredLog("warn", "model_spokesperson_plan_repair_started", {
+          ...requestContext(request),
+          userId: user.id,
+          normalizeError,
+          productName: normalizedProductName,
+        });
+        const repaired = await callScriptLLM({
+          operation: "model_spokesperson_script_plans_repair",
+          prompt: plansRepairPrompt({
+            productName: normalizedProductName,
+            sellingPoints,
+            points,
+            tone,
+            duration,
+            productImageCount,
+            directorBrief,
+            rawPlans: raw,
+            normalizeError,
+          }),
+          requestLog: {
+            mode,
+            productName: normalizedProductName,
+            sellingPointCount: points.length,
+            tone,
+            duration,
+            productImageCount,
+            directorBrief,
+            repairFor: normalizeError,
+          },
+        });
+        plans = normalizePlans(repaired, normalizedProductName, duration);
+      }
       await audit(user.id, "MODEL_SPOKESPERSON_SCRIPT_PLANS_GENERATED", request, {
         type: "script_plan_set",
         id: randomUUID(),

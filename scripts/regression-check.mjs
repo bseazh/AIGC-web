@@ -863,6 +863,12 @@ const checks = [
     "导演问答/商品理解",
   ],
   [
+    "Model spokesperson repairs incomplete LLM plan JSON",
+    "app/api/workflows/model-spokesperson-script/route.ts",
+    "model_spokesperson_script_plans_repair",
+    "plansRepairPrompt",
+  ],
+  [
     "Model spokesperson allows minimal product input",
     "app/api/workflows/model-spokesperson-script/route.ts",
     "请至少上传商品图，或填写商品名称/一句话描述",
