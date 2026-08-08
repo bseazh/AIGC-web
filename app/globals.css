@@ -1138,6 +1138,14 @@ a { color: inherit; text-decoration: none; }
 .spokesperson-director-question nav { display: flex; flex-wrap: wrap; gap: 6px; }
 .spokesperson-director-question button { min-height: 29px; padding: 0 8px; border: 1px solid #d8e2ee; border-radius: 999px; color: #61738a; background: #fff; font-size: 10px; font-weight: 800; }
 .spokesperson-director-question button.active { border-color: #8061e1; color: #6747ca; background: #f2efff; }
+.spokesperson-workflow-steps { width: min(1440px,100%); margin: -4px auto 16px; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
+.spokesperson-workflow-steps button { min-height: 38px; border: 1px solid #d9e4ef; border-radius: 10px; color: #61738a; background: rgba(255,255,255,.86); font-size: 11px; font-weight: 900; }
+.spokesperson-workflow-steps button.active { border-color: #8061e1; color: #6747ca; background: #f2efff; box-shadow: 0 10px 24px rgba(92,75,190,.12); }
+.spokesperson-step-hidden { display: none !important; }
+.spokesperson-director-question.recommended nav { align-items: center; }
+.spokesperson-director-question.recommended em { min-height: 29px; padding: 6px 9px; border-radius: 999px; color: #167f99; background: #effcff; font-size: 10px; font-style: normal; font-weight: 900; }
+.spokesperson-pack-ready { margin: 10px 0 0; padding: 9px 10px; border-radius: 10px; color: #3d6d7b; background: #effcff; font-size: 10px; font-weight: 800; }
+.spokesperson-video-pack-body { display: none !important; }
 .spokesperson-case-board.inline { margin-top: auto; padding: 14px; box-shadow: none; }
 .spokesperson-case-grid.compact { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 9px; }
 .spokesperson-case-grid.compact article { border-radius: 11px; }

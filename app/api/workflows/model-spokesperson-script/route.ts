@@ -260,10 +260,10 @@ async function callDirectorVision(options: {
         "JSON 字段：productName、productUnderstanding、audience、usageScene、valueFocus、storyStyle、peopleMode、sellingPoints。",
         "productName：尽量给出具体商品名或商品类型；如果看不清，输出用户上传商品。",
         "productUnderstanding：用 80-160 字讲清楚商品是什么、适合谁、解决什么问题、为什么值得拍。",
-        "audience 必须是以下之一：系统推荐、工程采购、活动主办方、商铺老板、展厅/门店负责人、家庭用户。",
-        "usageScene 必须是以下之一：系统推荐、会议室、展厅、商铺、活动现场、客厅、办公空间。",
-        "valueFocus 必须是以下之一：系统推荐、空间更整洁、声音覆盖、安装美观、采购省心、高级质感、性价比。",
-        "storyStyle 必须是以下之一：系统推荐、采购决策、场景痛点、前后对比、高级空间感、专业讲解。",
+        "audience：请根据商品真实用途推荐 1 个具体目标用户，不要套用固定模板；例如工程采购、活动主办方、品牌门店负责人、空间设计方、学校/机构采购等。",
+        "usageScene：请根据商品真实用途推荐 1 个具体场景，不要套用固定模板；例如会议室、展厅、商铺、活动现场、商业空间、学校礼堂、工程项目等。",
+        "valueFocus：请推荐 1 个最适合拍出来的核心价值，例如声音覆盖、安装美观、空间整洁、采购省心、部署效率、高级质感等。",
+        "storyStyle：请推荐 1 个故事表达方式，例如采购决策、场景痛点、前后对比、空间效果、专业讲解、安装演示等。",
         "peopleMode 必须是 no_people、hands_or_back、spokesperson 之一；默认优先 no_people 或 hands_or_back，不要主动推荐清晰真人出镜。",
         "sellingPoints 是数组，输出 3-5 个可拍摄卖点，每个不超过 18 字。",
         `用户填写商品名：${options.productName || "未填写"}`,
@@ -366,10 +366,6 @@ function directorBriefLines(brief: DirectorBriefInput) {
   ];
 }
 
-function oneOf(value: unknown, allowed: string[], fallback: string) {
-  return typeof value === "string" && allowed.includes(value) ? value : fallback;
-}
-
 function normalizeDirectorBrief(value: unknown, fallback: DirectorBriefInput) {
   const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
   const sellingPoints = Array.isArray(record.sellingPoints)
@@ -379,11 +375,11 @@ function normalizeDirectorBrief(value: unknown, fallback: DirectorBriefInput) {
     productName: compact(record.productName, 80),
     directorBrief: {
       productUnderstanding: compact(record.productUnderstanding, 260) || compact(fallback.productUnderstanding, 260),
-      audience: oneOf(record.audience, ["系统推荐", "工程采购", "活动主办方", "商铺老板", "展厅/门店负责人", "家庭用户"], "系统推荐"),
-      usageScene: oneOf(record.usageScene, ["系统推荐", "会议室", "展厅", "商铺", "活动现场", "客厅", "办公空间"], "系统推荐"),
-      valueFocus: oneOf(record.valueFocus, ["系统推荐", "空间更整洁", "声音覆盖", "安装美观", "采购省心", "高级质感", "性价比"], "系统推荐"),
-      storyStyle: oneOf(record.storyStyle, ["系统推荐", "采购决策", "场景痛点", "前后对比", "高级空间感", "专业讲解"], "系统推荐"),
-      peopleMode: oneOf(record.peopleMode, ["no_people", "hands_or_back", "spokesperson"], "no_people"),
+      audience: compact(record.audience, 80) || "系统推荐",
+      usageScene: compact(record.usageScene, 80) || "系统推荐",
+      valueFocus: compact(record.valueFocus, 80) || "系统推荐",
+      storyStyle: compact(record.storyStyle, 80) || "系统推荐",
+      peopleMode: ["no_people", "hands_or_back", "spokesperson"].includes(String(record.peopleMode)) ? String(record.peopleMode) : "no_people",
     },
     sellingPoints,
   };

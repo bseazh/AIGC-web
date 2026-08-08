@@ -887,6 +887,19 @@ const checks = [
     "人物参与",
   ],
   [
+    "Model spokesperson director choices are recommendation-first",
+    "app/components/model-spokesperson-script-page.tsx",
+    "directorQuestionLabels",
+    "spokesperson-director-question recommended",
+  ],
+  [
+    "Model spokesperson uses a step-by-step workflow UI",
+    "app/components/model-spokesperson-script-page.tsx",
+    "spokesperson-workflow-steps",
+    "1 商品理解",
+    "4 提交视频",
+  ],
+  [
     "Model spokesperson supports product-only scene director mode",
     "app/components/model-spokesperson-script-page.tsx",
     "场景导演参考",
@@ -908,7 +921,7 @@ const checks = [
     "Model spokesperson includes a hidden video task pack and submit action",
     "app/components/model-spokesperson-script-page.tsx",
     "生成并提交视频",
-    "视频任务包",
+    "内部任务包会自动合并",
   ],
   [
     "Model spokesperson video routes through Ark video generation",

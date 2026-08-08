@@ -172,6 +172,7 @@ type LibraryAsset = {
   url: string;
 };
 type ModelSourceMode = "auto" | "upload" | "library";
+type WorkflowStep = "brief" | "plans" | "assets" | "generate";
 
 const draftStorageKey = "aigc-model-spokesperson-script-draft";
 const systemRecommended = "系统推荐";
@@ -181,10 +182,12 @@ const toneOptions = [
   ["enthusiastic", "强带货"],
   ["professional", "专业讲解"],
 ];
-const audienceOptions = [systemRecommended, "工程采购", "活动主办方", "商铺老板", "展厅/门店负责人", "家庭用户"];
-const usageSceneOptions = [systemRecommended, "会议室", "展厅", "商铺", "活动现场", "客厅", "办公空间"];
-const valueFocusOptions = [systemRecommended, "空间更整洁", "声音覆盖", "安装美观", "采购省心", "高级质感", "性价比"];
-const storyStyleOptions = [systemRecommended, "采购决策", "场景痛点", "前后对比", "高级空间感", "专业讲解"];
+const directorQuestionLabels: Array<[keyof Pick<DirectorBrief, "audience" | "usageScene" | "valueFocus" | "storyStyle">, string]> = [
+  ["audience", "推荐受众"],
+  ["usageScene", "推荐场景"],
+  ["valueFocus", "突出价值"],
+  ["storyStyle", "故事方式"],
+];
 const peopleModeOptions: Array<[DirectorBrief["peopleMode"], string]> = [
   ["no_people", "无真人"],
   ["hands_or_back", "手部/背影"],
@@ -279,6 +282,7 @@ export function ModelSpokespersonScriptPage() {
   const [duration] = useState(15);
   const [generateAudio, setGenerateAudio] = useState(true);
   const [directorBrief, setDirectorBrief] = useState<DirectorBrief>(() => defaultDirectorBrief());
+  const [workflowStep, setWorkflowStep] = useState<WorkflowStep>("brief");
   const [variant, setVariant] = useState(0);
   const [productImages, setProductImages] = useState<ProductImage[]>([]);
   const [plans, setPlans] = useState<ScriptPlan[]>([]);
@@ -578,6 +582,7 @@ export function ModelSpokespersonScriptPage() {
       setPlans(body.plans);
       setSelectedPlanId(body.plans[0]?.id || "");
       setResult(body.plans[0]?.script || null);
+      setWorkflowStep("plans");
       setVideoPack(null);
       setVideoTask(null);
       setVideoPhase("idle");
@@ -613,8 +618,9 @@ export function ModelSpokespersonScriptPage() {
     setVideoTask(null);
     setVideoPhase("idle");
     setVideoError("");
-    setNotice(`已选用 ${plan.label} 方案，可继续编辑讲稿`);
-    window.setTimeout(() => setNotice(""), 1800);
+      setNotice(`已选用 ${plan.label} 方案，可继续编辑讲稿`);
+      setWorkflowStep("assets");
+      window.setTimeout(() => setNotice(""), 1800);
   };
 
   const updateSegment = (id: string, narration: string) =>
@@ -712,6 +718,7 @@ export function ModelSpokespersonScriptPage() {
       setVideoTask(null);
       setVideoPhase("idle");
       setNotice("已完成商品识别和导演推荐");
+      setWorkflowStep("plans");
       window.setTimeout(() => setNotice(""), 2200);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "商品识别失败");
@@ -760,6 +767,7 @@ export function ModelSpokespersonScriptPage() {
         throw new Error(body?.message || "视频任务包生成失败");
       }
       setVideoPack(body.pack);
+      setWorkflowStep("assets");
       localStorage.setItem(
         draftStorageKey,
         JSON.stringify({
@@ -1033,6 +1041,7 @@ export function ModelSpokespersonScriptPage() {
           const generatedAsset = { assetId: output.assetId, url: output.url, mimeType: output.mimeType, name: output.name };
           const asset = stage === "modelReference" && directorBrief.peopleMode !== "no_people" ? await createFaceMaskedReferenceAsset(generatedAsset) : generatedAsset;
           setStageAssets((current) => ({ ...current, [stage]: asset }));
+          if (stage === "storyboard") setWorkflowStep("generate");
           traceStage("stage_succeeded", {
             stage,
             taskId: created.taskId,
@@ -1193,6 +1202,19 @@ export function ModelSpokespersonScriptPage() {
         </em>
       </header>
 
+      <nav className="spokesperson-workflow-steps" aria-label="商品口播导演步骤">
+        {([
+          ["brief", "1 商品理解"],
+          ["plans", "2 方案选择"],
+          ["assets", "3 多视图/分镜"],
+          ["generate", "4 提交视频"],
+        ] as Array<[WorkflowStep, string]>).map(([step, label]) => (
+          <button type="button" className={workflowStep === step ? "active" : ""} onClick={() => setWorkflowStep(step)} key={step}>
+            {label}
+          </button>
+        ))}
+      </nav>
+
       <form className="spokesperson-script-layout spokesperson-two-column" onSubmit={generatePlans}>
         <section className="spokesperson-script-form spokesperson-plan-column">
           <div className="spokesperson-script-intro">
@@ -1204,7 +1226,7 @@ export function ModelSpokespersonScriptPage() {
             <p>用户只需要给商品图和一句描述，系统会识别商品、推荐场景，并内置 15 秒广告导演脚本。</p>
           </div>
 
-          <section className="spokesperson-product-upload">
+          <section className={`spokesperson-product-upload ${workflowStep === "brief" ? "" : "spokesperson-step-hidden"}`}>
             <header>
               <strong>商品图</strong>
               <small>后续会自动生成商品多视图参考板</small>
@@ -1229,7 +1251,7 @@ export function ModelSpokespersonScriptPage() {
             ) : null}
           </section>
 
-          <div className="spokesperson-field-grid compact">
+          <div className={`spokesperson-field-grid compact ${workflowStep === "brief" ? "" : "spokesperson-step-hidden"}`}>
             <label>
               商品名称
               <input value={productName} onChange={(event) => setProductName(event.target.value)} maxLength={80} placeholder="例如：轻氧便携榨汁杯" />
@@ -1246,7 +1268,7 @@ export function ModelSpokespersonScriptPage() {
             </label>
           </div>
 
-          <label className="spokesperson-wide-field">
+          <label className={`spokesperson-wide-field ${workflowStep === "brief" ? "" : "spokesperson-step-hidden"}`}>
             一句话描述 / 补充卖点
             <textarea
               value={productBrief}
@@ -1257,7 +1279,7 @@ export function ModelSpokespersonScriptPage() {
             <small>{productBrief.length}/600</small>
           </label>
 
-          <section className="spokesperson-director-brief">
+          <section className={`spokesperson-director-brief ${workflowStep === "brief" ? "" : "spokesperson-step-hidden"}`}>
             <header>
               <strong>商品导演问答</strong>
               <small>不懂怎么拍就保持系统推荐</small>
@@ -1272,25 +1294,14 @@ export function ModelSpokespersonScriptPage() {
               </div>
               <p>{productUnderstanding}</p>
             </div>
-            {([
-              ["audience", "想打动谁", audienceOptions],
-              ["usageScene", "主要场景", usageSceneOptions],
-              ["valueFocus", "突出价值", valueFocusOptions],
-              ["storyStyle", "故事方式", storyStyleOptions],
-            ] as Array<[keyof DirectorBrief, string, string[]]>).map(([key, label, options]) => (
-              <div className="spokesperson-director-question" key={key}>
+            {directorQuestionLabels.map(([key, label]) => (
+              <div className="spokesperson-director-question recommended" key={key}>
                 <span>{label}</span>
                 <nav>
-                  {options.map((option) => (
-                    <button
-                      type="button"
-                      className={directorBrief[key] === option ? "active" : ""}
-                      onClick={() => updateDirectorBrief(key, option as never)}
-                      key={option}
-                    >
-                      {option}
-                    </button>
-                  ))}
+                  <button type="button" className={directorBrief[key] === systemRecommended ? "active" : ""} onClick={() => updateDirectorBrief(key, systemRecommended)}>
+                    系统推荐
+                  </button>
+                  {directorBrief[key] !== systemRecommended ? <em>{directorBrief[key]}</em> : null}
                 </nav>
               </div>
             ))}
@@ -1312,7 +1323,7 @@ export function ModelSpokespersonScriptPage() {
             </div>
           </section>
 
-          <div className="spokesperson-options compact">
+          <div className={`spokesperson-options compact ${workflowStep === "brief" ? "" : "spokesperson-step-hidden"}`}>
             <div>
               <span>目标时长</span>
               <nav>
@@ -1335,12 +1346,12 @@ export function ModelSpokespersonScriptPage() {
             </p>
           )}
 
-          <button className="spokesperson-generate" type="submit" disabled={!canGeneratePlans}>
+          <button className={`spokesperson-generate ${workflowStep === "brief" ? "" : "spokesperson-step-hidden"}`} type="submit" disabled={!canGeneratePlans}>
             {busy ? <LoaderCircle className="generation-spinner" size={18} /> : <WandSparkles size={18} />}
             {busy ? "正在生成方案" : plans.length ? "重新生成 A/B/C 方案" : "生成 A/B/C 方案"}
           </button>
 
-          <section className="spokesperson-plan-list">
+          <section className={`spokesperson-plan-list ${workflowStep === "plans" ? "" : "spokesperson-step-hidden"}`}>
             <header>
               <strong>AI 口播方案</strong>
               <small>选择一个方案后，在右侧编辑讲稿</small>
@@ -1375,7 +1386,7 @@ export function ModelSpokespersonScriptPage() {
             )}
           </section>
 
-          <aside className="spokesperson-case-board inline">
+          <aside className={`spokesperson-case-board inline ${workflowStep === "brief" ? "" : "spokesperson-step-hidden"}`}>
             <header>
               <span>
                 <Sparkles size={17} />
@@ -1481,17 +1492,18 @@ export function ModelSpokespersonScriptPage() {
                 </div>
               )}
 
-              <section className="spokesperson-video-pack">
+              <section className={`spokesperson-video-pack ${workflowStep === "assets" || workflowStep === "generate" ? "" : "spokesperson-step-hidden"}`}>
                 <header>
                   <div>
-                    <strong>视频任务包</strong>
-                    <small>商品多视图、模特推荐、12 宫格分镜和最终提示词会自动合并</small>
+                    <strong>{workflowStep === "generate" ? "提交生成" : "分阶段制作"}</strong>
+                    <small>内部任务包会自动合并，不需要用户手动处理</small>
                   </div>
                   <span>
                     <Layers3 size={14} />
-                    内置
+                    自动
                   </span>
                 </header>
+                {videoPack ? <p className="spokesperson-pack-ready">内部任务包已准备，会自动用于多视图、分镜和最终视频生成。</p> : null}
                 {videoPack ? (
                   <div className="spokesperson-video-pack-body">
                     <div className="spokesperson-video-pack-summary">
