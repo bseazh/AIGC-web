@@ -845,6 +845,12 @@ const checks = [
     "做同款",
   ],
   [
+    "Model spokesperson case references are right-side contextual content",
+    "app/components/model-spokesperson-script-page.tsx",
+    "showCaseReferences",
+    "spokesperson-context-thumbs",
+  ],
+  [
     "Model spokesperson plans include story arcs and action beats",
     "app/api/workflows/model-spokesperson-script/route.ts",
     "storyArc",
@@ -887,10 +893,10 @@ const checks = [
     "人物参与",
   ],
   [
-    "Model spokesperson director choices are recommendation-first",
+    "Model spokesperson hides director recommendation chip rows",
     "app/components/model-spokesperson-script-page.tsx",
-    "directorQuestionLabels",
-    "spokesperson-director-question recommended",
+    "productUnderstanding",
+    "peopleModeOptions",
   ],
   [
     "Model spokesperson uses a step-by-step workflow UI",

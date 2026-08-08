@@ -182,12 +182,6 @@ const toneOptions = [
   ["enthusiastic", "强带货"],
   ["professional", "专业讲解"],
 ];
-const directorQuestionLabels: Array<[keyof Pick<DirectorBrief, "audience" | "usageScene" | "valueFocus" | "storyStyle">, string]> = [
-  ["audience", "推荐受众"],
-  ["usageScene", "推荐场景"],
-  ["valueFocus", "突出价值"],
-  ["storyStyle", "故事方式"],
-];
 const peopleModeOptions: Array<[DirectorBrief["peopleMode"], string]> = [
   ["no_people", "无真人"],
   ["hands_or_back", "手部/背影"],
@@ -402,6 +396,7 @@ export function ModelSpokespersonScriptPage() {
       ].filter(Boolean).join("\n"),
     [directorBrief.audience, directorBrief.productUnderstanding, directorBrief.storyStyle, directorBrief.usageScene, directorBrief.valueFocus, productBrief, productImages.length, productName],
   );
+  const showCaseReferences = workflowStep === "brief" && productImages.length === 0 && !productName.trim() && !productBrief.trim() && !result;
   const updateDirectorBrief = <Key extends keyof DirectorBrief>(key: Key, value: DirectorBrief[Key]) => {
     setDirectorBrief((current) => ({ ...current, [key]: value }));
     setPlans([]);
@@ -671,6 +666,38 @@ export function ModelSpokespersonScriptPage() {
     setNotice("案例参数已回填，可以生成 A/B/C 方案");
     window.setTimeout(() => setNotice(""), 1800);
   };
+
+  const renderCaseReferences = () => (
+    <aside className="spokesperson-case-board inline">
+      <header>
+        <span>
+          <Sparkles size={17} />
+        </span>
+        <div>
+          <h1>案例参考</h1>
+          <p>做同款会回填商品描述</p>
+        </div>
+      </header>
+      <div className="spokesperson-case-grid compact">
+        {spokespersonCases.map((item) => (
+          <article key={item.id}>
+            <div className="spokesperson-case-media">
+              <img src={item.image} alt={item.title} />
+              <span>{item.tag}</span>
+            </div>
+            <div>
+              <strong>{item.title}</strong>
+              <p>{item.description}</p>
+            </div>
+            <button type="button" onClick={() => applyCase(item)}>
+              <WandSparkles size={15} />
+              做同款
+            </button>
+          </article>
+        ))}
+      </div>
+    </aside>
+  );
 
   const analyzeDirectorBrief = async () => {
     if (!productImages.length && !productName.trim() && !productBrief.trim()) {
@@ -1294,17 +1321,6 @@ export function ModelSpokespersonScriptPage() {
               </div>
               <p>{productUnderstanding}</p>
             </div>
-            {directorQuestionLabels.map(([key, label]) => (
-              <div className="spokesperson-director-question recommended" key={key}>
-                <span>{label}</span>
-                <nav>
-                  <button type="button" className={directorBrief[key] === systemRecommended ? "active" : ""} onClick={() => updateDirectorBrief(key, systemRecommended)}>
-                    系统推荐
-                  </button>
-                  {directorBrief[key] !== systemRecommended ? <em>{directorBrief[key]}</em> : null}
-                </nav>
-              </div>
-            ))}
             <div className="spokesperson-director-question">
               <span>人物参与</span>
               <nav>
@@ -1386,35 +1402,6 @@ export function ModelSpokespersonScriptPage() {
             )}
           </section>
 
-          <aside className={`spokesperson-case-board inline ${workflowStep === "brief" ? "" : "spokesperson-step-hidden"}`}>
-            <header>
-              <span>
-                <Sparkles size={17} />
-              </span>
-              <div>
-                <h1>案例参考</h1>
-                <p>做同款会回填商品描述</p>
-              </div>
-            </header>
-            <div className="spokesperson-case-grid compact">
-              {spokespersonCases.map((item) => (
-                <article key={item.id}>
-                  <div className="spokesperson-case-media">
-                    <img src={item.image} alt={item.title} />
-                    <span>{item.tag}</span>
-                  </div>
-                  <div>
-                    <strong>{item.title}</strong>
-                    <p>{item.description}</p>
-                  </div>
-                  <button type="button" onClick={() => applyCase(item)}>
-                    <WandSparkles size={15} />
-                    做同款
-                  </button>
-                </article>
-              ))}
-            </div>
-          </aside>
         </section>
 
         <section className="spokesperson-script-result spokesperson-editor-column">
@@ -1435,11 +1422,29 @@ export function ModelSpokespersonScriptPage() {
             </div>
           </header>
 
-          {!result ? (
+          {showCaseReferences ? (
+            renderCaseReferences()
+          ) : !result ? (
             <div className="spokesperson-result-empty">
-              <MicVocal size={34} />
-              <strong>这里将显示选中的 15 秒讲稿</strong>
-              <p>左侧生成 A/B/C 方案后，选择一个方向即可编辑。</p>
+              {productImages.length ? (
+                <>
+                  <div className="spokesperson-context-thumbs">
+                    {productImages.slice(0, 4).map((image) => (
+                      <button type="button" onClick={() => setPreviewAsset({ assetId: image.assetId || image.id, url: image.preview, name: image.name })} key={image.id}>
+                        <img src={image.preview} alt={image.name} />
+                      </button>
+                    ))}
+                  </div>
+                  <strong>商品图已就绪</strong>
+                  <p>左侧补一句描述，或直接点击生成 A/B/C 导演方案。</p>
+                </>
+              ) : (
+                <>
+                  <MicVocal size={34} />
+                  <strong>这里将显示选中的 15 秒讲稿</strong>
+                  <p>左侧生成 A/B/C 方案后，选择一个方向即可编辑。</p>
+                </>
+              )}
             </div>
           ) : (
             <>
