@@ -133,9 +133,16 @@ else
 fi
 
 mkdir -p .next/standalone/.next
+rm -rf .next/standalone/.next/static .next/standalone/public
 cp -R .next/static .next/standalone/.next/static
 if [[ -d public ]]; then
   cp -R public .next/standalone/public
+fi
+
+test -n "$(find .next/standalone/.next/static/css -type f -name '*.css' -print -quit)"
+test -n "$(find .next/standalone/.next/static/chunks -type f -name '*.js' -print -quit)"
+if [[ -d public ]]; then
+  test -f .next/standalone/public/favicon.ico
 fi
 
 sudo systemctl restart aigc-web
@@ -153,6 +160,12 @@ sudo systemctl start aigc-lifecycle-maintenance.service
 
 for attempt in {1..20}; do
   if curl --fail --silent http://127.0.0.1:3010/api/health/ >/dev/null; then
+    homepage_html="$(curl --fail --silent http://127.0.0.1:3010/)"
+    stylesheet_path="$(printf '%s' "$homepage_html" | grep -oE '/_next/static/css/[^"[:space:]]+\.css' | head -1)"
+    if [[ -z "$stylesheet_path" ]] || ! curl --fail --silent "http://127.0.0.1:3010${stylesheet_path}" >/dev/null; then
+      echo "Standalone static asset verification failed" >&2
+      exit 1
+    fi
     required_units=(aigc-web aigc-worker)
     if [[ "${CONTENT_REVIEW_ENABLED:-false}" == "true" && "${CONTENT_REVIEW_PROVIDER:-}" == "tencent-ci" ]]; then required_units+=(aigc-moderation-worker); fi
     sudo systemctl is-active --quiet "${required_units[@]}"
