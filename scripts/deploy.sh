@@ -90,6 +90,7 @@ npm run test:db
 npm run verify:production
 
 chmod 700 scripts/backup-postgres.sh scripts/verify-postgres-backup.sh scripts/send-alert-email.sh scripts/check-health-alert.sh scripts/run-gray-rollout-report.sh
+sudo install -D -m 644 deploy/aigc-web.service /etc/systemd/system/aigc-web.service
 sudo install -D -m 644 deploy/aigc-storage-cleanup.service /etc/systemd/system/aigc-storage-cleanup.service
 sudo install -D -m 644 deploy/aigc-storage-cleanup.timer /etc/systemd/system/aigc-storage-cleanup.timer
 sudo install -D -m 644 deploy/aigc-lifecycle-maintenance.service /etc/systemd/system/aigc-lifecycle-maintenance.service
@@ -144,6 +145,19 @@ test -n "$(find .next/standalone/.next/static/chunks -type f -name '*.js' -print
 if [[ -d public ]]; then
   test -f .next/standalone/public/favicon.ico
 fi
+
+runtime_root=".runtime"
+release_id="$(cat .next/BUILD_ID)"
+release_dir="${runtime_root}/releases/${release_id}"
+rm -rf "$release_dir"
+mkdir -p "$release_dir"
+cp -a .next/standalone/. "$release_dir/"
+ln -sfn "releases/${release_id}" "${runtime_root}/current.next"
+mv -Tf "${runtime_root}/current.next" "${runtime_root}/current"
+
+test -f "${runtime_root}/current/server.js"
+test -n "$(find "${runtime_root}/current/.next/static/css" -type f -name '*.css' -print -quit)"
+test -n "$(find "${runtime_root}/current/.next/static/chunks" -type f -name '*.js' -print -quit)"
 
 sudo systemctl restart aigc-web
 if systemctl list-unit-files aigc-worker.service >/dev/null 2>&1; then
