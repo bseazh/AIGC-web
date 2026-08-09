@@ -479,13 +479,13 @@ function defaultDirectorBrief(): DirectorBrief {
   };
 }
 
-export function ModelSpokespersonScriptPage() {
+export function ModelSpokespersonScriptPage({ initialAccount = null }: { initialAccount?: Account | null }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams?.get("projectId") || null;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const modelFileInputRef = useRef<HTMLInputElement | null>(null);
-  const [account, setAccount] = useState<Account | null>(null);
+  const [account, setAccount] = useState<Account | null>(initialAccount);
   const [projectTitle, setProjectTitle] = useState("模特口播项目");
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [productName, setProductName] = useState("");
@@ -526,13 +526,14 @@ export function ModelSpokespersonScriptPage() {
   const productImagesRef = useRef<ProductImage[]>([]);
 
   useEffect(() => {
+    if (initialAccount) return;
     fetch("/api/auth/session/", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error();
         setAccount(await response.json());
       })
       .catch(() => router.replace("/"));
-  }, [router]);
+  }, [initialAccount, router]);
 
   useEffect(() => {
     let cancelled = false;

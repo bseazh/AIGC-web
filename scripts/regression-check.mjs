@@ -920,10 +920,11 @@ const checks = [
     "normalizeStageAsset",
   ],
   [
-    "Model spokesperson route wraps search params in suspense",
+    "Model spokesperson route server-preloads account state",
     "app/create/model-spokesperson-video/page.tsx",
-    "<Suspense",
-    "ProjectRequiredGate",
+    "loadInitialAccount",
+    "verifySessionToken",
+    "initialAccount",
   ],
   [
     "Model spokesperson UI exposes auto product recognition",
