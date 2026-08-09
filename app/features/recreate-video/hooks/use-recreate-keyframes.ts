@@ -418,6 +418,7 @@ export function useRecreateKeyframes({
         preview,
         name: "动作结构十二宫格参考图",
         byteSize: file.size,
+        temporaryDerived: true,
       });
     } finally {
       URL.revokeObjectURL(preview);

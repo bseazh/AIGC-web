@@ -8,12 +8,8 @@ for (const name of required) if (!process.env[name]) throw new Error(`${name} is
 const dryRun = process.argv.includes("--dry-run");
 const temporaryTtlHours = Number(process.env.STORAGE_TEMPORARY_TTL_HOURS || 24);
 const uploadingTtlHours = Number(process.env.STORAGE_UPLOADING_TTL_HOURS || 24);
-const inputRetentionDays = Number(process.env.STORAGE_INPUT_RETENTION_DAYS || 30);
-const outputRetentionDays = Number(process.env.STORAGE_OUTPUT_RETENTION_DAYS || 90);
 if (!Number.isFinite(temporaryTtlHours) || temporaryTtlHours <= 0) throw new Error("STORAGE_TEMPORARY_TTL_HOURS must be positive");
 if (!Number.isFinite(uploadingTtlHours) || uploadingTtlHours <= 0) throw new Error("STORAGE_UPLOADING_TTL_HOURS must be positive");
-if (!Number.isFinite(inputRetentionDays) || inputRetentionDays <= 0) throw new Error("STORAGE_INPUT_RETENTION_DAYS must be positive");
-if (!Number.isFinite(outputRetentionDays) || outputRetentionDays <= 0) throw new Error("STORAGE_OUTPUT_RETENTION_DAYS must be positive");
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
 const cos = new COS({ SecretId: process.env.COS_SECRET_ID, SecretKey: process.env.COS_SECRET_KEY });
@@ -69,30 +65,12 @@ async function removeStaleUploads() {
   return { found: result.rowCount, removed };
 }
 
-async function removeExpiredAssets(kind, retentionDays) {
-  const result = await pool.query(
-    "SELECT id, storage_key FROM assets WHERE kind = $1 AND audit_status = 'READY' AND created_at < NOW() - ($2 * INTERVAL '1 day') ORDER BY created_at ASC LIMIT 500",
-    [kind, retentionDays],
-  );
-  let removed = 0;
-  for (const asset of result.rows) {
-    if (!dryRun) {
-      await removeObject(asset.storage_key);
-      await pool.query("DELETE FROM assets WHERE id = $1 AND audit_status = 'READY'", [asset.id]);
-    }
-    removed += 1;
-  }
-  return { found: result.rowCount, removed, retentionDays };
-}
-
 try {
-  const [temporary, uploads, inputs, outputs] = await Promise.all([
+  const [temporary, uploads] = await Promise.all([
     removeStaleTemporaryObjects(),
     removeStaleUploads(),
-    removeExpiredAssets("INPUT", inputRetentionDays),
-    removeExpiredAssets("OUTPUT", outputRetentionDays),
   ]);
-  const summary = { event: "storage_cleanup_complete", dryRun, temporary, uploads, inputs, outputs };
+  const summary = { event: "storage_cleanup_complete", dryRun, temporary, uploads, retainedAssets: "USER_INPUTS_AND_SAVED_OUTPUTS" };
   if (!dryRun) {
     await pool.query("INSERT INTO operations_runs (operation, status, summary) VALUES ('STORAGE_CLEANUP', 'SUCCEEDED', $1)", [JSON.stringify(summary)]);
   }

@@ -16,7 +16,14 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   if (!user) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401 });
   const { id } = await context.params;
   const result = await db.query<{ storage_key: string; mime_type: string; original_name: string | null; metadata_json: Record<string, unknown> }>(
-    "SELECT storage_key, mime_type, original_name, metadata_json FROM assets WHERE id = $1 AND owner_id = $2 AND audit_status = 'READY'", [id, user.id],
+    `SELECT storage_key, mime_type, original_name, metadata_json
+       FROM assets
+      WHERE id = $1 AND owner_id = $2 AND audit_status = 'READY'
+        AND (
+          kind = 'INPUT'
+          OR COALESCE(metadata_json #>> '{library,saved}', 'false') = 'true'
+          OR COALESCE((metadata_json #>> '{library,expiresAt}')::timestamptz, created_at + INTERVAL '48 hours') > NOW()
+        )`, [id, user.id],
   );
   const asset = result.rows[0];
   if (!asset) return NextResponse.json({ code: "ASSET_NOT_FOUND" }, { status: 404 });

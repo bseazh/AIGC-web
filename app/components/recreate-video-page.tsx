@@ -1015,6 +1015,7 @@ export function RecreateVideoPage() {
       preview,
       name: source.name || "虚拟模特参考",
       byteSize: file.size,
+      temporaryDerived: true,
     });
     const url = await resolveAssetPreviewUrl(assetId, preview);
     if (url !== preview) URL.revokeObjectURL(preview);
@@ -1095,7 +1096,7 @@ export function RecreateVideoPage() {
     if (!blob) throw new Error("多视图参考板导出失败");
     const file = new File([blob], "recreate-multiview-board.jpg", { type: "image/jpeg" });
     const preview = URL.createObjectURL(file);
-    const assetId = await upload({ file, preview, name, byteSize: file.size });
+    const assetId = await upload({ file, preview, name, byteSize: file.size, temporaryDerived: true });
     const url = await resolveAssetPreviewUrl(assetId, preview);
     if (url !== preview) URL.revokeObjectURL(preview);
     return { assetId, url, byteSize: file.size };
@@ -1260,6 +1261,7 @@ export function RecreateVideoPage() {
             materialKind: isPerson ? "person" : kind,
             materialSummary: isPerson ? "已先生成完整人物多角度参考，再二次遮挡五官区域并保留脸部轮廓" : "已生成素材多视图参考",
             materialConfidence: source.materialConfidence,
+            generatedAsset: true,
           };
         }),
       );

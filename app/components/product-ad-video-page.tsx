@@ -13,10 +13,11 @@ import {
   Wand2,
   X,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { VideoGenerationProgress } from "@/app/components/video-generation-progress";
+import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
 
 type Account = { wallet: { availablePoints: number } };
 type SelectedImage = {
@@ -34,11 +35,7 @@ type Asset = {
   url: string;
   kind: string;
 };
-type Result = {
-  taskId: string;
-  status: string;
-  outputs: Array<{ assetId: string; url: string }>;
-};
+type Result = GeneratedTaskResult;
 const maxImages = 5;
 const imageAccepts = "image/jpeg,image/png,image/webp";
 
@@ -142,6 +139,8 @@ async function createCaseImage(item: ProductAdCase): Promise<SelectedImage> {
 
 export function ProductAdVideoPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const projectId = searchParams?.get("projectId") || "";
   const inputRef = useRef<HTMLInputElement>(null);
   const [account, setAccount] = useState<Account | null>(null);
   const [sourceTab, setSourceTab] = useState<"local" | "library">("local");
@@ -161,6 +160,8 @@ export function ProductAdVideoPage() {
   >("idle");
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
+  const markSaved = (assetId: string) => setResult((current) => current ? { ...current, outputs: current.outputs.map((output) => output.assetId === assetId ? { ...output, savedToLibrary: true, expiresAt: null } : output) } : current);
+  useEffect(() => watchProjectTaskResult(projectId, (restored) => { setResult(restored); setPhase(restoredTaskPhase(restored)); }), [projectId]);
   const [appliedCaseId, setAppliedCaseId] = useState("");
   const [applyingCaseId, setApplyingCaseId] = useState("");
   const [detailCase, setDetailCase] = useState<ProductAdCase | null>(null);
@@ -371,6 +372,7 @@ export function ProductAdVideoPage() {
           productInfo: productInfo.trim(),
           specialRequirements: specialRequirements.trim(),
           appliedCaseId,
+          draftId: projectId,
         }),
       });
       const created = await response.json();
@@ -643,8 +645,10 @@ export function ProductAdVideoPage() {
           {phase === "succeeded" && result?.outputs[0] && (
             <div className="ad-result">
               <video src={result.outputs[0].url} controls playsInline />
+              <GeneratedAssetActions output={result.outputs[0]} downloadLabel="下载视频" onSaved={markSaved} />
             </div>
           )}
+          <TemporaryResultNotice result={result} />
           <div className="ad-actions">
             <button
               className="ad-generate"

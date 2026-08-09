@@ -1,6 +1,7 @@
 import { FolderOpen, ImagePlus, LoaderCircle, Sparkles, Upload, X } from "lucide-react";
 import type { ReactNode, RefObject } from "react";
 
+import { GeneratedAssetActions } from "@/app/components/generated-asset-actions";
 import { imageAccept, materialLabel } from "../../constants";
 import type { Item, KeyframeSelection, MaterialKind, PolishedRecreatePrompt, RecreateFrameAnalysis } from "../../types";
 
@@ -314,6 +315,9 @@ export function MaterialsPanel({
                     )}
                     {faceMaskBusyIndex === index ? "遮盖中" : "强化遮盖"}
                   </button>
+                ) : null}
+                {product.generatedAsset && product.assetId ? (
+                  <GeneratedAssetActions output={{ assetId: product.assetId, url: product.preview, savedToLibrary: product.savedToLibrary, expiresAt: product.expiresAt }} />
                 ) : null}
               </label>
               <button

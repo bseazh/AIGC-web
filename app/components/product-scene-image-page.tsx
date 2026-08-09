@@ -1,16 +1,17 @@
 "use client";
 
-import { ArrowLeft, Check, Download, FolderOpen, ImageIcon, LoaderCircle, Sparkles, Upload, Wand2, X, Zap } from "lucide-react";
+import { ArrowLeft, FolderOpen, ImageIcon, LoaderCircle, Sparkles, Upload, Wand2, X, Zap } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { GenerationProgress } from "@/app/components/generation-progress";
+import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
 import { productSceneCases } from "@/lib/image-workflow-cases";
 import { sceneImageWorkflow } from "@/lib/product-config";
 
 type Account = { user: { isAdministrator?: boolean }; wallet: { availablePoints: number } };
 type Asset = { id: string; mimeType: string; originalName: string; url: string; kind: string };
 type ProductImage = { id?: string; file?: File; url: string; name: string };
-type TaskResult = { taskId: string; status: string; outputs: Array<{ assetId: string; url: string }>; errorCode?: string };
+type TaskResult = GeneratedTaskResult;
 type Phase = "idle" | "uploading" | "generating" | "succeeded" | "failed";
 
 const ratios = ["1:1", "3:4", "4:3", "9:16"];
@@ -45,6 +46,7 @@ export function ProductSceneImagePage() {
   const [appliedCaseId, setAppliedCaseId] = useState("");
 
   const busy = phase === "uploading" || phase === "generating";
+  const markSaved = (assetId: string) => setTask((current) => current ? { ...current, outputs: current.outputs.map((output) => output.assetId === assetId ? { ...output, savedToLibrary: true, expiresAt: null } : output) } : current);
   const canSubmit = products.length > 0 && productDescription.trim().length > 0 && !busy && (account?.user.isAdministrator || (account?.wallet.availablePoints ?? 0) >= sceneImageWorkflow.pointsPerTask);
   const quotedText = useMemo(() => {
     if (!account) return "";
@@ -60,6 +62,10 @@ export function ProductSceneImagePage() {
       })
       .catch(() => router.replace("/"));
   }, [router]);
+
+  useEffect(() => {
+    return watchProjectTaskResult(projectId, (restored) => { setTask(restored); setPhase(restoredTaskPhase(restored)); });
+  }, [projectId]);
 
   useEffect(() => {
     const assetId = new URLSearchParams(window.location.search).get("assetId");
@@ -250,14 +256,14 @@ export function ProductSceneImagePage() {
           <label className="yh-toggle-field"><span><strong>指定模特图</strong><small>如果指定产品场景图中的人物模特，可上传模特图</small></span><input type="checkbox" checked={useModelReference} onChange={(event) => setUseModelReference(event.target.checked)} /><i /></label>
           <p className="yh-credit"><Zap size={15} />{quotedText}</p>
           {error && <p className="creator-error" role="alert">{error}</p>}
-          {phase === "succeeded" && <p className="creator-success"><Check size={16} />生成结果已保存到内容资产</p>}
+          <TemporaryResultNotice result={task} />
           <div className="yh-actions"><button type="submit" disabled={!canSubmit}><Wand2 size={16} />{busy ? "任务处理中" : "开始生成"}</button><button type="button" onClick={resetForm}>重置</button></div>
         </form>
 
         <section className="yh-case-board yh-scene-case-board">
           <header><span><Sparkles size={17} /></span><div><h1>案例参考</h1><p>选择案例可一键回填入参</p></div></header>
           {busy && <GenerationProgress phase={phase} taskStatus={task?.status} title="生成产品场景图" outputCount={4} />}
-          {phase === "succeeded" && task ? <div className="yh-result-grid">{task.outputs.map((output, index) => <article key={output.assetId}><img src={output.url} alt={`场景图结果 ${index + 1}`} /><a href={output.url} download target="_blank" rel="noreferrer"><Download size={15} />下载</a></article>)}</div> : <div className="yh-case-grid">{productSceneCases.map((item) => <article className={appliedCaseId === item.id ? "active" : ""} key={item.id}><div className="yh-case-media"><img src={item.image} alt={item.title} /><span><ImageIcon size={12} />图片案例</span></div><strong>{item.title}</strong><button type="button" onClick={() => applyCase(item)}><Wand2 size={15} />做同款</button></article>)}</div>}
+          {phase === "succeeded" && task?.outputs.length ? <div className="yh-result-grid">{task.outputs.map((output, index) => <article key={output.assetId}><img src={output.url} alt={`场景图结果 ${index + 1}`} /><GeneratedAssetActions output={output} onSaved={markSaved} /></article>)}</div> : phase === "succeeded" && task?.expiredOutputCount ? null : <div className="yh-case-grid">{productSceneCases.map((item) => <article className={appliedCaseId === item.id ? "active" : ""} key={item.id}><div className="yh-case-media"><img src={item.image} alt={item.title} /><span><ImageIcon size={12} />图片案例</span></div><strong>{item.title}</strong><button type="button" onClick={() => applyCase(item)}><Wand2 size={15} />做同款</button></article>)}</div>}
         </section>
       </div>
     </main>

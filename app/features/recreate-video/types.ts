@@ -16,6 +16,10 @@ export type Item = {
   materialSummary?: string;
   materialConfidence?: number;
   materialSuggestedAction?: string;
+  temporaryDerived?: boolean;
+  generatedAsset?: boolean;
+  savedToLibrary?: boolean;
+  expiresAt?: string | null;
 };
 
 export type Asset = {
@@ -29,8 +33,10 @@ export type Asset = {
 
 export type Result = {
   status: string;
-  outputs: Array<{ assetId: string; url: string }>;
+  outputs: Array<{ assetId: string; url: string; savedToLibrary?: boolean; expiresAt?: string | null }>;
   taskId?: string;
+  expiredOutputCount?: number;
+  originalOutputCount?: number;
 };
 
 export type PreviewMedia = { url: string; name: string; mimeType: string };

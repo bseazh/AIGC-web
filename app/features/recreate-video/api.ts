@@ -65,6 +65,7 @@ export async function uploadRecreateItem(item: Item) {
       mimeType: item.file.type,
       byteSize: item.file.size,
       contentHash,
+      temporaryDerived: item.temporaryDerived === true,
     }),
   });
   const presign = await response.json();

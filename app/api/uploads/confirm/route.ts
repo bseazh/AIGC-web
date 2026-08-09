@@ -14,8 +14,8 @@ export async function POST(request: NextRequest) {
   if (typeof body?.assetId !== "string") {
     return NextResponse.json({ code: "INVALID_ASSET" }, { status: 400 });
   }
-  const result = await db.query<{ id: string; storage_key: string; byte_size: string; mime_type: string }>(
-    "SELECT id, storage_key, byte_size, mime_type FROM assets WHERE id = $1 AND owner_id = $2 AND audit_status = 'UPLOADING'",
+  const result = await db.query<{ id: string; kind: string; storage_key: string; byte_size: string; mime_type: string }>(
+    "SELECT id, kind, storage_key, byte_size, mime_type FROM assets WHERE id = $1 AND owner_id = $2 AND audit_status = 'UPLOADING'",
     [body.assetId, user.id],
   );
   const asset = result.rows[0];
@@ -69,10 +69,10 @@ export async function POST(request: NextRequest) {
       }
       const review = await client.query<{ id: string }>(
         `INSERT INTO content_review_records (asset_id, phase, status, review_source, metadata_json)
-         VALUES ($1, 'UPLOAD', 'PENDING', 'SYSTEM', $2::jsonb)
+         VALUES ($1, $3, 'PENDING', 'SYSTEM', $2::jsonb)
          ON CONFLICT (asset_id) WHERE status IN ('PENDING', 'NEEDS_MANUAL') DO UPDATE SET updated_at = NOW()
          RETURNING id`,
-        [asset.id, JSON.stringify({ mimeType: asset.mime_type, byteSize: actualSize })],
+        [asset.id, JSON.stringify({ mimeType: asset.mime_type, byteSize: actualSize }), asset.kind === "OUTPUT" ? "GENERATED_OUTPUT" : "UPLOAD"],
       );
       reviewId = review.rows[0]?.id || "";
       await client.query("COMMIT");

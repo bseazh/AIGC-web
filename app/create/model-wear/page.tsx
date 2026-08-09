@@ -2,16 +2,17 @@
 
 export const dynamic = "force-dynamic";
 
-import { ArrowLeft, Check, Download, ImageIcon, ImagePlus, RotateCcw, Sparkles, Upload, Wand2, X } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { ArrowLeft, ImageIcon, ImagePlus, RotateCcw, Sparkles, Upload, Wand2, X } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { GenerationProgress } from "@/app/components/generation-progress";
+import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
 import { ProjectRequiredGate } from "@/app/components/project-required-gate";
 import { modelWearCases } from "@/lib/image-workflow-cases";
 
 type Account = { user: { isAdministrator?: boolean }; wallet: { availablePoints: number } };
 type Uploaded = { file: File; preview: string };
-type TaskResult = { taskId: string; status: string; outputs: Array<{ assetId: string; url: string }>; errorCode?: string };
+type TaskResult = GeneratedTaskResult;
 const ratios = ["1:1", "3:4", "4:3", "9:16"];
 const scenes = ["简约棚拍", "通勤街拍", "自然居家", "精品店试穿"];
 const styles = ["自然真实", "轻奢时尚", "清新日常", "电商展示"];
@@ -22,6 +23,8 @@ export default function ModelWearPage() {
 
 function ModelWearWorkspace() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const projectId = searchParams?.get("projectId") || "";
   const [account, setAccount] = useState<Account | null>(null);
   const [model, setModel] = useState<Uploaded | null>(null);
   const [products, setProducts] = useState<Uploaded[]>([]);
@@ -33,8 +36,10 @@ function ModelWearWorkspace() {
   const [phase, setPhase] = useState<"idle" | "uploading" | "generating" | "succeeded" | "failed">("idle");
   const [error, setError] = useState("");
   const [task, setTask] = useState<TaskResult | null>(null);
+  const markSaved = (assetId: string) => setTask((current) => current ? { ...current, outputs: current.outputs.map((output) => output.assetId === assetId ? { ...output, savedToLibrary: true, expiresAt: null } : output) } : current);
 
   useEffect(() => { fetch("/api/auth/session/", { cache: "no-store" }).then(async (response) => { if (!response.ok) throw new Error(); setAccount(await response.json()); }).catch(() => router.replace("/")); }, [router]);
+  useEffect(() => watchProjectTaskResult(projectId, (restored) => { setTask(restored); setPhase(restoredTaskPhase(restored)); }), [projectId]);
   useEffect(() => () => {
     if (model) URL.revokeObjectURL(model.preview);
     products.forEach((item) => URL.revokeObjectURL(item.preview));
@@ -49,7 +54,7 @@ function ModelWearWorkspace() {
   const applyCase = (item: (typeof modelWearCases)[number]) => { if (item.ratio && ratios.includes(item.ratio)) setRatio(item.ratio); if (item.scene && scenes.includes(item.scene)) setScene(item.scene); if (item.style && styles.includes(item.style)) setStyle(item.style); setPrompt(item.prompt.slice(0, 1200)); setAppliedCaseId(item.id); setError(""); setTask(null); setPhase("idle"); };
   const resetForm = () => { if (model) URL.revokeObjectURL(model.preview); products.forEach((item) => URL.revokeObjectURL(item.preview)); setModel(null); setProducts([]); setRatio("1:1"); setScene(scenes[0]); setStyle(styles[0]); setPrompt(""); setAppliedCaseId(""); setError(""); setTask(null); setPhase("idle"); };
   const pollTask = async (taskId: string) => { const deadline = Date.now() + 6 * 60 * 1000; while (Date.now() < deadline) { const response = await fetch(`/api/tasks/${taskId}/`, { cache: "no-store" }); const current = await response.json(); if (!response.ok) throw new Error(current.message || "任务查询失败"); setTask(current); if (current.status === "SUCCEEDED") { setPhase("succeeded"); const session = await fetch("/api/auth/session/", { cache: "no-store" }).then((item) => item.json()); setAccount(session); return; } if (["FAILED", "REJECTED", "CANCELED"].includes(current.status)) throw new Error(current.errorCode || "生成失败，积分已退回"); await new Promise((resolve) => setTimeout(resolve, 3000)); } throw new Error("任务等待超时，请稍后在任务中心查看"); };
-  const submit = async (event: FormEvent) => { event.preventDefault(); if (!model || !products.length || phase === "uploading" || phase === "generating") return; setError(""); setTask(null); setPhase("uploading"); try { const [modelAssetId, ...productAssetIds] = await Promise.all([uploadAsset(model), ...products.map(uploadAsset)]); const created = await request("/api/tasks/model-wear/", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ modelAssetId, productAssetIds, aspectRatio: ratio, scene, style, prompt }) }); setPhase("generating"); await pollTask(created.taskId); } catch (caught) { setError(caught instanceof Error ? caught.message : "生成失败"); setPhase("failed"); } };
+  const submit = async (event: FormEvent) => { event.preventDefault(); if (!model || !products.length || phase === "uploading" || phase === "generating") return; setError(""); setTask(null); setPhase("uploading"); try { const [modelAssetId, ...productAssetIds] = await Promise.all([uploadAsset(model), ...products.map(uploadAsset)]); const created = await request("/api/tasks/model-wear/", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ modelAssetId, productAssetIds, aspectRatio: ratio, scene, style, prompt, draftId: projectId }) }); setPhase("generating"); await pollTask(created.taskId); } catch (caught) { setError(caught instanceof Error ? caught.message : "生成失败"); setPhase("failed"); } };
   if (!account) return <main className="workspace-loading"><span><Sparkles size={22} /></span><p>正在载入芭乐AIGC</p></main>;
   const busy = phase === "uploading" || phase === "generating";
   return <main className="creator-shell model-wear-shell"><header className="creator-header"><button className="icon-button" aria-label="返回图片创作" onClick={() => router.push("/tools")}><ArrowLeft size={19} /></button><div><strong>模特穿搭</strong><span>芭乐AIGC</span></div><div className="creator-points"><Sparkles size={15} />{account.user.isAdministrator ? "管理员免积分" : `${account.wallet.availablePoints} 积分`}</div></header>
@@ -74,9 +79,9 @@ function ModelWearWorkspace() {
           <label className="model-wear-ratio-field">图片比例<div>{ratios.map((item) => <button type="button" key={item} className={ratio === item ? "active" : ""} onClick={() => setRatio(item)}>{item}</button>)}</div></label>
           <label className="model-wear-prompt-field">补充要求<textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={1200} placeholder="例如：保持模特发型，展示全身穿搭效果" /><small>{prompt.length}/1200</small></label>
           <p className="model-wear-credit"><Sparkles size={15} />预估积分：{account.user.isAdministrator ? "待填写：管理员免积分" : "10 积分"}</p>
-          {error && <p className="creator-error" role="alert">{error}</p>}{phase === "succeeded" && <p className="creator-success"><Check size={16} />4 张结果已保存到内容资产</p>}
+          {error && <p className="creator-error" role="alert">{error}</p>}<TemporaryResultNotice result={task} />
           <div className="model-wear-actions"><button className="generate-button" type="submit" disabled={!model || !products.length || busy || (!account.user.isAdministrator && account.wallet.availablePoints < 10)}><Upload size={18} />{busy ? "任务处理中" : !account.user.isAdministrator && account.wallet.availablePoints < 10 ? "积分不足" : "提交生成任务"}</button><button className="model-wear-reset" type="button" onClick={resetForm} disabled={busy}><RotateCcw size={16} />重置</button></div>
-          {busy && <GenerationProgress phase={phase} taskStatus={task?.status} title="模特穿搭图" outputCount={4} />}{phase === "succeeded" && task && <div className="result-grid model-wear-results">{task.outputs.map((output, index) => <article key={output.assetId}><img src={output.url} alt={`模特穿搭结果 ${index + 1}`} /><a href={output.url} download target="_blank" rel="noreferrer"><Download size={16} />下载</a></article>)}</div>}
+          {busy && <GenerationProgress phase={phase} taskStatus={task?.status} title="模特穿搭图" outputCount={4} />}{phase === "succeeded" && task?.outputs.length ? <div className="result-grid model-wear-results">{task.outputs.map((output, index) => <article key={output.assetId}><img src={output.url} alt={`模特穿搭结果 ${index + 1}`} /><GeneratedAssetActions output={output} onSaved={markSaved} /></article>)}</div> : null}
         </div>
       </section>
       <aside className="model-wear-case-board">

@@ -4,8 +4,6 @@ import {
   ArrowLeft,
   ArrowDown,
   ArrowUp,
-  Check,
-  Download,
   Film,
   FolderOpen,
   LoaderCircle,
@@ -15,10 +13,11 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 
 import { VideoGenerationProgress } from "@/app/components/video-generation-progress";
+import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
 
 type Account = {
   user: { isAdministrator?: boolean };
@@ -49,11 +48,7 @@ type Asset = {
   kind: string;
   durationSeconds?: number | null;
 };
-type Result = {
-  taskId: string;
-  status: string;
-  outputs: Array<{ assetId: string; url: string }>;
-};
+type Result = GeneratedTaskResult;
 type VideoTemplate = "ad" | "recreate" | "seedance" | "mix";
 type Props = { template?: VideoTemplate };
 type Definition = {
@@ -178,6 +173,8 @@ const videoMixHandoffKey = "aigc-video-mix-asset-ids";
 
 export function VideoWorkflowPage({ template = "seedance" }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const projectId = searchParams?.get("projectId") || "";
   const config = templateConfig[template];
   const definitions = allDefinitions
     .filter((definition) => config.keys.includes(definition.key))
@@ -204,6 +201,8 @@ export function VideoWorkflowPage({ template = "seedance" }: Props) {
   >("idle");
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
+  const markSaved = (assetId: string) => setResult((current) => current ? { ...current, outputs: current.outputs.map((output) => output.assetId === assetId ? { ...output, savedToLibrary: true, expiresAt: null } : output) } : current);
+  useEffect(() => watchProjectTaskResult(projectId, (restored) => { setResult(restored); setPhase(restoredTaskPhase(restored)); }), [projectId]);
   const [librarySlot, setLibrarySlot] = useState<UploadSlot | null>(null);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [assetsLoading, setAssetsLoading] = useState(false);
@@ -456,6 +455,7 @@ export function VideoWorkflowPage({ template = "seedance" }: Props) {
           scene: config.scenes[0],
           style: config.styles[0],
           authorizationConfirmed,
+          draftId: projectId,
         }),
       });
       const created = await response.json();
@@ -721,12 +721,10 @@ export function VideoWorkflowPage({ template = "seedance" }: Props) {
           {phase === "succeeded" && result?.outputs[0] && (
             <div className="video-result">
               <video src={result.outputs[0].url} controls playsInline />
-              <a href={`/api/assets/${result.outputs[0].assetId}/download/`}>
-                <Download size={15} />
-                下载视频
-              </a>
+              <GeneratedAssetActions output={result.outputs[0]} downloadLabel="下载视频" onSaved={markSaved} />
             </div>
           )}
+          <TemporaryResultNotice result={result} />
         </section>
         <aside className="creator-panel">
           <div className="panel-title">
@@ -803,12 +801,6 @@ export function VideoWorkflowPage({ template = "seedance" }: Props) {
           {error && (
             <p className="creator-error" role="alert">
               {error}
-            </p>
-          )}
-          {phase === "succeeded" && (
-            <p className="creator-success">
-              <Check size={16} />
-              视频已保存到内容资产
             </p>
           )}
           <button

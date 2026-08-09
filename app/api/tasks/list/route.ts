@@ -30,12 +30,19 @@ export async function GET(request: NextRequest) {
       FROM generation_tasks WHERE ${where} ORDER BY created_at DESC LIMIT $${params.length}`, params);
 
   const tasks = await Promise.all(result.rows.map(async (task) => {
-    const output = task.output_json?.assets?.[0];
     const outputAssetIds = (task.output_json?.assets || []).map((asset) => asset.assetId).filter(Boolean);
-    const savedOutputCount = outputAssetIds.length ? await db.query<{ count: string }>(
-      "SELECT COUNT(*)::text AS count FROM assets WHERE id = ANY($1::uuid[]) AND owner_id = $2 AND kind = 'OUTPUT' AND audit_status = 'READY' AND metadata_json #>> '{library,saved}' = 'true'",
+    const assetStats = outputAssetIds.length ? await db.query<{ available_count: string; saved_count: string; thumbnail_key: string | null }>(
+      `SELECT
+         COUNT(*) FILTER (WHERE COALESCE(metadata_json #>> '{library,saved}', 'false') = 'true' OR COALESCE((metadata_json #>> '{library,expiresAt}')::timestamptz, created_at + INTERVAL '48 hours') > NOW())::text AS available_count,
+         COUNT(*) FILTER (WHERE metadata_json #>> '{library,saved}' = 'true')::text AS saved_count,
+         (ARRAY_AGG(storage_key ORDER BY created_at) FILTER (WHERE COALESCE(metadata_json #>> '{library,saved}', 'false') = 'true' OR COALESCE((metadata_json #>> '{library,expiresAt}')::timestamptz, created_at + INTERVAL '48 hours') > NOW()))[1] AS thumbnail_key
+       FROM assets
+       WHERE id = ANY($1::uuid[]) AND owner_id = $2 AND kind = 'OUTPUT' AND audit_status = 'READY'`,
       [outputAssetIds, user.id],
-    ) : { rows: [{ count: "0" }] };
+    ) : { rows: [{ available_count: "0", saved_count: "0", thumbnail_key: null }] };
+    const availableOutputCount = Number(assetStats.rows[0]?.available_count || 0);
+    const savedOutputCount = Number(assetStats.rows[0]?.saved_count || 0);
+    const thumbnailKey = assetStats.rows[0]?.thumbnail_key || null;
     return {
       id: task.id,
       workflowKey: task.workflow_key,
@@ -49,9 +56,11 @@ export async function GET(request: NextRequest) {
         scene: task.input_json?.scene || null,
         style: task.input_json?.style || null,
       },
-      outputCount: task.output_json?.assets?.length || 0,
-      savedOutputCount: Number(savedOutputCount.rows[0]?.count || 0),
-      thumbnailUrl: task.status === "SUCCEEDED" && output ? await createSignedObjectUrl(output.storageKey, "GET", 3600) : null,
+      outputCount: availableOutputCount,
+      originalOutputCount: outputAssetIds.length,
+      expiredOutputCount: Math.max(0, outputAssetIds.length - availableOutputCount),
+      savedOutputCount,
+      thumbnailUrl: task.status === "SUCCEEDED" && thumbnailKey ? await createSignedObjectUrl(thumbnailKey, "GET", 3600) : null,
       errorCode: task.error_code,
       createdAt: task.created_at,
       updatedAt: task.updated_at,

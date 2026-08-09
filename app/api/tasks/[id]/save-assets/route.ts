@@ -33,9 +33,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         AND owner_id = $2
         AND kind = 'OUTPUT'
         AND audit_status = 'READY'
+        AND (
+          COALESCE(metadata_json #>> '{library,saved}', 'false') = 'true'
+          OR COALESCE((metadata_json #>> '{library,expiresAt}')::timestamptz, created_at + INTERVAL '48 hours') > NOW()
+        )
       RETURNING id`,
     [assetIds, user.id, JSON.stringify({ library: { saved: true, retention: "SAVED_ASSET", savedAt: new Date().toISOString(), expiresAt: null } })],
   );
+  if (!result.rowCount) return NextResponse.json({ code: "OUTPUT_EXPIRED", message: "任务结果已过期，无法加入素材库" }, { status: 410 });
   await audit(user.id, "TASK_OUTPUTS_SAVED_TO_LIBRARY", request, { type: "generation_task", id }, { assetIds: result.rows.map((row) => row.id) });
   return NextResponse.json({ ok: true, savedAssetIds: result.rows.map((row) => row.id), savedCount: result.rowCount });
 }

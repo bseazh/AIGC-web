@@ -14,7 +14,7 @@ type Account = { user: { displayName: string; isAdministrator?: boolean }; walle
 type Task = {
   id: string; workflowKey: string; workflowName: string; status: string; statusLabel: string; points: number; adminExempt?: boolean;
   params: { aspectRatio: string | null; scene: string | null; style: string | null };
-  outputCount: number; savedOutputCount: number; thumbnailUrl: string | null; errorCode: string | null; createdAt: string;
+  outputCount: number; originalOutputCount: number; expiredOutputCount: number; savedOutputCount: number; thumbnailUrl: string | null; errorCode: string | null; createdAt: string;
 };
 
 const taskCategories = ["全部", "AI生图", "AI电商视频", "AI工具", "AI办公"];
@@ -120,7 +120,7 @@ export default function TasksPage() {
               <div className="record-main"><strong>{task.workflowName}</strong><span>{[task.params.scene, task.params.style, task.params.aspectRatio].filter(Boolean).join(" · ") || "默认生成设置"}</span><time>{new Date(task.createdAt).toLocaleString("zh-CN")}</time></div>
               <span className={`record-status status-${task.status.toLowerCase()}`}>{statusIcon(task.status)}{task.statusLabel}</span>
               <span className="record-points">{pointsLabel(task)}</span>
-              <span className="record-output">{["FAILED", "REJECTED", "CANCELED"].includes(task.status) ? (task.adminExempt ? `未产生积分变动 · 报价 ${task.points} 积分` : `失败已退回 ${task.points} 积分`) : task.outputCount ? `${task.outputCount} 个结果` : task.errorCode || "等待结果"}</span>
+              <span className="record-output">{["FAILED", "REJECTED", "CANCELED"].includes(task.status) ? (task.adminExempt ? `未产生积分变动 · 报价 ${task.points} 积分` : `失败已退回 ${task.points} 积分`) : task.outputCount ? `${task.outputCount} 个可用结果` : task.expiredOutputCount ? "结果已过期" : task.errorCode || "等待结果"}</span>
               <div className="task-record-actions">
                 {task.status === "SUCCEEDED" && task.outputCount > task.savedOutputCount && <button type="button" disabled={savingTaskId === task.id} onClick={() => saveOutputs(task)}><Plus size={14} />{savingTaskId === task.id ? "添加中" : "添加到素材库"}</button>}
                 {task.status === "SUCCEEDED" && task.outputCount > 0 && task.outputCount <= task.savedOutputCount && <span>已在素材库</span>}

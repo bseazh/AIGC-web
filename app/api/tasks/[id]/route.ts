@@ -46,7 +46,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const expiredAssets = task.output_json?.expiredAssets || [];
   const assetIds = outputAssets.map((asset) => asset.assetId);
   const assetRows = assetIds.length ? await db.query<{ id: string; storage_key: string; mime_type: string; original_name: string | null; metadata_json: Record<string, unknown> }>(
-    "SELECT id, storage_key, mime_type, original_name, metadata_json FROM assets WHERE id = ANY($1::uuid[]) AND owner_id = $2 AND kind = 'OUTPUT' AND audit_status = 'READY'", [assetIds, user.id],
+    `SELECT id, storage_key, mime_type, original_name, metadata_json
+       FROM assets
+      WHERE id = ANY($1::uuid[]) AND owner_id = $2 AND kind = 'OUTPUT' AND audit_status = 'READY'
+        AND (
+          COALESCE(metadata_json #>> '{library,saved}', 'false') = 'true'
+          OR COALESCE((metadata_json #>> '{library,expiresAt}')::timestamptz, created_at + INTERVAL '48 hours') > NOW()
+        )`, [assetIds, user.id],
   ) : { rows: [] };
   const assetsById = new Map(assetRows.rows.map((asset) => [asset.id, asset]));
   const outputs = await Promise.all(outputAssets.map(async (output) => {
@@ -62,6 +68,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       expiresAt: typeof library.expiresAt === "string" ? library.expiresAt : null,
     };
   }));
+  const availableOutputs = outputs.filter((output): output is NonNullable<typeof output> => Boolean(output));
+  const unavailableOutputCount = Math.max(0, outputAssets.length - availableOutputs.length);
   return NextResponse.json({
     taskId: task.id,
     workflowKey: task.workflow_key,
@@ -70,8 +78,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     statusLabel: taskStatusLabel(task.status),
     points: task.points,
     adminExempt: isAdminExemptTask(task.input_json),
-    outputs: outputs.filter((output): output is NonNullable<typeof output> => Boolean(output)),
-    expiredOutputCount: expiredAssets.length,
+    outputs: availableOutputs,
+    expiredOutputCount: expiredAssets.length + unavailableOutputCount,
     originalOutputCount: outputAssets.length + expiredAssets.length,
     inputSummary: summarizeInput(task.input_json),
     project: projectResult.rows[0] ? { id: projectResult.rows[0].id, title: projectResult.rows[0].title } : null,

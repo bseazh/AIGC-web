@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
   const byteSize = Number(body?.byteSize);
   const originalName = typeof body?.fileName === "string" ? body.fileName.slice(0, 255) : "upload";
   const contentHash = normalizeContentHash(body?.contentHash);
+  const temporaryDerived = body?.temporaryDerived === true;
   const extension = extensionByMime[mimeType];
   if (!extension) {
     return NextResponse.json({ code: "UNSUPPORTED_FILE", message: "仅支持 JPG、PNG、WebP、MP4、MP3、WAV" }, { status: 400 });
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
   if (!Number.isInteger(byteSize) || byteSize <= 0 || byteSize > maxBytesByMime[mimeType]) {
     return NextResponse.json({ code: "FILE_TOO_LARGE", message: "图片最大 10MB，视频最大 100MB，音频最大 30MB" }, { status: 400 });
   }
-  if (contentHash) {
+  if (contentHash && !temporaryDerived) {
     const duplicate = await db.query<{ id: string }>(
       `SELECT id
        FROM assets
@@ -67,14 +68,21 @@ export async function POST(request: NextRequest) {
   const storage = await storageSummary(user.id);
   if (storage.usedBytes + byteSize > storage.quotaBytes) return NextResponse.json({ code: "STORAGE_QUOTA_EXCEEDED", message: "存储空间不足，请删除不需要的素材后重试", storage }, { status: 413 });
 
-  const key = `users/${user.id}/inputs/${randomUUID()}.${extension}`;
+  const kind = temporaryDerived ? "OUTPUT" : "INPUT";
+  const key = temporaryDerived
+    ? `users/${user.id}/outputs/derived/${randomUUID()}.${extension}`
+    : `users/${user.id}/inputs/${randomUUID()}.${extension}`;
+  const expiresAt = new Date(Date.now() + Number(process.env.TEMP_OUTPUT_RETENTION_HOURS || 48) * 60 * 60 * 1000).toISOString();
   const result = await db.query<{ id: string }>(
     `INSERT INTO assets (owner_id, kind, storage_key, mime_type, byte_size, audit_status, original_name, content_hash, metadata_json)
-     VALUES ($1, 'INPUT', $2, $3, $4, 'UPLOADING', $5, $6, $7::jsonb)
+     VALUES ($1, $2, $3, $4, $5, 'UPLOADING', $6, $7, $8::jsonb)
      RETURNING id`,
-    [user.id, key, mimeType, byteSize, originalName, contentHash || null, JSON.stringify(contentHash ? { contentHash } : {})],
+    [user.id, kind, key, mimeType, byteSize, originalName, contentHash || null, JSON.stringify({
+      ...(contentHash ? { contentHash } : {}),
+      ...(temporaryDerived ? { derived: true, library: { saved: false, retention: "TEMPORARY_DERIVED", expiresAt } } : {}),
+    })],
   );
   const uploadUrl = await createSignedObjectUrl(key, "PUT", 600);
-  await audit(user.id, "ASSET_UPLOAD_CREATED", request, { type: "asset", id: result.rows[0].id }, { byteSize, mimeType });
-  return NextResponse.json({ assetId: result.rows[0].id, uploadUrl, expiresIn: 600 });
+  await audit(user.id, temporaryDerived ? "TEMPORARY_DERIVED_ASSET_CREATED" : "ASSET_UPLOAD_CREATED", request, { type: "asset", id: result.rows[0].id }, { byteSize, mimeType, expiresAt: temporaryDerived ? expiresAt : null });
+  return NextResponse.json({ assetId: result.rows[0].id, uploadUrl, expiresIn: 600, temporaryDerived, expiresAt: temporaryDerived ? expiresAt : null });
 }

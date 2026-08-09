@@ -17,7 +17,7 @@ export function restoreItem(raw: unknown): Item | null {
     return null;
   if (!item.assetId && item.preview.startsWith("blob:")) return null;
   return {
-    preview: item.preview,
+    preview: typeof item.assetId === "string" ? `/api/assets/${item.assetId}/download/` : item.preview,
     name: item.name,
     byteSize: item.byteSize,
     assetId: typeof item.assetId === "string" ? item.assetId : undefined,
@@ -32,6 +32,9 @@ export function restoreItem(raw: unknown): Item | null {
     materialSummary: typeof item.materialSummary === "string" ? item.materialSummary : undefined,
     materialConfidence: typeof item.materialConfidence === "number" ? item.materialConfidence : undefined,
     materialSuggestedAction: typeof item.materialSuggestedAction === "string" ? item.materialSuggestedAction : undefined,
+    generatedAsset: item.generatedAsset === true,
+    savedToLibrary: item.savedToLibrary === true,
+    expiresAt: typeof item.expiresAt === "string" ? item.expiresAt : undefined,
     durationSeconds: typeof item.durationSeconds === "number" ? item.durationSeconds : undefined,
     source: item.source === "douyin" ? "douyin" : undefined,
     clipStartSeconds: typeof item.clipStartSeconds === "number" ? item.clipStartSeconds : undefined,

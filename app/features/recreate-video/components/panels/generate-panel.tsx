@@ -1,5 +1,6 @@
-import { ArrowLeft, ChevronDown, Download, Film, LoaderCircle, Maximize2, Sparkles } from "lucide-react";
+import { ArrowLeft, ChevronDown, Film, LoaderCircle, Maximize2, Sparkles } from "lucide-react";
 
+import { GeneratedAssetActions, TemporaryResultNotice } from "@/app/components/generated-asset-actions";
 import { VideoGenerationProgress } from "@/app/components/video-generation-progress";
 import type { PreviewMedia, Result } from "../../types";
 
@@ -195,16 +196,13 @@ export function GeneratePanel({
               </div>
               <div className="recreate-result-actions">
                 <strong>视频已生成</strong>
-                <p>结果已保存到内容资产，可下载或继续带入智能混剪。</p>
+                <p>结果临时保留 48 小时，可下载、保存到素材库或继续带入智能混剪。</p>
                 <div>
                   <button type="button" onClick={() => window.open(generatedVideo.url, "_blank", "noopener,noreferrer")}>
                     <Maximize2 size={16} />
                     全屏预览
                   </button>
-                  <a href={`/api/assets/${generatedVideo.assetId}/download/`}>
-                    <Download size={16} />
-                    下载视频
-                  </a>
+                  <GeneratedAssetActions output={generatedVideo} downloadLabel="下载视频" />
                   <button type="button" onClick={goToVideoMix}>
                     <Film size={16} />
                     前往智能混剪
@@ -212,6 +210,8 @@ export function GeneratePanel({
                 </div>
               </div>
             </div>
+          ) : phase === "succeeded" && result?.expiredOutputCount ? (
+            <TemporaryResultNotice result={{ taskId: result.taskId || "", ...result }} />
           ) : (
             <div className="recreate-result-empty">
               <Film size={30} />

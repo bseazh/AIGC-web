@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowLeft, Check, Download, FolderOpen, ImagePlus, LoaderCircle, Sparkles, Upload, Wand2, X } from "lucide-react";
+import { ArrowLeft, FolderOpen, ImagePlus, LoaderCircle, Sparkles, Upload, Wand2, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { GenerationProgress } from "@/app/components/generation-progress";
+import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
 import type { ImageWorkflowCase } from "@/lib/image-workflow-cases";
 import { appendProjectId } from "@/lib/project-workflows";
 
@@ -31,7 +32,7 @@ type Props = {
 };
 
 type Account = { user: { isAdministrator?: boolean }; wallet: { availablePoints: number } };
-type TaskResult = { taskId: string; status: string; outputs: Array<{ assetId: string; url: string }>; errorCode?: string };
+type TaskResult = GeneratedTaskResult;
 type Asset = { id: string; mimeType: string; byteSize: number; originalName: string; url: string; kind: string };
 type Phase = "idle" | "uploading" | "generating" | "succeeded" | "failed";
 
@@ -78,6 +79,7 @@ export function ImageWorkflowPage({
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState("");
   const [task, setTask] = useState<TaskResult | null>(null);
+  const markSaved = (assetId: string) => setTask((current) => current ? { ...current, outputs: current.outputs.map((output) => output.assetId === assetId ? { ...output, savedToLibrary: true, expiresAt: null } : output) } : current);
 
   useEffect(() => {
     fetch("/api/auth/session/", { cache: "no-store" })
@@ -87,6 +89,10 @@ export function ImageWorkflowPage({
       })
       .catch(() => router.replace("/"));
   }, [router]);
+
+  useEffect(() => {
+    return watchProjectTaskResult(projectId, (restored) => { setTask(restored); setPhase(restoredTaskPhase(restored)); });
+  }, [projectId]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -225,7 +231,7 @@ export function ImageWorkflowPage({
       const created = await request(submitUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({ assetId, prompt: composedPrompt || prompt, productDescription, aspectRatio: ratio, scene, style }),
+        body: JSON.stringify({ assetId, prompt: composedPrompt || prompt, productDescription, aspectRatio: ratio, scene, style, draftId: projectId }),
       });
       setPhase("generating");
       await pollTask(created.taskId);
@@ -266,17 +272,17 @@ export function ImageWorkflowPage({
           <label className="yh-field wide">提示词 <em>*</em><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={1200} placeholder={requireSource ? "例如：商品放在窗边桌面，保留自然投影与留白" : "请输入图像描述，例如：清新自然的电商带货模特，真实摄影质感"} /><small>{prompt.length}/1200</small></label>
           <p className="yh-credit"><Sparkles size={15} />{creditText}</p>
           {error && <p className="creator-error" role="alert">{error}</p>}
-          {phase === "succeeded" && <p className="creator-success"><Check size={16} />{outputCount} 张结果已保存到内容资产</p>}
+          <TemporaryResultNotice result={task} />
           <div className="yh-actions"><button type="submit" disabled={!canSubmit}><Wand2 size={16} />{busy ? "任务处理中" : submitLabel}</button><button type="button" onClick={() => { if (preview.startsWith("blob:")) URL.revokeObjectURL(preview); setFile(null); setSelectedAsset(null); setPreview(""); setRatio(defaultRatio); setScene(scenes[0]); setStyle(styles[0]); setPrompt(""); setProductDescription(""); setAppliedCaseId(""); resetTask(); }}>重置</button></div>
         </form>
 
         <section className="yh-case-board">
           <header><span><Sparkles size={17} /></span><div><h1>案例参考</h1><p>选择案例可一键回填入参</p></div></header>
           {busy && <GenerationProgress phase={phase} taskStatus={task?.status} title={title} outputCount={outputCount} />}
-          {phase === "succeeded" && task ? <div className="yh-result-grid">{task.outputs.map((output, index) => <article key={output.assetId}><img src={output.url} alt={`${title}结果 ${index + 1}`} /><a href={output.url} download target="_blank" rel="noreferrer"><Download size={15} />下载</a>{nextStepHref && <button type="button" className="result-next" onClick={() => router.push(appendProjectId(`${nextStepHref}?assetId=${output.assetId}`, projectId))}>{nextStepLabel || "继续创作"}</button>}</article>)}</div> : <div className="yh-case-grid">{cases.map((item) => <article className={appliedCaseId === item.id ? "active" : ""} key={item.id}><div className="yh-case-media"><img src={item.image} alt={item.title} /><span><ImagePlus size={12} />{item.tag}</span></div><strong>{item.title}</strong><button type="button" onClick={() => applyCase(item)}><Wand2 size={15} />做同款</button></article>)}</div>}
+          {phase === "succeeded" && task?.outputs.length ? <div className="yh-result-grid">{task.outputs.map((output, index) => <article key={output.assetId}><img src={output.url} alt={`${title}结果 ${index + 1}`} /><GeneratedAssetActions output={output} onSaved={markSaved} />{nextStepHref && <button type="button" className="result-next" onClick={() => router.push(appendProjectId(`${nextStepHref}?assetId=${output.assetId}`, projectId))}>{nextStepLabel || "继续创作"}</button>}</article>)}</div> : phase === "succeeded" && task?.expiredOutputCount ? null : <div className="yh-case-grid">{cases.map((item) => <article className={appliedCaseId === item.id ? "active" : ""} key={item.id}><div className="yh-case-media"><img src={item.image} alt={item.title} /><span><ImagePlus size={12} />{item.tag}</span></div><strong>{item.title}</strong><button type="button" onClick={() => applyCase(item)}><Wand2 size={15} />做同款</button></article>)}</div>}
         </section>
       </div>
-      {libraryOpen && <div className="asset-picker-backdrop" role="dialog" aria-modal="true" aria-label="选择图片素材"><section className="asset-picker-modal"><header><div><span>内容资产</span><h2>选择图片素材</h2></div><button type="button" className="icon-button" onClick={() => setLibraryOpen(false)}><X size={18} /></button></header>{assetsLoading ? <div className="asset-picker-empty"><LoaderCircle size={22} />正在加载素材</div> : assets.length ? <div className="asset-picker-grid">{assets.map((asset) => <button type="button" key={asset.id} onClick={() => selectAsset(asset)}><img src={asset.url} alt="" /><strong>{asset.originalName}</strong><small>{asset.kind === "OUTPUT" ? "生成结果" : "上传素材"}</small></button>)}</div> : <div className="asset-picker-empty"><FolderOpen size={25} /><strong>暂无图片素材</strong><p>上传或完成一次生成后，素材会自动显示在这里。</p></div>}</section></div>}
+      {libraryOpen && <div className="asset-picker-backdrop" role="dialog" aria-modal="true" aria-label="选择图片素材"><section className="asset-picker-modal"><header><div><span>内容资产</span><h2>选择图片素材</h2></div><button type="button" className="icon-button" onClick={() => setLibraryOpen(false)}><X size={18} /></button></header>{assetsLoading ? <div className="asset-picker-empty"><LoaderCircle size={22} />正在加载素材</div> : assets.length ? <div className="asset-picker-grid">{assets.map((asset) => <button type="button" key={asset.id} onClick={() => selectAsset(asset)}><img src={asset.url} alt="" /><strong>{asset.originalName}</strong><small>{asset.kind === "OUTPUT" ? "生成结果" : "上传素材"}</small></button>)}</div> : <div className="asset-picker-empty"><FolderOpen size={25} /><strong>暂无图片素材</strong><p>用户上传素材会长期保留；生成结果需要手动添加到素材库后才会显示。</p></div>}</section></div>}
     </main>;
   }
 
@@ -299,7 +305,7 @@ export function ImageWorkflowPage({
           <div className="source-preview-actions">{selectedAsset && <span>已引用资产素材</span>}<button type="button" className="icon-button" aria-label="移除图片" onClick={() => { if (preview.startsWith("blob:")) URL.revokeObjectURL(preview); setFile(null); setSelectedAsset(null); setPreview(""); resetTask(); }}><X size={18} /></button></div>
         </div>}
         {busy && <GenerationProgress phase={phase} taskStatus={task?.status} title={title} outputCount={outputCount} />}
-        {phase === "succeeded" && task && <div className="result-grid">{task.outputs.map((output, index) => <article key={output.assetId}><img src={output.url} alt={`${title}结果 ${index + 1}`} /><a href={output.url} download target="_blank" rel="noreferrer"><Download size={16} />下载</a>{nextStepHref && <button type="button" className="result-next" onClick={() => router.push(appendProjectId(`${nextStepHref}?assetId=${output.assetId}`, projectId))}>{nextStepLabel || "继续创作"}</button>}</article>)}</div>}
+        {phase === "succeeded" && task?.outputs.length ? <div className="result-grid">{task.outputs.map((output, index) => <article key={output.assetId}><img src={output.url} alt={`${title}结果 ${index + 1}`} /><GeneratedAssetActions output={output} onSaved={markSaved} />{nextStepHref && <button type="button" className="result-next" onClick={() => router.push(appendProjectId(`${nextStepHref}?assetId=${output.assetId}`, projectId))}>{nextStepLabel || "继续创作"}</button>}</article>)}</div> : null}
       </section>
       <aside className="creator-panel">
         <div className="panel-title"><span><Sparkles size={18} /></span><div><h1>生成设置</h1><p>{account.user.isAdministrator ? `管理员免积分 · 报价 ${pointsPerTask} 积分计入成本审计` : description}</p></div></div>
@@ -309,7 +315,7 @@ export function ImageWorkflowPage({
         {productDescriptionLabel && <label className="field-label">{productDescriptionLabel}<textarea value={productDescription} onChange={(event) => setProductDescription(event.target.value)} maxLength={900} placeholder={productDescriptionPlaceholder} /><small>{productDescription.length}/900</small></label>}
         <label className="field-label">{requireSource ? "提示词" : "提示词"}<textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={1200} placeholder={requireSource ? "例如：商品放在窗边桌面，保留自然投影与留白" : "请输入图像描述，例如：一只可爱的橘猫在阳光下打盹，温暖真实摄影"} /><small>{prompt.length}/1200</small></label>
         {error && <p className="creator-error" role="alert">{error}</p>}
-        {phase === "succeeded" && <p className="creator-success"><Check size={16} />{outputCount} 张结果已保存到内容资产</p>}
+        <TemporaryResultNotice result={task} />
         <button className="generate-button" type="submit" disabled={(requireSource && !file && !selectedAsset) || (!requireSource && !prompt.trim()) || busy || (!account.user.isAdministrator && account.wallet.availablePoints < pointsPerTask)}><Upload size={18} />{busy ? "任务处理中" : !account.user.isAdministrator && account.wallet.availablePoints < pointsPerTask ? "积分不足" : submitLabel}</button>
       </aside>
       {cases.length > 0 && <aside className="case-reference-panel">
@@ -322,6 +328,6 @@ export function ImageWorkflowPage({
         </div>
       </aside>}
     </form>
-    {libraryOpen && <div className="asset-picker-backdrop" role="dialog" aria-modal="true" aria-label="选择图片素材"><section className="asset-picker-modal"><header><div><span>内容资产</span><h2>选择图片素材</h2></div><button type="button" className="icon-button" onClick={() => setLibraryOpen(false)}><X size={18} /></button></header>{assetsLoading ? <div className="asset-picker-empty"><LoaderCircle size={22} />正在加载素材</div> : assets.length ? <div className="asset-picker-grid">{assets.map((asset) => <button type="button" key={asset.id} onClick={() => selectAsset(asset)}><img src={asset.url} alt="" /><strong>{asset.originalName}</strong><small>{asset.kind === "OUTPUT" ? "生成结果" : "上传素材"}</small></button>)}</div> : <div className="asset-picker-empty"><FolderOpen size={25} /><strong>暂无图片素材</strong><p>上传或完成一次生成后，素材会自动显示在这里。</p></div>}</section></div>}
+    {libraryOpen && <div className="asset-picker-backdrop" role="dialog" aria-modal="true" aria-label="选择图片素材"><section className="asset-picker-modal"><header><div><span>内容资产</span><h2>选择图片素材</h2></div><button type="button" className="icon-button" onClick={() => setLibraryOpen(false)}><X size={18} /></button></header>{assetsLoading ? <div className="asset-picker-empty"><LoaderCircle size={22} />正在加载素材</div> : assets.length ? <div className="asset-picker-grid">{assets.map((asset) => <button type="button" key={asset.id} onClick={() => selectAsset(asset)}><img src={asset.url} alt="" /><strong>{asset.originalName}</strong><small>{asset.kind === "OUTPUT" ? "生成结果" : "上传素材"}</small></button>)}</div> : <div className="asset-picker-empty"><FolderOpen size={25} /><strong>暂无图片素材</strong><p>用户上传素材会长期保留；生成结果需要手动添加到素材库后才会显示。</p></div>}</section></div>}
   </main>;
 }

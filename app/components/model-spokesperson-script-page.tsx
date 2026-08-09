@@ -23,6 +23,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { VideoGenerationProgress } from "@/app/components/video-generation-progress";
+import { GeneratedAssetActions, TemporaryResultNotice, loadProjectTaskResult, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskOutput } from "@/app/components/generated-asset-actions";
 import {
   getTaskStatus,
   loadImageForCanvas,
@@ -145,7 +146,9 @@ type VideoTask = {
   taskId?: string;
   status: string;
   errorCode?: string;
-  outputs?: Array<{ assetId: string; mimeType?: string; name?: string; url: string }>;
+  outputs?: GeneratedTaskOutput[];
+  expiredOutputCount?: number;
+  originalOutputCount?: number;
 };
 type StageAsset = {
   assetId: string;
@@ -430,7 +433,7 @@ function normalizeStageAsset(value: unknown): StageAsset | null {
   if (typeof record.url !== "string" || !record.url) return null;
   return {
     assetId: record.assetId,
-    url: record.url,
+    url: `/api/assets/${record.assetId}/download/`,
     mimeType: typeof record.mimeType === "string" ? record.mimeType : undefined,
     name: typeof record.name === "string" ? record.name : undefined,
   };
@@ -482,7 +485,7 @@ function defaultDirectorBrief(): DirectorBrief {
 export function ModelSpokespersonScriptPage({ initialAccount = null }: { initialAccount?: Account | null }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const projectId = searchParams?.get("projectId") || null;
+  const projectId = searchParams?.get("projectId") || "";
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const modelFileInputRef = useRef<HTMLInputElement | null>(null);
   const [account, setAccount] = useState<Account | null>(initialAccount);
@@ -535,6 +538,12 @@ export function ModelSpokespersonScriptPage({ initialAccount = null }: { initial
       .catch(() => router.replace("/"));
   }, [initialAccount, router]);
 
+  useEffect(() => watchProjectTaskResult(projectId, (restored) => {
+    if (restored.workflowKey !== "model-spokesperson-video") return;
+    setVideoTask(restored);
+    setVideoPhase(restoredTaskPhase(restored));
+  }), [projectId]);
+
   useEffect(() => {
     let cancelled = false;
     const applyDraft = (draft: Partial<Draft>) => {
@@ -563,6 +572,11 @@ export function ModelSpokespersonScriptPage({ initialAccount = null }: { initial
           if (response.ok && body?.draft?.payload) {
             if (typeof body.draft.title === "string" && body.draft.title.trim()) setProjectTitle(body.draft.title);
             applyDraft(body.draft.payload as Partial<Draft>);
+            const restored = await loadProjectTaskResult(projectId);
+            if (!cancelled && restored?.workflowKey === "model-spokesperson-video") {
+              setVideoTask(restored);
+              setVideoPhase(restoredTaskPhase(restored));
+            }
             return;
           }
         }
@@ -1226,7 +1240,7 @@ export function ModelSpokespersonScriptPage({ initialAccount = null }: { initial
     if (!blob) throw new Error("模特遮挡图导出失败");
     const file = new File([blob], "spokesperson-model-reference-masked.jpg", { type: "image/jpeg" });
     const preview = URL.createObjectURL(file);
-    const assetId = await uploadRecreateItem({ file, preview, name: "已遮挡模特参考", byteSize: file.size });
+    const assetId = await uploadRecreateItem({ file, preview, name: "已遮挡模特参考", byteSize: file.size, temporaryDerived: true });
     const url = await resolveAssetPreviewUrl(assetId, preview);
     if (url !== preview) URL.revokeObjectURL(preview);
     return { assetId, url, mimeType: "image/jpeg", name: "已遮挡模特参考" };
@@ -1994,6 +2008,7 @@ export function ModelSpokespersonScriptPage({ initialAccount = null }: { initial
                             {stageBusy === stage ? <LoaderCircle className="generation-spinner" size={14} /> : <Sparkles size={14} />}
                             {stageBusy === stage ? "生成中" : asset ? "重新生成" : "生成本步"}
                           </button>
+                          {asset ? <GeneratedAssetActions output={asset} /> : null}
                         </article>
                       );
                     })}
@@ -2017,13 +2032,15 @@ export function ModelSpokespersonScriptPage({ initialAccount = null }: { initial
                     <video src={videoTask.outputs[0].url} controls playsInline />
                     <div>
                       <strong>视频已生成</strong>
-                      <p>任务结果会保存到资产库中。</p>
+                      <p>结果临时保留 48 小时，保存到素材库后才会长期保留。</p>
                       <a href={videoTask.outputs[0].url} target="_blank" rel="noreferrer">
                         全屏预览
                       </a>
+                      <GeneratedAssetActions output={videoTask.outputs[0]} downloadLabel="下载视频" />
                     </div>
                   </div>
                 ) : null}
+                {videoTask?.status === "SUCCEEDED" ? <TemporaryResultNotice result={{ taskId: videoTask.taskId || "", status: videoTask.status, outputs: videoTask.outputs || [], expiredOutputCount: videoTask.expiredOutputCount, originalOutputCount: videoTask.originalOutputCount }} /> : null}
                 {videoTask?.status === "SUCCEEDED" && videoTask.outputs?.[0] && !videoTask.outputs[0].mimeType?.startsWith("video/") ? (
                   <p className="creator-error" role="alert">
                     任务返回了非视频素材（{videoTask.outputs[0].mimeType || "未知类型"}），已阻止用视频播放器加载。请重新提交任务。
