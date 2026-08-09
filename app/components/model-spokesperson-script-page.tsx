@@ -240,7 +240,7 @@ const spokespersonCases: SpokespersonCase[] = [
 ];
 
 function scriptText(result: ScriptResult | null) {
-  return result?.segments.map((segment) => segment.narration).join("\n") || "";
+  return Array.isArray(result?.segments) ? result.segments.map((segment) => segment.narration || "").join("\n") : "";
 }
 
 function estimateSeconds(characterCount: number) {
@@ -280,14 +280,147 @@ function normalizeActionBeatText(value: unknown) {
   ].map((item) => String(item || "").trim()).filter(Boolean).join("；");
 }
 
-function normalizeDraftPlan(plan: ScriptPlan) {
+function normalizeDraftPlan(plan: unknown): ScriptPlan | null {
+  if (!plan || typeof plan !== "object") return null;
+  const record = plan as Partial<ScriptPlan>;
+  const script = normalizeScriptResult(record.script);
+  if (!script) return null;
   return {
-    ...plan,
-    sellingPointSummary: splitSummaryPoints(plan.sellingPointSummary),
-    actionBeats: Array.isArray(plan.actionBeats)
-      ? plan.actionBeats.map((beat) => normalizeActionBeatText(beat)).filter(Boolean).slice(0, 4)
+    id: typeof record.id === "string" && record.id ? record.id : `plan-${Date.now()}`,
+    label: typeof record.label === "string" && record.label ? record.label : "A",
+    title: typeof record.title === "string" && record.title ? record.title : "口播方案",
+    angle: typeof record.angle === "string" ? record.angle : "",
+    storyArc: typeof record.storyArc === "string" ? record.storyArc : "",
+    sellingPointSummary: splitSummaryPoints(record.sellingPointSummary),
+    actionBeats: Array.isArray(record.actionBeats)
+      ? record.actionBeats.map((beat) => normalizeActionBeatText(beat)).filter(Boolean).slice(0, 4)
       : [],
+    modelDirection: typeof record.modelDirection === "string" ? record.modelDirection : "",
+    productDirection: typeof record.productDirection === "string" ? record.productDirection : "",
+    internalPrompt: typeof record.internalPrompt === "string" ? record.internalPrompt : "",
+    script,
   };
+}
+
+function normalizeScriptResult(result: unknown): ScriptResult | null {
+  if (!result || typeof result !== "object") return null;
+  const record = result as Partial<ScriptResult>;
+  const segments = Array.isArray(record.segments)
+    ? record.segments
+        .filter((segment): segment is Segment => Boolean(segment) && typeof segment === "object")
+        .map((segment, index) => ({
+          id: typeof segment.id === "string" && segment.id ? segment.id : `segment-${index + 1}`,
+          stage: typeof segment.stage === "string" && segment.stage ? segment.stage : ["开场", "展示", "卖点", "收尾"][index] || "分段",
+          timeRange: typeof segment.timeRange === "string" && segment.timeRange ? segment.timeRange : ["0-3 秒", "3-8 秒", "8-12 秒", "12-15 秒"][index] || "",
+          narration: typeof segment.narration === "string" ? segment.narration : "",
+          visual: typeof segment.visual === "string" ? segment.visual : "",
+        }))
+        .filter((segment) => segment.narration || segment.visual)
+        .slice(0, 4)
+    : [];
+  if (!segments.length) return null;
+  return {
+    status: typeof record.status === "string" ? record.status : "READY",
+    draftId: typeof record.draftId === "string" ? record.draftId : `draft-${Date.now()}`,
+    title: typeof record.title === "string" && record.title ? record.title : "15 秒口播稿",
+    durationSeconds: Number(record.durationSeconds) || 15,
+    tone: typeof record.tone === "string" && record.tone ? record.tone : "自然口播",
+    segments,
+    alternativeOpeners: Array.isArray(record.alternativeOpeners)
+      ? record.alternativeOpeners.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 3)
+      : [],
+    generatedAt: typeof record.generatedAt === "string" ? record.generatedAt : new Date().toISOString(),
+  };
+}
+
+function normalizeVideoPack(value: unknown): VideoPack | null {
+  if (!value || typeof value !== "object") return null;
+  const pack = value as Partial<VideoPack>;
+  if (typeof pack.finalPrompt !== "string" || !pack.finalPrompt.trim()) return null;
+  const rawMultiview = pack.productMultiview && typeof pack.productMultiview === "object" ? pack.productMultiview : null;
+  const rawRecommendation = pack.modelRecommendation && typeof pack.modelRecommendation === "object" ? pack.modelRecommendation : null;
+  const rawStoryboard = pack.storyboard && typeof pack.storyboard === "object" ? pack.storyboard : null;
+  const views = Array.isArray(rawMultiview?.views) ? rawMultiview.views : [];
+  const frames = Array.isArray(rawStoryboard?.frames) ? rawStoryboard.frames : [];
+  const bindings = Array.isArray(pack.bindings) ? pack.bindings : [];
+  return {
+    status: typeof pack.status === "string" ? pack.status : "READY",
+    draftId: typeof pack.draftId === "string" ? pack.draftId : `pack-${Date.now()}`,
+    title: typeof pack.title === "string" && pack.title ? pack.title : "商品导演视频任务包",
+    selectedPlanId: typeof pack.selectedPlanId === "string" ? pack.selectedPlanId : "",
+    selectedPlanLabel: typeof pack.selectedPlanLabel === "string" ? pack.selectedPlanLabel : "",
+    productMultiview: {
+      summary: typeof rawMultiview?.summary === "string" ? rawMultiview.summary : "商品多视图参考已准备。",
+      views: views
+        .filter((view): view is VideoPack["productMultiview"]["views"][number] => Boolean(view) && typeof view === "object")
+        .map((view, index) => ({
+          name: typeof view.name === "string" && view.name ? view.name : ["正面", "侧面", "45度", "背面/顶部/底部", "细节特写"][index] || `视图${index + 1}`,
+          purpose: typeof view.purpose === "string" ? view.purpose : "",
+          prompt: typeof view.prompt === "string" ? view.prompt : "",
+          note: typeof view.note === "string" ? view.note : "",
+        })),
+    },
+    modelRecommendation: {
+      mode: rawRecommendation?.mode === "asset_library" || rawRecommendation?.mode === "blurred_reference" ? rawRecommendation.mode : "auto",
+      label: typeof rawRecommendation?.label === "string" ? rawRecommendation.label : "自动推荐",
+      reason: typeof rawRecommendation?.reason === "string" ? rawRecommendation.reason : "系统会根据商品和导演意图自动选择素材策略。",
+      maskingAdvice: typeof rawRecommendation?.maskingAdvice === "string" ? rawRecommendation.maskingAdvice : "如涉及人物，将优先使用隐私安全处理。",
+    },
+    storyboard: {
+      summary: typeof rawStoryboard?.summary === "string" ? rawStoryboard.summary : "12 格分镜按广告节奏推进。",
+      frames: frames
+        .filter((frame): frame is VideoPack["storyboard"]["frames"][number] => Boolean(frame) && typeof frame === "object")
+        .map((frame, index) => ({
+          index: Number(frame.index) || index + 1,
+          timeRange: typeof frame.timeRange === "string" ? frame.timeRange : "",
+          scene: typeof frame.scene === "string" ? frame.scene : "",
+          intent: typeof frame.intent === "string" ? frame.intent : "",
+          visual: typeof frame.visual === "string" ? frame.visual : "",
+          camera: typeof frame.camera === "string" ? frame.camera : "",
+          narration: typeof frame.narration === "string" ? frame.narration : "",
+          assetUse: typeof frame.assetUse === "string" ? frame.assetUse : "",
+        })),
+    },
+    bindings: bindings
+      .filter((binding): binding is VideoPack["bindings"][number] => Boolean(binding) && typeof binding === "object")
+      .map((binding, index) => ({
+        segmentId: typeof binding.segmentId === "string" ? binding.segmentId : `segment-${index + 1}`,
+        timeRange: typeof binding.timeRange === "string" ? binding.timeRange : "",
+        narration: typeof binding.narration === "string" ? binding.narration : "",
+        frameIndexes: Array.isArray(binding.frameIndexes) ? binding.frameIndexes.filter((item) => Number.isInteger(Number(item))).map(Number) : [],
+        note: typeof binding.note === "string" ? binding.note : "",
+      })),
+    finalPrompt: pack.finalPrompt,
+    generatedAt: typeof pack.generatedAt === "string" ? pack.generatedAt : new Date().toISOString(),
+  };
+}
+
+function normalizeDirectorBriefValue(value: unknown): DirectorBrief {
+  const record = value && typeof value === "object" ? (value as Partial<DirectorBrief>) : {};
+  const peopleMode = record.peopleMode === "hands_or_back" || record.peopleMode === "spokesperson" ? record.peopleMode : "no_people";
+  return {
+    audience: typeof record.audience === "string" && record.audience ? record.audience : systemRecommended,
+    usageScene: typeof record.usageScene === "string" && record.usageScene ? record.usageScene : systemRecommended,
+    valueFocus: typeof record.valueFocus === "string" && record.valueFocus ? record.valueFocus : systemRecommended,
+    storyStyle: typeof record.storyStyle === "string" && record.storyStyle ? record.storyStyle : systemRecommended,
+    peopleMode,
+    productUnderstanding: typeof record.productUnderstanding === "string" ? record.productUnderstanding : "",
+  };
+}
+
+function normalizeDirectorMessages(value: unknown): DirectorChatMessage[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((message): message is Partial<DirectorChatMessage> => Boolean(message) && typeof message === "object")
+    .map((message) => ({
+      role: message.role === "user" ? "user" as const : "assistant" as const,
+      content: typeof message.content === "string" ? message.content : "",
+      quickReplies: Array.isArray(message.quickReplies)
+        ? message.quickReplies.map((reply) => String(reply || "").trim()).filter(Boolean).slice(0, 5)
+        : [],
+    }))
+    .filter((message) => message.content || message.quickReplies?.length)
+    .slice(-12);
 }
 
 function defaultDirectorBrief(): DirectorBrief {
@@ -363,8 +496,8 @@ export function ModelSpokespersonScriptPage() {
       setProductName(draft.productName || "");
       setProductBrief(draft.productBrief || "");
       if (typeof draft.generateAudio === "boolean") setGenerateAudio(draft.generateAudio);
-      setDirectorBrief({ ...defaultDirectorBrief(), ...(draft.directorBrief || {}) });
-      if (Array.isArray(draft.directorMessages)) setDirectorMessages(draft.directorMessages.slice(-12));
+      setDirectorBrief(normalizeDirectorBriefValue(draft.directorBrief));
+      setDirectorMessages(normalizeDirectorMessages(draft.directorMessages));
       if (["auto", "natural", "enthusiastic", "professional"].includes(draft.tone || "")) setTone(draft.tone!);
       if (Array.isArray(draft.productImages)) {
         setProductImages(
@@ -376,10 +509,10 @@ export function ModelSpokespersonScriptPage() {
       if (draft.stageAssets && typeof draft.stageAssets === "object") setStageAssets(draft.stageAssets);
       if (draft.modelSource?.assetId && draft.modelSource.url) setModelSource(draft.modelSource);
       if (["auto", "upload", "library"].includes(draft.modelSourceMode || "")) setModelSourceMode(draft.modelSourceMode!);
-      if (Array.isArray(draft.plans)) setPlans(draft.plans.map((plan) => normalizeDraftPlan(plan as ScriptPlan)));
+      if (Array.isArray(draft.plans)) setPlans(draft.plans.map((plan) => normalizeDraftPlan(plan)).filter((plan): plan is ScriptPlan => Boolean(plan)));
       if (typeof draft.selectedPlanId === "string") setSelectedPlanId(draft.selectedPlanId);
-      if (draft.result?.segments?.length) setResult(draft.result);
-      if (draft.videoPack?.finalPrompt) setVideoPack(draft.videoPack);
+      setResult(normalizeScriptResult(draft.result));
+      setVideoPack(normalizeVideoPack(draft.videoPack));
     };
 
     const load = async () => {
@@ -619,7 +752,10 @@ export function ModelSpokespersonScriptPage() {
       const body = await response.json().catch(() => null);
       if (!response.ok || body?.status !== "READY" || !Array.isArray(body?.plans))
         throw new Error(body?.message || "口播方案生成失败");
-      const normalizedPlans = body.plans.map((plan: ScriptPlan) => normalizeDraftPlan(plan));
+      const normalizedPlans = (body.plans as unknown[])
+        .map((plan) => normalizeDraftPlan(plan))
+        .filter((plan): plan is ScriptPlan => Boolean(plan));
+      if (!normalizedPlans.length) throw new Error("口播方案结构异常，请重新生成");
       setPlans(normalizedPlans);
       setSelectedPlanId(normalizedPlans[0]?.id || "");
       setResult(normalizedPlans[0]?.script || null);
@@ -743,19 +879,19 @@ export function ModelSpokespersonScriptPage() {
       });
       const body = await response.json().catch(() => null);
       if (!response.ok || body?.status !== "READY") throw new Error(body?.message || "AI 导演对话失败");
-      const nextBrief = { ...defaultDirectorBrief(), ...directorBrief, ...(body.directorBrief || {}) };
+      const nextBrief = normalizeDirectorBriefValue({ ...directorBrief, ...(body.directorBrief || {}) });
       setDirectorBrief(nextBrief);
       if (typeof body.productBriefSuggestion === "string" && body.productBriefSuggestion.trim() && !productBrief.trim()) {
         setProductBrief(body.productBriefSuggestion.trim());
       }
-      setDirectorMessages([
+      setDirectorMessages(normalizeDirectorMessages([
         ...nextMessages,
         {
           role: "assistant" as const,
           content: String(body.reply || "我已更新导演理解，可以继续补充或生成方案。"),
           quickReplies: Array.isArray(body.quickReplies) ? body.quickReplies.slice(0, 5) : [],
         },
-      ].slice(-12));
+      ].slice(-12)));
       setPlans([]);
       setSelectedPlanId("");
       setResult(null);
@@ -896,18 +1032,20 @@ export function ModelSpokespersonScriptPage() {
       if (!response.ok || body?.status !== "READY" || !body?.pack?.finalPrompt) {
         throw new Error(body?.message || "视频任务包生成失败");
       }
-      setVideoPack(body.pack);
+      const normalizedPack = normalizeVideoPack(body.pack);
+      if (!normalizedPack) throw new Error("视频任务包结构异常，请重新生成");
+      setVideoPack(normalizedPack);
       setWorkflowStep("assets");
       localStorage.setItem(
         draftStorageKey,
         JSON.stringify({
           ...draftValue(),
-          videoPack: body.pack,
+          videoPack: normalizedPack,
         }),
       );
       setNotice("视频任务包已生成");
       window.setTimeout(() => setNotice(""), 1800);
-      return body.pack as VideoPack;
+      return normalizedPack;
     } catch (caught) {
       setVideoError(caught instanceof Error ? caught.message : "视频任务包生成失败");
       return null;

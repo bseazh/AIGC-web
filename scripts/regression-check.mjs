@@ -912,6 +912,9 @@ const checks = [
     "splitSummaryPoints",
     "normalizeDraftPlan",
     "normalizeActionBeatText",
+    "normalizeScriptResult",
+    "normalizeVideoPack",
+    "normalizeDirectorMessages",
   ],
   [
     "Model spokesperson UI exposes auto product recognition",
