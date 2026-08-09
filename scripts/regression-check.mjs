@@ -373,7 +373,7 @@ const checks = [
   [
     "Worker routes recreate references to Nano Banana image generation with fallback",
     "scripts/worker.mjs",
-    "createGeminiImageWithSophnetFallback(inputUrls, prompt, generationTaskId, index, input.aspectRatio)",
+    "createGeminiImageWithSophnetFallback(inputUrls, prompt, generationTaskId, index, input.aspectRatio, input)",
   ],
   [
     "Gemini image generation falls back to SophNet when configured",
@@ -1253,7 +1253,7 @@ const checks = [
   [
     "product hero production acceptance",
     "scripts/product-hero-acceptance.mjs",
-    "real SophNet create/query/download protocol",
+    "real SophNet Seedream generation/download protocol",
   ],
   [
     "real user product hero production acceptance",
@@ -1265,7 +1265,14 @@ const checks = [
     "scripts/real-user-account-preflight.mjs",
     "publicEmailRegistration",
   ],
-  ["SophNet provider logs", "scripts/worker.mjs", "create_image_task"],
+  ["SophNet provider logs", "scripts/worker.mjs", 'operation: "generate_image"'],
+  [
+    "SophNet image workflows use Doubao Seedream synchronous generation",
+    "scripts/worker.mjs",
+    'process.env.AI_MODEL || "Doubao-Seedream-5.0-pro"',
+    '...(inputUrls.length ? { image: inputUrls } : {})',
+    "payload?.data?.[0]?.url",
+  ],
   [
     "SophNet production preflight",
     "scripts/production-preflight.mjs",

@@ -14,9 +14,13 @@ type TaskResult = { taskId: string; status: string; outputs: Array<{ assetId: st
 type Phase = "idle" | "uploading" | "generating" | "succeeded" | "failed";
 
 const ratios = ["1:1", "3:4", "4:3", "9:16"];
-const modelOptions = ["Gemini 2.5 Flash Image", "智能生图-IG-2.0"];
+const modelOptions = ["Gemini 2.5 Flash Image", "豆包 Seedream 5.0 Pro"];
 const resolutions = ["1K", "2K"];
 const maxProductImages = 5;
+
+function imageProviderForModel(model: string) {
+  return model === "豆包 Seedream 5.0 Pro" ? "sophnet" : "gemini";
+}
 
 export function ProductSceneImagePage() {
   const router = useRouter();
@@ -183,12 +187,12 @@ export function ProductSceneImagePage() {
       const composedPrompt = [
         `产品描述：${productDescription.trim()}`,
         prompt.trim() ? `提示词：${prompt.trim()}` : "",
-        `内置参数：模型 ${model}，清晰度 ${resolution}，图片比例 ${ratio}，使用场景 ${scene}，视觉风格 ${style}${useModelReference ? "，允许参考指定模特图" : ""}。`,
+        `内置参数：清晰度 ${resolution}，图片比例 ${ratio}，使用场景 ${scene}，视觉风格 ${style}${useModelReference ? "，允许参考指定模特图" : ""}。`,
       ].filter(Boolean).join("\n");
       const created = await request("/api/tasks/scene/", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({ assetIds, prompt: composedPrompt, aspectRatio: ratio, scene, style, draftId: projectId }),
+        body: JSON.stringify({ assetIds, prompt: composedPrompt, aspectRatio: ratio, scene, style, imageProvider: imageProviderForModel(model), imageResolution: resolution, draftId: projectId }),
       });
       setPhase("generating");
       await pollTask(created.taskId);

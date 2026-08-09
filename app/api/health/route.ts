@@ -42,7 +42,9 @@ function checkSophnet() {
       throw new Error("SophNet is not configured");
     }
     if (!baseUrl.startsWith("https://")) throw new Error("SophNet base URL must use HTTPS");
-    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/task/health-check`, {
+    const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
+    const probeUrl = normalizedBaseUrl.endsWith("/imagegenerator") ? normalizedBaseUrl : `${normalizedBaseUrl}/task/health-check`;
+    const response = await fetch(probeUrl, {
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       signal: AbortSignal.timeout(4_000),
     });

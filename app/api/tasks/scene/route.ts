@@ -10,5 +10,11 @@ export async function POST(request: NextRequest) {
       if (Array.isArray(body.assetIds)) return body.assetIds.filter((id): id is string => typeof id === "string").slice(0, 5);
       return [typeof body.assetId === "string" ? body.assetId : ""];
     },
+    undefined,
+    undefined,
+    (body) => ({
+      imageProvider: body.imageProvider === "gemini" ? "gemini" : "sophnet",
+      imageResolution: body.imageResolution === "2K" ? "2K" : "1K",
+    }),
   );
 }

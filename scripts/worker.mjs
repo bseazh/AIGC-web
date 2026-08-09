@@ -144,19 +144,22 @@ async function sophnet(path, init = {}, audit = {}) {
   }
 }
 
-async function createImageTask(inputUrls, prompt, generationTaskId, outputIndex) {
-  const payload = await sophnet("/task", {
+async function createSophnetImage(inputUrls, prompt, generationTaskId, outputIndex, input = {}) {
+  const model = process.env.AI_MODEL || "Doubao-Seedream-5.0-pro";
+  const size = input.imageResolution === "2K" ? "2K" : "1K";
+  const payload = await sophnet("", {
     method: "POST",
-    body: JSON.stringify({ model: process.env.AI_MODEL, input: { prompt, images: inputUrls } }),
-  }, { taskId: generationTaskId, operation: "create_image_task", request: { outputIndex, inputCount: inputUrls.length, promptLength: prompt.length } });
-  const taskId = payload?.output?.taskId;
-  if (!taskId) throw new Error("SophNet did not return taskId");
-  return taskId;
-}
-
-async function createSophnetImage(inputUrls, prompt, generationTaskId, outputIndex) {
-  const providerTaskId = await createImageTask(inputUrls, prompt, generationTaskId, outputIndex);
-  return { url: await waitForImage(providerTaskId, generationTaskId, outputIndex), temporaryKey: null, provider: "sophnet", model: process.env.AI_MODEL };
+    body: JSON.stringify({
+      model,
+      prompt,
+      size,
+      watermark: false,
+      ...(inputUrls.length ? { image: inputUrls } : {}),
+    }),
+  }, { taskId: generationTaskId, operation: "generate_image", request: { outputIndex, inputCount: inputUrls.length, promptLength: prompt.length, size } });
+  const url = payload?.data?.[0]?.url;
+  if (!url) throw new Error("SophNet Seedream did not return an image URL");
+  return { url, temporaryKey: null, provider: "sophnet", model: payload?.model || model };
 }
 
 async function createGeminiImage(inputUrls, prompt, generationTaskId, outputIndex, aspectRatio = "1:1") {
@@ -216,7 +219,7 @@ async function createGeminiImage(inputUrls, prompt, generationTaskId, outputInde
   return { url: await cosUrl(key, "GET", 3600), temporaryKey: key, provider: "google-gemini", model };
 }
 
-async function createGeminiImageWithSophnetFallback(inputUrls, prompt, generationTaskId, outputIndex, aspectRatio = "1:1") {
+async function createGeminiImageWithSophnetFallback(inputUrls, prompt, generationTaskId, outputIndex, aspectRatio = "1:1", sophnetInput = {}) {
   try {
     return await createGeminiImage(inputUrls, prompt, generationTaskId, outputIndex, aspectRatio);
   } catch (error) {
@@ -224,7 +227,7 @@ async function createGeminiImageWithSophnetFallback(inputUrls, prompt, generatio
     const geminiMessage = error instanceof Error ? error.message : "Gemini image generation failed";
     log("warn", "gemini_image_fallback_to_sophnet", { taskId: generationTaskId, outputIndex, reason: geminiMessage.slice(0, 200) });
     try {
-      return await createSophnetImage(inputUrls, prompt, generationTaskId, outputIndex);
+      return await createSophnetImage(inputUrls, prompt, generationTaskId, outputIndex, sophnetInput);
     } catch (fallbackError) {
       const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : "SophNet fallback failed";
       throw new Error(`${geminiMessage}; SophNet fallback failed: ${fallbackMessage}`);
@@ -311,24 +314,6 @@ async function waitForVideo(taskId, generationTaskId) {
     await new Promise((resolve) => setTimeout(resolve, 5000));
   }
   throw new Error("Ark video task timed out");
-}
-
-async function waitForImage(taskId, generationTaskId, outputIndex) {
-  const deadline = Date.now() + 5 * 60 * 1000;
-  while (Date.now() < deadline) {
-    const payload = await sophnet(`/task/${taskId}`, {}, { taskId: generationTaskId, operation: "get_image_task", providerTaskId: taskId, request: { outputIndex } });
-    const output = payload?.output;
-    if (output?.taskStatus === "SUCCEEDED") {
-      const url = output.results?.[0]?.url;
-      if (!url) throw new Error("SophNet task succeeded without an image");
-      return url;
-    }
-    if (!["PENDING", "RUNNING"].includes(output?.taskStatus)) {
-      throw new Error(`SophNet task ${output?.taskStatus || "UNKNOWN"}: ${output?.message || output?.code || "failed"}`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-  }
-  throw new Error("SophNet task timed out");
 }
 
 function sophnetImageConfigured() {
@@ -419,23 +404,30 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
   ].filter(Boolean).join("\n");
   if (workflowKey === "recreate-reference-image") {
     if (geminiImageConfigured()) {
-      return createGeminiImageWithSophnetFallback(inputUrls, prompt, generationTaskId, index, input.aspectRatio);
+      return createGeminiImageWithSophnetFallback(inputUrls, prompt, generationTaskId, index, input.aspectRatio, input);
     }
-    return createSophnetImage(inputUrls, prompt, generationTaskId, index);
+    return createSophnetImage(inputUrls, prompt, generationTaskId, index, input);
   }
   if (workflowKey === "image-generate" || workflowKey === "commerce-model") {
     if (input.imageProvider === "sophnet") {
       if (!sophnetImageConfigured()) throw new Error("SophNet image generation is not configured");
-      if (inputUrls.length === 0) throw new Error("智能生图-IG-2.0 需要至少一张参考图");
-      return createSophnetImage(inputUrls, prompt, generationTaskId, index);
+      return createSophnetImage(inputUrls, prompt, generationTaskId, index, input);
     }
     if (!geminiImageConfigured()) throw new Error("Gemini image generation is not configured");
     return createGeminiImage(inputUrls, prompt, generationTaskId, index, geminiAspectRatio(input.aspectRatio));
   }
+  if (input.imageProvider === "gemini") {
+    if (!geminiImageConfigured()) throw new Error("Gemini image generation is not configured");
+    return createGeminiImage(inputUrls, prompt, generationTaskId, index, geminiAspectRatio(input.aspectRatio));
+  }
+  if (input.imageProvider === "sophnet") {
+    if (!sophnetImageConfigured()) throw new Error("SophNet image generation is not configured");
+    return createSophnetImage(inputUrls, prompt, generationTaskId, index, input);
+  }
   if (!sophnetImageConfigured() && geminiImageConfigured()) {
     return createGeminiImage(inputUrls, prompt, generationTaskId, index, geminiAspectRatio(input.aspectRatio));
   }
-  return createSophnetImage(inputUrls, prompt, generationTaskId, index);
+  return createSophnetImage(inputUrls, prompt, generationTaskId, index, input);
 }
 
 async function generateVideo(inputUrls, input, workflowKey, taskId) {
@@ -624,11 +616,11 @@ const worker = new Worker("generation", async (job) => {
       ? task.input_json.acceptanceFault
       : null;
     if (acceptanceFault === "PROVIDER_FAILURE") {
-      await logProviderCall(task.id, "sophnet", "create_image_task", { controlledAcceptanceFault: true }, 502, {}, "SOPHNET_CONTROLLED_FAILURE");
+      await logProviderCall(task.id, "sophnet", "generate_image", { controlledAcceptanceFault: true }, 502, {}, "SOPHNET_CONTROLLED_FAILURE");
       throw new Error("SOPHNET_PROVIDER_FAILED");
     }
     if (acceptanceFault === "PROVIDER_TIMEOUT") {
-      await logProviderCall(task.id, "sophnet", "get_image_task", { controlledAcceptanceFault: true }, 504, {}, "SOPHNET_CONTROLLED_TIMEOUT");
+      await logProviderCall(task.id, "sophnet", "generate_image", { controlledAcceptanceFault: true }, 504, {}, "SOPHNET_CONTROLLED_TIMEOUT");
       throw new Error("SOPHNET_PROVIDER_TIMEOUT");
     }
     const storageKeys = task.input_json.storageKeys || [task.input_json.storageKey];

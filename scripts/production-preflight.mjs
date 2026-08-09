@@ -58,7 +58,9 @@ const payload = await response.json().catch(() => ({}));
 const models = Array.isArray(payload?.data) ? payload.data.map((model) => model?.id) : [];
 if (models.length && !models.includes(arkModel)) throw new Error(`Ark model is not enabled for this key: ${arkModel}`);
 console.log(`Ark access: OK (${arkModel})`);
-const sophnetResponse = await fetch(`${process.env.AI_BASE_URL.replace(/\/$/, "")}/task/preflight-health-check`, {
+const normalizedSophnetUrl = process.env.AI_BASE_URL.replace(/\/$/, "");
+const sophnetProbeUrl = normalizedSophnetUrl.endsWith("/imagegenerator") ? normalizedSophnetUrl : `${normalizedSophnetUrl}/task/preflight-health-check`;
+const sophnetResponse = await fetch(sophnetProbeUrl, {
   headers: { Authorization: `Bearer ${process.env.AI_API_KEY}`, "Content-Type": "application/json" },
   signal: AbortSignal.timeout(10_000),
 });

@@ -223,10 +223,9 @@ try {
   const successLedger = afterSuccess.ledger.filter((entry) => entry.businessId === successCreation.taskId);
   if (!successLedger.some((entry) => entry.type === "FREEZE") || !successLedger.some((entry) => entry.type === "SETTLE") || successLedger.some((entry) => entry.type === "REFUND")) throw new Error("Success ledger is inconsistent");
   const providerLogs = await database.query("SELECT operation, response_status, error_code, provider_request_id FROM provider_call_logs WHERE task_id = $1 AND provider = 'sophnet' ORDER BY created_at", [successCreation.taskId]);
-  const createLogs = providerLogs.rows.filter((entry) => entry.operation === "create_image_task" && entry.response_status >= 200 && entry.response_status < 300 && !entry.error_code && entry.provider_request_id);
-  const queryLogs = providerLogs.rows.filter((entry) => entry.operation === "get_image_task" && entry.response_status >= 200 && entry.response_status < 300 && !entry.error_code);
-  if (createLogs.length !== 4 || queryLogs.length < 4) throw new Error(`SophNet protocol logs are incomplete: create=${createLogs.length}, query=${queryLogs.length}`);
-  record("real SophNet create/query/download protocol", "PASS", { taskId: successCreation.taskId, createCalls: createLogs.length, queryCalls: queryLogs.length });
+  const generateLogs = providerLogs.rows.filter((entry) => entry.operation === "generate_image" && entry.response_status >= 200 && entry.response_status < 300 && !entry.error_code);
+  if (generateLogs.length !== 4) throw new Error(`SophNet Seedream protocol logs are incomplete: generate=${generateLogs.length}`);
+  record("real SophNet Seedream generation/download protocol", "PASS", { taskId: successCreation.taskId, generateCalls: generateLogs.length });
   record("four COS objects and READY assets", "PASS", { taskId: successCreation.taskId, outputCount: 4 });
   record("ordinary user 10 point settlement", "PASS", { taskId: successCreation.taskId, chargedPoints: 10 });
 

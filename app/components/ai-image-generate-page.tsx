@@ -14,12 +14,12 @@ type TaskResult = { taskId: string; status: string; outputs: Array<{ assetId: st
 type Phase = "idle" | "uploading" | "generating" | "succeeded" | "failed";
 
 const ratios = ["1:1", "3:4", "4:3", "9:16"];
-const modelOptions = ["Gemini 2.5 Flash Image", "智能生图-IG-2.0"];
+const modelOptions = ["Gemini 2.5 Flash Image", "豆包 Seedream 5.0 Pro"];
 const resolutions = ["1K", "2K"];
 const maxReferenceImages = 10;
 
 function imageProviderForModel(model: string) {
-  return model === "智能生图-IG-2.0" ? "sophnet" : "gemini";
+  return model === "豆包 Seedream 5.0 Pro" ? "sophnet" : "gemini";
 }
 
 export function AiImageGeneratePage() {
@@ -232,7 +232,7 @@ export function AiImageGeneratePage() {
               <button className={sourceTab === "local" ? "active" : ""} type="button" onClick={() => setSourceTab("local")}><Upload size={14} />本地上传</button>
               <button className={sourceTab === "asset" ? "active" : ""} type="button" onClick={loadAssets}><FolderOpen size={14} />资产库</button>
             </div>
-            {sourceTab === "local" ? <label className="yh-upload-drop"><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => chooseFiles(event.target.files)} /><span><Upload size={24} /></span><strong>{imageProviderForModel(model) === "sophnet" ? "参考图片（必选）" : "参考图片（可选）"}</strong><small>{imageProviderForModel(model) === "sophnet" ? "当前模型用于参考图编辑，请上传 1-10 张图片" : "不上传则文生图，上传后按参考图生成"}<br />已上传 {references.length}/{maxReferenceImages} 个</small></label> : <div className="yh-asset-picker">{assetsLoading ? <p><LoaderCircle size={18} />正在加载素材</p> : assets.length ? assets.slice(0, 12).map((asset) => <button type="button" key={asset.id} onClick={() => selectAsset(asset)}><img src={asset.url} alt="" /><span>{asset.originalName}</span></button>) : <p>暂无可用图片素材</p>}</div>}
+            {sourceTab === "local" ? <label className="yh-upload-drop"><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => chooseFiles(event.target.files)} /><span><Upload size={24} /></span><strong>参考图片（可选）</strong><small>不上传则文生图，上传后按参考图生成<br />已上传 {references.length}/{maxReferenceImages} 个</small></label> : <div className="yh-asset-picker">{assetsLoading ? <p><LoaderCircle size={18} />正在加载素材</p> : assets.length ? assets.slice(0, 12).map((asset) => <button type="button" key={asset.id} onClick={() => selectAsset(asset)}><img src={asset.url} alt="" /><span>{asset.originalName}</span></button>) : <p>暂无可用图片素材</p>}</div>}
             {references.length > 0 && <div className="yh-reference-list">{references.map((item, index) => <article key={`${item.url}-${index}`}><img src={item.url} alt="" /><button type="button" aria-label="移除参考图" onClick={() => removeReference(index)}><X size={13} /></button></article>)}</div>}
           </section>
           <p className="yh-credit"><Zap size={15} />{quotedText}</p>
