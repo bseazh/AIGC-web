@@ -423,6 +423,51 @@ function normalizeDirectorMessages(value: unknown): DirectorChatMessage[] {
     .slice(-12);
 }
 
+function normalizeStageAsset(value: unknown): StageAsset | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Partial<StageAsset>;
+  if (typeof record.assetId !== "string" || !record.assetId) return null;
+  if (typeof record.url !== "string" || !record.url) return null;
+  return {
+    assetId: record.assetId,
+    url: record.url,
+    mimeType: typeof record.mimeType === "string" ? record.mimeType : undefined,
+    name: typeof record.name === "string" ? record.name : undefined,
+  };
+}
+
+function normalizeStageAssets(value: unknown): Partial<Record<SpokespersonStage, StageAsset>> {
+  if (!value || typeof value !== "object") return {};
+  const record = value as Partial<Record<SpokespersonStage, unknown>>;
+  const normalized: Partial<Record<SpokespersonStage, StageAsset>> = {};
+  for (const stage of ["productMultiview", "modelReference", "storyboard"] as SpokespersonStage[]) {
+    const asset = normalizeStageAsset(record[stage]);
+    if (asset) normalized[stage] = asset;
+  }
+  return normalized;
+}
+
+function normalizeProductImages(value: unknown): ProductImage[] {
+  if (!Array.isArray(value)) return [];
+  const normalized: ProductImage[] = [];
+  value.forEach((item, index) => {
+    if (!item || typeof item !== "object") return;
+    const image = item as Partial<ProductImage>;
+    const assetId = typeof image.assetId === "string" && image.assetId ? image.assetId : "";
+    const preview = typeof image.preview === "string" && image.preview ? image.preview : assetId ? `/api/assets/${assetId}/download/` : "";
+    if (!assetId || !preview) return;
+    normalized.push({
+      id: typeof image.id === "string" && image.id ? image.id : assetId || `product-image-${index + 1}`,
+      name: typeof image.name === "string" && image.name ? image.name : `商品图 ${index + 1}`,
+      preview,
+      byteSize: Number(image.byteSize) || 0,
+      assetId,
+      file: undefined,
+    });
+  });
+  return normalized.slice(0, 4);
+}
+
 function defaultDirectorBrief(): DirectorBrief {
   return {
     audience: systemRecommended,
@@ -499,15 +544,9 @@ export function ModelSpokespersonScriptPage() {
       setDirectorBrief(normalizeDirectorBriefValue(draft.directorBrief));
       setDirectorMessages(normalizeDirectorMessages(draft.directorMessages));
       if (["auto", "natural", "enthusiastic", "professional"].includes(draft.tone || "")) setTone(draft.tone!);
-      if (Array.isArray(draft.productImages)) {
-        setProductImages(
-          draft.productImages
-            .filter((image) => typeof image?.assetId === "string" && typeof image.preview === "string")
-            .map((image) => ({ ...image, file: undefined })),
-        );
-      }
-      if (draft.stageAssets && typeof draft.stageAssets === "object") setStageAssets(draft.stageAssets);
-      if (draft.modelSource?.assetId && draft.modelSource.url) setModelSource(draft.modelSource);
+      setProductImages(normalizeProductImages(draft.productImages));
+      setStageAssets(normalizeStageAssets(draft.stageAssets));
+      setModelSource(normalizeStageAsset(draft.modelSource));
       if (["auto", "upload", "library"].includes(draft.modelSourceMode || "")) setModelSourceMode(draft.modelSourceMode!);
       if (Array.isArray(draft.plans)) setPlans(draft.plans.map((plan) => normalizeDraftPlan(plan)).filter((plan): plan is ScriptPlan => Boolean(plan)));
       if (typeof draft.selectedPlanId === "string") setSelectedPlanId(draft.selectedPlanId);

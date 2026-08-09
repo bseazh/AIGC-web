@@ -915,6 +915,15 @@ const checks = [
     "normalizeScriptResult",
     "normalizeVideoPack",
     "normalizeDirectorMessages",
+    "normalizeProductImages",
+    "normalizeStageAssets",
+    "normalizeStageAsset",
+  ],
+  [
+    "Model spokesperson route wraps search params in suspense",
+    "app/create/model-spokesperson-video/page.tsx",
+    "<Suspense",
+    "ProjectRequiredGate",
   ],
   [
     "Model spokesperson UI exposes auto product recognition",
