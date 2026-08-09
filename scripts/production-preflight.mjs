@@ -59,9 +59,12 @@ const models = Array.isArray(payload?.data) ? payload.data.map((model) => model?
 if (models.length && !models.includes(arkModel)) throw new Error(`Ark model is not enabled for this key: ${arkModel}`);
 console.log(`Ark access: OK (${arkModel})`);
 const normalizedSophnetUrl = process.env.AI_BASE_URL.replace(/\/$/, "");
-const sophnetProbeUrl = normalizedSophnetUrl.endsWith("/imagegenerator") ? normalizedSophnetUrl : `${normalizedSophnetUrl}/task/preflight-health-check`;
+const synchronousImageEndpoint = normalizedSophnetUrl.endsWith("/imagegenerator");
+const sophnetProbeUrl = synchronousImageEndpoint ? normalizedSophnetUrl : `${normalizedSophnetUrl}/task/preflight-health-check`;
 const sophnetResponse = await fetch(sophnetProbeUrl, {
+  method: synchronousImageEndpoint ? "POST" : "GET",
   headers: { Authorization: `Bearer ${process.env.AI_API_KEY}`, "Content-Type": "application/json" },
+  ...(synchronousImageEndpoint ? { body: JSON.stringify({ model: process.env.AI_MODEL, size: "1K", watermark: false }) } : {}),
   signal: AbortSignal.timeout(10_000),
 });
 if ([401, 403].includes(sophnetResponse.status) || sophnetResponse.status >= 500) throw new Error(`SophNet credential/reachability check failed: HTTP ${sophnetResponse.status}`);

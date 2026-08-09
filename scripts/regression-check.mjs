@@ -1277,6 +1277,14 @@ const checks = [
     "SophNet production preflight",
     "scripts/production-preflight.mjs",
     "SophNet access: OK",
+    'method: synchronousImageEndpoint ? "POST" : "GET"',
+    'body: JSON.stringify({ model: process.env.AI_MODEL, size: "1K", watermark: false })',
+  ],
+  [
+    "SophNet health check uses a non-generating synchronous probe",
+    "app/api/health/route.ts",
+    'method: synchronousImageEndpoint ? "POST" : "GET"',
+    'body: JSON.stringify({ model, size: "1K", watermark: false })',
   ],
   [
     "acceptance notification suppression",

@@ -43,9 +43,12 @@ function checkSophnet() {
     }
     if (!baseUrl.startsWith("https://")) throw new Error("SophNet base URL must use HTTPS");
     const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
-    const probeUrl = normalizedBaseUrl.endsWith("/imagegenerator") ? normalizedBaseUrl : `${normalizedBaseUrl}/task/health-check`;
+    const synchronousImageEndpoint = normalizedBaseUrl.endsWith("/imagegenerator");
+    const probeUrl = synchronousImageEndpoint ? normalizedBaseUrl : `${normalizedBaseUrl}/task/health-check`;
     const response = await fetch(probeUrl, {
+      method: synchronousImageEndpoint ? "POST" : "GET",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      ...(synchronousImageEndpoint ? { body: JSON.stringify({ model, size: "1K", watermark: false }) } : {}),
       signal: AbortSignal.timeout(4_000),
     });
     if ([401, 403].includes(response.status) || response.status >= 500) throw new Error(`SophNet HTTP ${response.status}`);
