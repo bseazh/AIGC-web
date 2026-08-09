@@ -402,6 +402,18 @@ const checks = [
     "按提示词生成原创图像",
   ],
   [
+    "AI image generation honors the selected Gemini provider",
+    "scripts/worker.mjs",
+    'input.imageProvider === "sophnet"',
+    "Gemini image generation is not configured",
+  ],
+  [
+    "AI image generation sends the selected provider to the backend",
+    "app/components/ai-image-generate-page.tsx",
+    "imageProvider: imageProviderForModel(model)",
+    "不上传则文生图，上传后按参考图生成",
+  ],
+  [
     "Gemini image generation supports a worker-only proxy",
     "scripts/worker.mjs",
     "GOOGLE_AI_PROXY_URL",

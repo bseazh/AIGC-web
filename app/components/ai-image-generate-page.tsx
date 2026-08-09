@@ -18,6 +18,10 @@ const modelOptions = ["Gemini 2.5 Flash Image", "智能生图-IG-2.0"];
 const resolutions = ["1K", "2K"];
 const maxReferenceImages = 10;
 
+function imageProviderForModel(model: string) {
+  return model === "智能生图-IG-2.0" ? "sophnet" : "gemini";
+}
+
 export function AiImageGeneratePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -166,12 +170,21 @@ export function AiImageGeneratePage() {
       const assetIds = await uploadReferences();
       const composedPrompt = [
         prompt.trim(),
-        `内置参数：模型 ${model}，清晰度 ${resolution}，画面比例 ${ratio}，使用场景 ${scene}，视觉风格 ${style}。`,
+        `内置参数：清晰度 ${resolution}，画面比例 ${ratio}，使用场景 ${scene}，视觉风格 ${style}。`,
       ].join("\n");
       const created = await request("/api/tasks/image-generate/", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({ assetIds, prompt: composedPrompt, aspectRatio: ratio, scene, style, draftId: projectId }),
+        body: JSON.stringify({
+          assetIds,
+          prompt: composedPrompt,
+          aspectRatio: ratio,
+          scene,
+          style,
+          imageProvider: imageProviderForModel(model),
+          imageResolution: resolution,
+          draftId: projectId,
+        }),
       });
       setPhase("generating");
       await pollTask(created.taskId);
@@ -219,7 +232,7 @@ export function AiImageGeneratePage() {
               <button className={sourceTab === "local" ? "active" : ""} type="button" onClick={() => setSourceTab("local")}><Upload size={14} />本地上传</button>
               <button className={sourceTab === "asset" ? "active" : ""} type="button" onClick={loadAssets}><FolderOpen size={14} />资产库</button>
             </div>
-            {sourceTab === "local" ? <label className="yh-upload-drop"><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => chooseFiles(event.target.files)} /><span><Upload size={24} /></span><strong>参考图片（可选）</strong><small>上传 1-10 张参考图片，让 AI 学习参考风格<br />已上传 {references.length}/{maxReferenceImages} 个</small></label> : <div className="yh-asset-picker">{assetsLoading ? <p><LoaderCircle size={18} />正在加载素材</p> : assets.length ? assets.slice(0, 12).map((asset) => <button type="button" key={asset.id} onClick={() => selectAsset(asset)}><img src={asset.url} alt="" /><span>{asset.originalName}</span></button>) : <p>暂无可用图片素材</p>}</div>}
+            {sourceTab === "local" ? <label className="yh-upload-drop"><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => chooseFiles(event.target.files)} /><span><Upload size={24} /></span><strong>{imageProviderForModel(model) === "sophnet" ? "参考图片（必选）" : "参考图片（可选）"}</strong><small>{imageProviderForModel(model) === "sophnet" ? "当前模型用于参考图编辑，请上传 1-10 张图片" : "不上传则文生图，上传后按参考图生成"}<br />已上传 {references.length}/{maxReferenceImages} 个</small></label> : <div className="yh-asset-picker">{assetsLoading ? <p><LoaderCircle size={18} />正在加载素材</p> : assets.length ? assets.slice(0, 12).map((asset) => <button type="button" key={asset.id} onClick={() => selectAsset(asset)}><img src={asset.url} alt="" /><span>{asset.originalName}</span></button>) : <p>暂无可用图片素材</p>}</div>}
             {references.length > 0 && <div className="yh-reference-list">{references.map((item, index) => <article key={`${item.url}-${index}`}><img src={item.url} alt="" /><button type="button" aria-label="移除参考图" onClick={() => removeReference(index)}><X size={13} /></button></article>)}</div>}
           </section>
           <p className="yh-credit"><Zap size={15} />{quotedText}</p>

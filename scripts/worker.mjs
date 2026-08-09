@@ -423,6 +423,15 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
     }
     return createSophnetImage(inputUrls, prompt, generationTaskId, index);
   }
+  if (workflowKey === "image-generate" || workflowKey === "commerce-model") {
+    if (input.imageProvider === "sophnet") {
+      if (!sophnetImageConfigured()) throw new Error("SophNet image generation is not configured");
+      if (inputUrls.length === 0) throw new Error("智能生图-IG-2.0 需要至少一张参考图");
+      return createSophnetImage(inputUrls, prompt, generationTaskId, index);
+    }
+    if (!geminiImageConfigured()) throw new Error("Gemini image generation is not configured");
+    return createGeminiImage(inputUrls, prompt, generationTaskId, index, geminiAspectRatio(input.aspectRatio));
+  }
   if (!sophnetImageConfigured() && geminiImageConfigured()) {
     return createGeminiImage(inputUrls, prompt, generationTaskId, index, geminiAspectRatio(input.aspectRatio));
   }
