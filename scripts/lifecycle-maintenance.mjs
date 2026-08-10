@@ -261,6 +261,18 @@ async function cleanupExpiredTaskOutputs() {
   return { found: expired.rowCount, removed };
 }
 
+async function cleanupExpiredCreationAssistantSessions() {
+  const expired = await pool.query(
+    `UPDATE workflow_drafts
+     SET payload_json = payload_json - 'creationAssistant', updated_at = NOW()
+     WHERE payload_json ? 'creationAssistant'
+       AND COALESCE(payload_json #>> '{creationAssistant,expiresAt}', '') ~ '^\\d{4}-\\d{2}-\\d{2}T'
+       AND (payload_json #>> '{creationAssistant,expiresAt}')::timestamptz < NOW()
+     RETURNING id`,
+  );
+  return { removed: expired.rowCount };
+}
+
 async function finalizeDeletedAccounts() {
   const found = await pool.query(
     `SELECT id FROM users WHERE status = 'DELETION_PENDING'
@@ -299,8 +311,9 @@ try {
   const reviewTimeouts = contentReviewEnabled ? await expireReviewWaits() : { inputExpired: 0, outputExpired: 0, skipped: true };
   const douyinCaches = await cleanupExpiredDouyinCaches();
   const taskOutputs = await cleanupExpiredTaskOutputs();
+  const creationAssistantSessions = await cleanupExpiredCreationAssistantSessions();
   const accountDeletions = await finalizeDeletedAccounts();
-  const summary = { event: "lifecycle_maintenance_complete", contentReview, waitingTasks, reviewTimeouts, douyinCaches, taskOutputs, accountDeletions };
+  const summary = { event: "lifecycle_maintenance_complete", contentReview, waitingTasks, reviewTimeouts, douyinCaches, taskOutputs, creationAssistantSessions, accountDeletions };
   await pool.query("INSERT INTO operations_runs (operation, status, summary) VALUES ('LIFECYCLE_MAINTENANCE', 'SUCCEEDED', $1)", [JSON.stringify(summary)]);
   console.log(JSON.stringify(summary));
 } catch (error) {

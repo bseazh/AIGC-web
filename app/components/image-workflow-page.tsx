@@ -2,9 +2,10 @@
 
 import { ArrowLeft, FolderOpen, ImagePlus, LoaderCircle, Sparkles, Upload, Wand2, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { GenerationProgress } from "@/app/components/generation-progress";
 import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
+import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import type { ImageWorkflowCase } from "@/lib/image-workflow-cases";
 import { appendProjectId } from "@/lib/project-workflows";
 
@@ -135,6 +136,11 @@ export function ImageWorkflowPage({
     setTask(null);
     setPhase("idle");
   };
+  useAssistantPromptReceiver({ setPrompt, setProductDescription, onApplied: resetTask });
+  useAssistantWorkspaceContext(useMemo(() => ({
+    images: preview ? [{ url: preview, name: file?.name || selectedAsset?.originalName || "商品图", role: "product" as const }] : [],
+    productText: productDescription || prompt,
+  }), [file?.name, preview, productDescription, prompt, selectedAsset?.originalName]));
 
   const applyCase = (item: ImageWorkflowCase) => {
     if (item.ratio && ratios.includes(item.ratio)) setRatio(item.ratio);

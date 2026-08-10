@@ -4,9 +4,10 @@ export const dynamic = "force-dynamic";
 
 import { ArrowLeft, ImageIcon, ImagePlus, RotateCcw, Sparkles, Upload, Wand2, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { GenerationProgress } from "@/app/components/generation-progress";
 import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
+import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import { ProjectRequiredGate } from "@/app/components/project-required-gate";
 import { modelWearCases } from "@/lib/image-workflow-cases";
 
@@ -53,6 +54,11 @@ function ModelWearWorkspace() {
   const uploadAsset = async (item: Uploaded) => { const presign = await request("/api/uploads/presign/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: item.file.name, mimeType: item.file.type, byteSize: item.file.size }) }); const upload = await fetch(presign.uploadUrl, { method: "PUT", headers: { "Content-Type": item.file.type }, body: item.file }); if (!upload.ok) throw new Error(`素材上传失败 (${upload.status})`); await request("/api/uploads/confirm/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assetId: presign.assetId }) }); return presign.assetId as string; };
   const applyCase = (item: (typeof modelWearCases)[number]) => { if (item.ratio && ratios.includes(item.ratio)) setRatio(item.ratio); if (item.scene && scenes.includes(item.scene)) setScene(item.scene); if (item.style && styles.includes(item.style)) setStyle(item.style); setPrompt(item.prompt.slice(0, 1200)); setAppliedCaseId(item.id); setError(""); setTask(null); setPhase("idle"); };
   const resetForm = () => { if (model) URL.revokeObjectURL(model.preview); products.forEach((item) => URL.revokeObjectURL(item.preview)); setModel(null); setProducts([]); setRatio("1:1"); setScene(scenes[0]); setStyle(styles[0]); setPrompt(""); setAppliedCaseId(""); setError(""); setTask(null); setPhase("idle"); };
+  useAssistantPromptReceiver({ setPrompt, onApplied: () => { setError(""); setTask(null); setPhase("idle"); } });
+  useAssistantWorkspaceContext(useMemo(() => ({
+    images: products.map((item, index) => ({ url: item.preview, name: `商品图 ${index + 1}`, role: "product" as const })),
+    productText: prompt,
+  }), [products, prompt]));
   const pollTask = async (taskId: string) => { const deadline = Date.now() + 6 * 60 * 1000; while (Date.now() < deadline) { const response = await fetch(`/api/tasks/${taskId}/`, { cache: "no-store" }); const current = await response.json(); if (!response.ok) throw new Error(current.message || "任务查询失败"); setTask(current); if (current.status === "SUCCEEDED") { setPhase("succeeded"); const session = await fetch("/api/auth/session/", { cache: "no-store" }).then((item) => item.json()); setAccount(session); return; } if (["FAILED", "REJECTED", "CANCELED"].includes(current.status)) throw new Error(current.errorCode || "生成失败，积分已退回"); await new Promise((resolve) => setTimeout(resolve, 3000)); } throw new Error("任务等待超时，请稍后在任务中心查看"); };
   const submit = async (event: FormEvent) => { event.preventDefault(); if (!model || !products.length || phase === "uploading" || phase === "generating") return; setError(""); setTask(null); setPhase("uploading"); try { const [modelAssetId, ...productAssetIds] = await Promise.all([uploadAsset(model), ...products.map(uploadAsset)]); const created = await request("/api/tasks/model-wear/", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ modelAssetId, productAssetIds, aspectRatio: ratio, scene, style, prompt, draftId: projectId }) }); setPhase("generating"); await pollTask(created.taskId); } catch (caught) { setError(caught instanceof Error ? caught.message : "生成失败"); setPhase("failed"); } };
   if (!account) return <main className="workspace-loading"><span><Sparkles size={22} /></span><p>正在载入芭乐AIGC</p></main>;

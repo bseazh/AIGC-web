@@ -5,6 +5,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 
+import { CreationAssistant } from "@/app/features/creation-assistant/components/creation-assistant";
+import { isImageAssistantWorkflow } from "@/app/features/creation-assistant/workflows";
 import { projectGateHref, type ProjectWorkflowKey } from "@/lib/project-workflows";
 
 export function ProjectRequiredGate({
@@ -35,5 +37,5 @@ export function ProjectRequiredGate({
     );
   }
 
-  return <>{children}</>;
+  return <>{children}{isImageAssistantWorkflow(workflowKey) && <CreationAssistant projectId={projectId} workflowKey={workflowKey} />}</>;
 }

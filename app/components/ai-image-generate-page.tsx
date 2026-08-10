@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { GenerationProgress } from "@/app/components/generation-progress";
 import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
+import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import { aiImageCases } from "@/lib/image-workflow-cases";
 import { imageGenerateWorkflow } from "@/lib/product-config";
 
@@ -68,6 +69,11 @@ export function AiImageGeneratePage() {
     setTask(null);
     setPhase("idle");
   };
+  useAssistantPromptReceiver({ setPrompt, onApplied: resetTask });
+  useAssistantWorkspaceContext(useMemo(() => ({
+    images: references.map((item) => ({ url: item.url, name: item.name, role: "reference" as const })),
+    productText: prompt,
+  }), [prompt, references]));
   const markSaved = (assetId: string) => setTask((current) => current ? { ...current, outputs: current.outputs.map((output) => output.assetId === assetId ? { ...output, savedToLibrary: true, expiresAt: null } : output) } : current);
 
   const request = async (url: string, init: RequestInit) => {

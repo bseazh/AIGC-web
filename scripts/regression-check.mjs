@@ -1432,6 +1432,71 @@ const checks = [
     "scripts/gray-rollout-report.mjs",
     "PUBLIC_REGISTRATION_ROLLOUT_PERCENT || 10",
   ],
+  [
+    "Image projects expose the floating creation assistant",
+    "app/components/project-required-gate.tsx",
+    "<CreationAssistant projectId={projectId} workflowKey={workflowKey}",
+  ],
+  [
+    "Creation assistant conversations persist inside projects",
+    "app/api/creation-assistant/route.ts",
+    "jsonb_set(payload_json, '{creationAssistant}'",
+  ],
+  [
+    "Creation assistant sessions expire after seven days",
+    "app/api/creation-assistant/route.ts",
+    "const sessionDays = 7",
+  ],
+  [
+    "Lifecycle maintenance actively removes expired creation assistant sessions",
+    "scripts/lifecycle-maintenance.mjs",
+    "cleanupExpiredCreationAssistantSessions",
+  ],
+  [
+    "Creation assistant recommendations use the configured chat LLM",
+    "app/api/creation-assistant/route.ts",
+    'operation: "image_creation_assistant_recommend"',
+  ],
+  [
+    "Creation assistant can visually identify current workspace images",
+    "app/api/creation-assistant/route.ts",
+    "imageUrls.slice(0, 4)",
+  ],
+  [
+    "Creation assistant keeps vision-only product context across later turns",
+    "app/api/creation-assistant/route.ts",
+    "const productContext = sourceText || recognizedProductText",
+  ],
+  [
+    "Creation assistant supports iterative direction refinement",
+    "app/api/creation-assistant/route.ts",
+    'operation: "image_creation_assistant_refine"',
+  ],
+  [
+    "Creation assistant can hand off to another image project",
+    "app/features/creation-assistant/components/creation-assistant.tsx",
+    "projectStartHref(state.goal, body.draft.id)",
+  ],
+  [
+    "Shared image workflows accept assistant prompt backfill",
+    "app/components/image-workflow-page.tsx",
+    "useAssistantPromptReceiver",
+  ],
+  [
+    "AI image generation accepts assistant prompt backfill",
+    "app/components/ai-image-generate-page.tsx",
+    "useAssistantPromptReceiver",
+  ],
+  [
+    "Product scene generation accepts assistant prompt backfill",
+    "app/components/product-scene-image-page.tsx",
+    "useAssistantPromptReceiver",
+  ],
+  [
+    "Model wear accepts assistant prompt backfill",
+    "app/create/model-wear/page.tsx",
+    "useAssistantPromptReceiver",
+  ],
 ];
 
 let failed = false;

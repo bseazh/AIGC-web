@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { GenerationProgress } from "@/app/components/generation-progress";
 import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
+import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import { productSceneCases } from "@/lib/image-workflow-cases";
 import { sceneImageWorkflow } from "@/lib/product-config";
 
@@ -84,6 +85,11 @@ export function ProductSceneImagePage() {
     setTask(null);
     setPhase("idle");
   };
+  useAssistantPromptReceiver({ setPrompt, setProductDescription, onApplied: resetTask });
+  useAssistantWorkspaceContext(useMemo(() => ({
+    images: products.map((item) => ({ url: item.url, name: item.name, role: "product" as const })),
+    productText: productDescription || prompt,
+  }), [productDescription, products, prompt]));
 
   const request = async (url: string, init: RequestInit) => {
     const response = await fetch(url, init);
