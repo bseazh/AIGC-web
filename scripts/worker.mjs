@@ -200,6 +200,14 @@ async function createGeminiImage(inputUrls, prompt, generationTaskId, outputInde
     });
     if (index >= 2 && model === "gemini-2.5-flash-image") break;
   }
+  const referenceParts = imageParts.flatMap((imagePart, index) => [
+    {
+      text: index === 0
+        ? "参考图 1（主体身份源图）：只提取并保留图中真实商品本体。商品的外形、头部结构、机身长宽比例、部件数量、颜色、材质和标识位置不可改变；原广告背景和广告文案不属于商品本体。"
+        : `参考图 ${index + 1}（补充视角）：只用于补充同一主体的结构、材质或视角，不得引入另一个款式。`,
+    },
+    imagePart,
+  ]);
   const maxAttempts = 2;
   let lastFailure = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -211,7 +219,7 @@ async function createGeminiImage(inputUrls, prompt, generationTaskId, outputInde
       contents: [{
         parts: [
           { text: [prompt, retryDirection].filter(Boolean).join("\n") },
-          ...imageParts,
+          ...referenceParts,
         ],
       }],
       generationConfig: {
@@ -381,10 +389,13 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
     : `本卡片阶段：${detailStage}。`;
   const referenceDirection = inputUrls.length
     ? [
-        `参考素材规则：已提供 ${inputUrls.length} 张输入图。第一张图是主体外观的最高事实来源，后续图片用于补充视角、材质、结构或构图信息。`,
-        "先识别并锁定主体的品类、轮廓、长宽比例、颜色、表面材质、部件结构、接口/按键位置、装饰细节以及可见标识位置，再进行场景和构图创作。",
-        "除非用户明确要求修改，不得换商品、改变款式、重塑结构、增删部件、虚构配件或把参考商品替换成相似品；不同参考图有冲突时以第一张为准。",
-        "参考图只约束需要保留的主体事实。背景、机位和氛围按本次创作要求重新设计，不要机械复制参考图背景，也不要把参考图做成贴图或画中画。",
+        `任务模式：这是严格的参考图商品换景/合成任务，不是从零文生图。已提供 ${inputUrls.length} 张输入图；第一张图是商品身份源图，后续图片只补充视角、材质和结构。`,
+        "商品身份锁定优先级最高：先逐项观察并锁定真实商品的整体几何轮廓、长宽厚比例、顶部/正面/侧面结构、部件数量与相对位置、接口/按键位置、颜色、表面材质、装饰细节、Logo 与标识位置。生成图中的商品必须让人一眼认出就是参考图中的同一款，而不只是同品类商品。",
+        "必须把参考图中的实际商品本体作为不可变资产放入新场景，可以改变商品的拍摄角度、尺寸和环境光，但不得重画成常见品类原型、相似款或另一款商品。尤其禁止改变头部类型、机身形态、部件数量和开合结构，例如双圆形旋转刀头不能变成长柄往复式刀头或三头剃须刀。",
+        "如果源图同时出现主设备、保护盖、包装或配件，先区分各对象，不得把保护盖融合成机身、把两个对象拼成新商品，也不得凭空添加源图不存在的部件。只有用户明确要求展示配件时才加入配件。",
+        "用户文字默认只控制人物、动作、场景、构图、镜头和光线，不得覆盖商品身份。只有用户明确说要改造商品某个结构时，才允许修改对应结构；模糊的品类描述不能推翻参考图可见事实。",
+        "源图中的广告背景、广告排版和外围宣传文案不是商品结构，应移除后重新布景；商品本体上真实存在的 Logo、按键和标识位置应保留，不要杜撰新的文字。",
+        "不要把源图直接贴进画面、做成画中画或复制原广告版式。应保持商品身份不变，将同一商品真实地重新拍摄或合成到目标场景，并匹配新场景的透视、接触阴影、反射和环境色。",
       ].join("\n")
     : "未提供参考图：严格依据用户描述建立唯一、清晰、结构合理的主体，不自行添加会改变商品品类或核心用途的部件。";
   const productionDirection = [
@@ -448,7 +459,7 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
     ? `根据商品与用户描述自动导演真实使用场景，${variation}，画幅比例${input.aspectRatio}，场景光线与商品接触阴影自然，突出商品主体。`
     : `生成电商商品主图，${variation}，画幅比例${input.aspectRatio}，真实摄影，干净背景，柔和自然阴影。`;
   const prompt = [
-    "任务：根据以下完整导演指令生成最终图片。执行优先级为：用户明确要求 > 工作流任务要求 > 自动补充的质量规则；发生冲突时服从优先级更高的要求。",
+    `任务：根据以下完整导演指令生成最终图片。执行优先级为：${inputUrls.length ? "参考图商品身份锁定 > 用户对场景与表达的明确要求 > 工作流任务要求 > 自动补充的质量规则" : "用户明确要求 > 工作流任务要求 > 自动补充的质量规则"}；发生冲突时服从优先级更高的要求。`,
     workflowKey === "recreate-reference-image" ? "" : referenceDirection,
     workflowKey === "recreate-reference-image" ? "" : shared,
     workflowKey === "recreate-reference-image" || !input.internalPrompt ? "" : `工作流内置策略：${input.internalPrompt}`,

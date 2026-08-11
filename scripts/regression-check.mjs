@@ -438,8 +438,22 @@ const checks = [
   [
     "Image generation treats the first reference as the subject source of truth",
     "scripts/worker.mjs",
-    '第一张图是主体外观的最高事实来源',
-    '不得换商品、改变款式、重塑结构',
+    '第一张图是商品身份源图',
+    '商品身份锁定优先级最高',
+    '双圆形旋转刀头不能变成长柄往复式刀头或三头剃须刀',
+  ],
+  [
+    "Gemini labels inline images as identity references",
+    "scripts/worker.mjs",
+    'const referenceParts = imageParts.flatMap',
+    '参考图 1（主体身份源图）',
+    '...referenceParts',
+  ],
+  [
+    "Image references outrank scene directions in generated prompts",
+    "scripts/worker.mjs",
+    '参考图商品身份锁定 > 用户对场景与表达的明确要求',
+    '用户文字默认只控制人物、动作、场景、构图、镜头和光线',
   ],
   [
     "Image generation submits a detailed production brief",
@@ -1481,6 +1495,13 @@ const checks = [
     "Creation assistant routes image understanding through SophNet vision",
     "app/api/creation-assistant/route.ts",
     'operation: "image_creation_assistant_vision"',
+  ],
+  [
+    "Creation assistant records immutable product geometry",
+    "app/api/creation-assistant/route.ts",
+    '不可变身份锚点必须具体到足以区分同品类其他款式',
+    '主体对象拆分必须区分主商品、保护盖、包装、支架和其他配件',
+    'prompt 第一段必须以‘参考图商品身份锁定：’开头',
   ],
   [
     "Creation assistant uses the configured Doubao vision model",
