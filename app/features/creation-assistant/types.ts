@@ -19,6 +19,7 @@ export type AssistantMessage = {
 
 export type AssistantRecommendations = {
   productSummary: string;
+  visualAnalysis: string;
   audiences: string[];
   scenes: string[];
   styles: string[];

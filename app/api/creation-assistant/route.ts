@@ -33,7 +33,14 @@ function parseJsonObject(raw: string) {
   }
 }
 
-function providerConfig() {
+type AssistantProviderConfig = {
+  provider: string;
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+};
+
+function textProviderConfig(): AssistantProviderConfig | null {
   if (process.env.DEEPSEEK_API_KEY) {
     return {
       provider: "deepseek-chat",
@@ -49,6 +56,17 @@ function providerConfig() {
     apiKey,
     baseUrl: process.env.SOPHNET_CHAT_BASE_URL || "https://www.sophnet.com/api/open-apis/v1",
     model: process.env.SOPHNET_CHAT_MODEL || "doubao-seed-2-0-mini-260428",
+  };
+}
+
+function visionProviderConfig(): AssistantProviderConfig | null {
+  const apiKey = process.env.SOPHNET_VISION_API_KEY || process.env.SOPHNET_CHAT_API_KEY || process.env.AI_API_KEY;
+  if (!apiKey) return null;
+  return {
+    provider: "sophnet-vision",
+    apiKey,
+    baseUrl: process.env.SOPHNET_CHAT_BASE_URL || "https://www.sophnet.com/api/open-apis/v1",
+    model: process.env.SOPHNET_VISION_MODEL || "doubao-seed-2-0-mini-260428",
   };
 }
 
@@ -88,8 +106,10 @@ async function callAssistantLLM(options: {
   userPrompt: string;
   imageUrls?: string[];
   requestLog: Record<string, unknown>;
+  provider?: AssistantProviderConfig | null;
+  temperature?: number;
 }) {
-  const config = providerConfig();
+  const config = options.provider === undefined ? textProviderConfig() : options.provider;
   if (!config) throw Object.assign(new Error("创作助手大模型尚未配置"), { status: 503, code: "LLM_NOT_CONFIGURED" });
   const response = await fetch(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
@@ -97,7 +117,7 @@ async function callAssistantLLM(options: {
     body: JSON.stringify({
       model: config.model,
       stream: false,
-      temperature: 0.72,
+      temperature: options.temperature ?? 0.72,
       messages: [
         { role: "system", content: options.system },
         {
@@ -169,6 +189,7 @@ function normalizeSavedState(value: unknown) {
     prompt: compact(record.prompt, 1200),
     recommendations: recommendations ? {
       productSummary: compact(recommendations.productSummary, 500),
+      visualAnalysis: compact(recommendations.visualAnalysis, 1600),
       audiences: stringList(recommendations.audiences),
       scenes: stringList(recommendations.scenes),
       styles: stringList(recommendations.styles),
@@ -184,10 +205,11 @@ function normalizeSavedState(value: unknown) {
   };
 }
 
-function normalizeRecommendations(value: unknown, sourceText: string) {
+function normalizeRecommendations(value: unknown, sourceText: string, visualAnalysis = "") {
   const record = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
   return {
     productSummary: compact(record.productSummary, 500) || sourceText.slice(0, 500) || "已根据当前商品图片整理商品特征",
+    visualAnalysis: compact(record.visualAnalysis, 1600) || visualAnalysis,
     audiences: stringList(record.audiences),
     scenes: stringList(record.scenes),
     styles: stringList(record.styles),
@@ -267,6 +289,32 @@ export async function POST(request: NextRequest) {
       if (sourceText.length < 2 && !visionUrls.length) {
         return NextResponse.json({ code: "PRODUCT_REQUIRED", message: "请先描述商品，或添加商品参考图" }, { status: 400 });
       }
+      let visualAnalysis = "";
+      let visionProductSummary = "";
+      if (visionUrls.length) {
+        const visionResult = await callAssistantLLM({
+          operation: "image_creation_assistant_vision",
+          provider: visionProviderConfig(),
+          temperature: 0.18,
+          system: "你是电商商品视觉识别专家。只根据图片中真实可见内容识别商品，不猜测不可见参数。只输出严格 JSON，不要 Markdown。",
+          userPrompt: [
+            "请逐张读取参考图片，并合并为一份可供商业摄影导演使用的商品视觉档案。",
+            "输出字段：productSummary、visualAnalysis。",
+            "productSummary 用不超过 180 字说明商品是什么、外观特征和可见用途。",
+            "visualAnalysis 用 300-900 个中文字符记录商品类别、主体数量、外观结构、颜色、材质质感、包装、Logo/品牌、图片内可见文字、展示角度、当前背景、可确认卖点、不可改变的身份细节，以及无法从图中确认的内容。",
+            "必须明确区分图片可见事实和无法确认的信息；禁止编造尺寸、功率、成分、功能参数或用户人群。",
+            "如果图片是网页截图、聊天截图、编辑器界面或拼图，只分析其中真正的商品图片区域；界面按钮、输入框内容、生成提示词和说明文字不能被当作商品外观、使用场景或真实参数。",
+            "把可见文字区分为商品包装/品牌文字、广告卖点文字、界面文字三类；广告文字只能作为待核实线索，不能覆盖图片中真实可见的商品特征。",
+            sourceText ? `用户补充文字：${sourceText}` : "用户未补充文字，以图片可见事实为准。",
+          ].join("\n"),
+          imageUrls: visionUrls,
+          requestLog: { userId: user.id, projectId: project.id, goal, imageCount: visionUrls.length },
+        });
+        visualAnalysis = compact(visionResult.visualAnalysis, 1600);
+        visionProductSummary = compact(visionResult.productSummary, 500);
+        if (!visualAnalysis) throw Object.assign(new Error("视觉模型没有返回有效的图片分析，请重试"), { status: 502, code: "VISION_EMPTY_RESPONSE" });
+      }
+      const recommendationSource = sourceText || visionProductSummary;
       const result = await callAssistantLLM({
         operation: "image_creation_assistant_recommend",
         system: "你是资深电商视觉创意策划。根据少量商品信息主动发散，但不能虚构确定性的商品参数。只输出严格 JSON，不要 Markdown。",
@@ -274,23 +322,23 @@ export async function POST(request: NextRequest) {
           "请理解用户的商品或创作想法，并推荐适合图片生成的方向。",
           "输出字段：productSummary、audiences、scenes、styles、sellingPoints、reply、question、quickReplies。",
           "audiences、scenes、styles、sellingPoints 都必须是 4 个简短、差异明显、可点击的中文选项。",
-          "如果提供商品图片，必须先识别商品类别、外观结构、材质、颜色、包装和可见用途，再结合用户文字；不得忽略图片，也不得虚构图片里看不到的参数。",
+          "视觉模型已经先读取图片。必须把视觉档案作为商品事实依据，不得用常见商品模板覆盖或改写商品身份。",
           "推荐必须符合商品真实用途，禁止把所有商品都套用租房、家庭或年轻女性等固定人群。",
           "reply 用不超过 120 字说明你如何理解商品，并邀请用户选择方向。",
           "question 只追问一个最影响生成效果的问题；quickReplies 提供 3-5 个针对该问题的短选项。",
           `目标图片类型：${goal}`,
-          `用户提供的信息：${sourceText || "用户未填写文字，请重点识别当前商品图片"}`,
+          `用户提供的信息：${sourceText || "用户未填写文字"}`,
+          visualAnalysis ? `参考图视觉档案：${visualAnalysis}` : "参考图视觉档案：未提供图片",
         ].join("\n"),
-        imageUrls: visionUrls,
-        requestLog: { userId: user.id, projectId: project.id, goal, sourceLength: sourceText.length },
+        requestLog: { userId: user.id, projectId: project.id, goal, sourceLength: sourceText.length, hasVisualAnalysis: Boolean(visualAnalysis) },
       });
-      return NextResponse.json({ recommendations: normalizeRecommendations(result, sourceText) });
+      return NextResponse.json({ recommendations: normalizeRecommendations(result, recommendationSource, visualAnalysis) });
     }
 
     if (action === "refine") {
       const userMessage = compact(body.userMessage, 500);
       if (!userMessage) return NextResponse.json({ code: "MESSAGE_REQUIRED", message: "请告诉我你想怎样调整" }, { status: 400 });
-      const current = normalizeRecommendations(body.recommendations, productContext);
+      const current = normalizeRecommendations(body.recommendations, productContext, compact(body.visualAnalysis, 1600));
       const history = Array.isArray(body.messages)
         ? body.messages.slice(-10).map((item) => {
             const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
@@ -308,6 +356,7 @@ export async function POST(request: NextRequest) {
           `目标图片类型：${goal}`,
           `商品信息：${productContext}`,
           `当前商品理解：${current.productSummary}`,
+          current.visualAnalysis ? `参考图视觉档案：${current.visualAnalysis}` : "参考图视觉档案：未提供图片",
           `当前受众：${compact(body.audience, 80)}`,
           `当前场景：${compact(body.scene, 80)}`,
           `当前风格：${compact(body.style, 80)}`,
@@ -317,7 +366,7 @@ export async function POST(request: NextRequest) {
         ].join("\n"),
         requestLog: { userId: user.id, projectId: project.id, goal },
       });
-      return NextResponse.json({ recommendations: normalizeRecommendations(result, productContext) });
+      return NextResponse.json({ recommendations: normalizeRecommendations(result, productContext, current.visualAnalysis) });
     }
 
     const audience = compact(body.audience, 80);
@@ -325,10 +374,11 @@ export async function POST(request: NextRequest) {
     const style = compact(body.style, 80);
     const sellingPoint = compact(body.sellingPoint, 120);
     const revision = compact(body.revision, 500);
+    const visualAnalysis = compact(body.visualAnalysis, 1600);
     const productSummary = recognizedProductText || sourceText.slice(0, 500);
     const result = await callAssistantLLM({
       operation: "image_creation_assistant_prompt",
-      system: "你是资深商业摄影导演和 AI 图片提示词专家。把用户选择转成可直接提交给图片模型的中文提示词。只输出严格 JSON，不要 Markdown。",
+      system: "你是资深商业摄影导演和 AI 图片提示词专家。把用户选择和视觉模型的图片分析转成可直接提交给图片模型的中文提示词。图片视觉档案是商品身份事实，必须准确保留。只输出严格 JSON，不要 Markdown。",
       userPrompt: [
         "生成一个完整、具体、可执行的图片提示词。",
         "输出字段：prompt、summary。",
@@ -337,6 +387,7 @@ export async function POST(request: NextRequest) {
         "如果是高清、白底或比例调整，重点必须是保持商品身份、颜色、结构和材质，不要重做成另一件商品。",
         `目标图片类型：${goal}`,
         `商品理解：${productSummary}`,
+        visualAnalysis ? `参考图视觉档案：${visualAnalysis}` : "参考图视觉档案：未提供图片，请仅依据用户文字。",
         `目标用户：${audience || "由模型合理判断"}`,
         `使用场景：${scene || "由模型合理判断"}`,
         `视觉风格：${style || "真实商业摄影"}`,

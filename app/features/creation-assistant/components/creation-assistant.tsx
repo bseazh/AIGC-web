@@ -281,6 +281,7 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
           goal: state.goal,
           sourceText: state.sourceText || state.recommendations?.productSummary,
           productSummary: state.recommendations?.productSummary,
+          visualAnalysis: state.recommendations?.visualAnalysis,
           recommendations: state.recommendations,
           audience: state.audience,
           scene: state.scene,
@@ -324,6 +325,7 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
           goal: state.goal,
           sourceText: state.sourceText || state.recommendations?.productSummary,
           productSummary: state.recommendations?.productSummary,
+          visualAnalysis: state.recommendations?.visualAnalysis,
           audience: state.audience,
           scene: state.scene,
           style: state.style,
@@ -448,6 +450,7 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
           {state.step === "direction" && state.recommendations && <section className="creation-assistant-step" ref={activeStepRef}>
             <div className="creation-assistant-step-title"><b>对话校正方向</b><span>3 / 4</span></div>
             <p className="creation-assistant-summary">{state.recommendations.productSummary}</p>
+            {state.recommendations.visualAnalysis && <details className="creation-assistant-vision-analysis"><summary><ImageIcon size={14} />已读取参考图，查看识别结果</summary><p>{state.recommendations.visualAnalysis}</p></details>}
             <ChoiceGroup label="卖给谁" value={state.audience} options={state.recommendations.audiences} onChange={(audience) => setState((current) => ({ ...current, audience }))} />
             <ChoiceGroup label="使用场景" value={state.scene} options={state.recommendations.scenes} onChange={(scene) => setState((current) => ({ ...current, scene }))} />
             <ChoiceGroup label="突出价值" value={state.sellingPoint} options={state.recommendations.sellingPoints} onChange={(sellingPoint) => setState((current) => ({ ...current, sellingPoint }))} />

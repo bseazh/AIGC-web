@@ -1458,6 +1458,21 @@ const checks = [
     'operation: "image_creation_assistant_recommend"',
   ],
   [
+    "Creation assistant routes image understanding through SophNet vision",
+    "app/api/creation-assistant/route.ts",
+    'operation: "image_creation_assistant_vision"',
+  ],
+  [
+    "Creation assistant uses the configured Doubao vision model",
+    "app/api/creation-assistant/route.ts",
+    'process.env.SOPHNET_VISION_MODEL || "doubao-seed-2-0-mini-260428"',
+  ],
+  [
+    "Creation assistant preserves visual analysis for prompt writing",
+    "app/api/creation-assistant/route.ts",
+    "参考图视觉档案",
+  ],
+  [
     "Creation assistant can visually identify current workspace images",
     "app/api/creation-assistant/route.ts",
     "imageUrls.slice(0, 4)",
