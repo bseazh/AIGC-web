@@ -12,6 +12,7 @@ import {
 export function useAssistantPromptReceiver(options: {
   setPrompt: (value: string) => void;
   setProductDescription?: (value: string) => void;
+  setReferenceImages?: (images: NonNullable<AssistantApplyDetail["referenceImages"]>) => void;
   onApplied?: () => void;
 }) {
   useEffect(() => {
@@ -21,6 +22,9 @@ export function useAssistantPromptReceiver(options: {
       options.setPrompt(detail.prompt.slice(0, 1200));
       if (detail.productSummary && options.setProductDescription) {
         options.setProductDescription(detail.productSummary.slice(0, 900));
+      }
+      if (detail.referenceImages?.length && options.setReferenceImages) {
+        options.setReferenceImages(detail.referenceImages);
       }
       options.onApplied?.();
     };

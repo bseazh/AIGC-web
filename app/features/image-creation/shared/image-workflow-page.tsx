@@ -118,7 +118,19 @@ export function ImageWorkflowPage({
     setTask(null);
     setPhase("idle");
   };
-  useAssistantPromptReceiver({ setPrompt, setProductDescription, onApplied: resetTask });
+  useAssistantPromptReceiver({
+    setPrompt,
+    setProductDescription,
+    setReferenceImages: (images) => {
+      const image = images.find((item) => item.url);
+      if (!image?.url) return;
+      if (preview.startsWith("blob:")) URL.revokeObjectURL(preview);
+      setFile(null);
+      setSelectedAsset({ id: image.assetId, mimeType: "image/jpeg", byteSize: 0, originalName: image.name, url: image.url, kind: "INPUT" });
+      setPreview(image.url);
+    },
+    onApplied: resetTask,
+  });
   useAssistantWorkspaceContext(useMemo(() => ({
     images: preview ? [{ url: preview, name: file?.name || selectedAsset?.originalName || "商品图", role: "product" as const }] : [],
     productText: productDescription || prompt,

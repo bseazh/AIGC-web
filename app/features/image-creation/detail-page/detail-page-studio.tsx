@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
 import { GenerationProgress } from "@/app/components/generation-progress";
 import { imageRequest, pollImageTask, uploadImageFile } from "@/app/features/image-creation/shared/image-task-api";
+import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import { DETAIL_PAGE_MAX_CARDS, DETAIL_PAGE_MIN_CARDS, normalizeDetailCards, normalizeDetailPlans, type DetailPageCard, type DetailPagePlan } from "@/lib/detail-page-plans";
 import type { ImageWorkflowCase } from "@/lib/image-workflow-cases";
 
@@ -109,6 +110,24 @@ export function DetailPageStudio(props: Props) {
   }), [projectId]);
 
   useEffect(() => () => { if (preview.startsWith("blob:")) URL.revokeObjectURL(preview); }, [preview]);
+
+  useAssistantPromptReceiver({
+    setPrompt: (value) => setProductDescription(value.slice(0, 900)),
+    setReferenceImages: (images) => {
+      const image = images.find((item) => item.url);
+      if (!image?.url) return;
+      if (preview.startsWith("blob:")) URL.revokeObjectURL(preview);
+      setFile(null);
+      setSelectedAsset({ id: image.assetId, mimeType: "image/jpeg", originalName: image.name, url: image.url, kind: "INPUT" });
+      setResolvedAssetId(image.assetId);
+      setPreview(image.url);
+      setPlans([]); setCards([]); setSelectedPlanId(""); setStage("brief"); setTask(null); setPhase("idle"); setError("");
+    },
+  });
+  useAssistantWorkspaceContext(useMemo(() => ({
+    images: preview ? [{ url: preview, name: file?.name || selectedAsset?.originalName || "商品图", role: "product" as const }] : [],
+    productText: productDescription,
+  }), [file?.name, preview, productDescription, selectedAsset?.originalName]));
 
   useEffect(() => {
     if (stage !== "cards" || !focusedCardId) return;

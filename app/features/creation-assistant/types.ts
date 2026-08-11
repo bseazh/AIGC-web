@@ -54,6 +54,7 @@ export type AssistantReferenceImage = {
 export type AssistantApplyDetail = {
   prompt: string;
   productSummary?: string;
+  referenceImages?: AssistantReferenceImage[];
 };
 
 export type AssistantWorkspaceContext = {

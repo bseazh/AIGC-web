@@ -1473,6 +1473,21 @@ const checks = [
     "ownedReferenceImages(referenceAssetIds, user.id)",
   ],
   [
+    "Creation assistant applies reference images with generated prompts",
+    "app/features/creation-assistant/components/creation-assistant.tsx",
+    "referenceImages: state.referenceImages",
+  ],
+  [
+    "AI image workspace receives assistant reference assets",
+    "app/features/image-creation/ai-image/ai-image-generate-page.tsx",
+    "setReferenceImages: (images) => setReferences",
+  ],
+  [
+    "Detail page workspace receives assistant reference assets",
+    "app/features/image-creation/detail-page/detail-page-studio.tsx",
+    "setReferenceImages: (images) =>",
+  ],
+  [
     "Creation assistant keeps vision-only product context across later turns",
     "app/api/creation-assistant/route.ts",
     "const productContext = sourceText || recognizedProductText",

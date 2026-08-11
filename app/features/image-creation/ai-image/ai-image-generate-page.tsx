@@ -70,7 +70,14 @@ export function AiImageGeneratePage() {
     setTask(null);
     setPhase("idle");
   };
-  useAssistantPromptReceiver({ setPrompt, onApplied: resetTask });
+  useAssistantPromptReceiver({
+    setPrompt,
+    setReferenceImages: (images) => setReferences((current) => [
+      ...images.map((image) => ({ id: image.assetId, url: image.url || "", name: image.name })),
+      ...current,
+    ].filter((item) => item.url).filter((item, index, items) => items.findIndex((candidate) => (candidate.id && item.id ? candidate.id === item.id : candidate.url === item.url)) === index).slice(0, maxReferenceImages)),
+    onApplied: resetTask,
+  });
   useAssistantWorkspaceContext(useMemo(() => ({
     images: references.map((item) => ({ url: item.url, name: item.name, role: "reference" as const })),
     productText: prompt,

@@ -140,7 +140,7 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
     if (!hydrated || !state.handoffPending || !state.prompt) return;
     const timer = window.setTimeout(() => {
       window.dispatchEvent(new CustomEvent(CREATION_ASSISTANT_APPLY_EVENT, {
-        detail: { prompt: state.prompt, productSummary: state.recommendations?.productSummary || state.sourceText },
+        detail: { prompt: state.prompt, productSummary: state.recommendations?.productSummary || state.sourceText, referenceImages: state.referenceImages },
       }));
       setState((current) => ({ ...current, handoffPending: false }));
     }, 250);
@@ -356,7 +356,7 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
   const applyPrompt = async () => {
     if (state.goal === workflowKey) {
       window.dispatchEvent(new CustomEvent(CREATION_ASSISTANT_APPLY_EVENT, {
-        detail: { prompt: state.prompt, productSummary: state.recommendations?.productSummary || state.sourceText },
+        detail: { prompt: state.prompt, productSummary: state.recommendations?.productSummary || state.sourceText, referenceImages: state.referenceImages },
       }));
       setOpen(false);
       return;
@@ -462,6 +462,15 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
 
           {state.step === "result" && <section className="creation-assistant-step result" ref={activeStepRef}>
             <div className="creation-assistant-step-title"><b>{currentWorkflow.label}提示词</b><span>4 / 4</span></div>
+            <div className="creation-assistant-reference-block">
+              <div className="creation-assistant-reference-heading"><span><ImageIcon size={15} />本次参考图</span><small>{state.referenceImages.length} / 4，将随提示词一起回填</small></div>
+              {state.referenceImages.length > 0 && <div className="creation-assistant-reference-grid">{state.referenceImages.map((image) => <figure key={image.assetId}>{image.url ? <img src={image.url} alt={image.name} /> : <span className="creation-assistant-reference-placeholder"><ImageIcon size={18} /></span>}<figcaption>{image.name}</figcaption><button type="button" aria-label={`移除${image.name}`} onClick={() => setState((current) => ({ ...current, referenceImages: current.referenceImages.filter((item) => item.assetId !== image.assetId) }))}><X size={12} /></button></figure>)}</div>}
+              {state.referenceImages.length < 4 && <label className="creation-assistant-reference-upload">
+                <input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={referenceBusy} onChange={(event) => { void addReferenceImages(event.target.files); event.currentTarget.value = ""; }} />
+                {referenceBusy ? <LoaderCircle className="spin" size={16} /> : <ImagePlus size={16} />}
+                <span>{referenceBusy ? "正在上传" : "添加参考图"}</span>
+              </label>}
+            </div>
             <textarea className="creation-assistant-prompt" value={state.prompt} onChange={(event) => setState((current) => ({ ...current, prompt: event.target.value.slice(0, 1200) }))} />
             {targetDiffers && <p className="creation-assistant-handoff-note">当前是 {imageAssistantWorkflows[workflowKey].label} 项目。应用后会新建 {currentWorkflow.label} 项目并自动回填提示词。</p>}
             <div className="creation-assistant-result-actions">

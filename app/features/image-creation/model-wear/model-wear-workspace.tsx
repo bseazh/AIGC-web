@@ -11,7 +11,7 @@ import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/
 import { modelWearCases } from "@/lib/image-workflow-cases";
 
 type Account = { user: { isAdministrator?: boolean }; wallet: { availablePoints: number } };
-type Uploaded = { file: File; preview: string };
+type Uploaded = { file?: File; assetId?: string; preview: string; name?: string };
 type TaskResult = GeneratedTaskResult;
 const ratios = ["1:1", "3:4", "4:3", "9:16"];
 
@@ -34,8 +34,8 @@ export function ModelWearWorkspace() {
   useEffect(() => { fetch("/api/auth/session/", { cache: "no-store" }).then(async (response) => { if (!response.ok) throw new Error(); setAccount(await response.json()); }).catch(() => router.replace("/")); }, [router]);
   useEffect(() => watchProjectTaskResult(projectId, (restored) => { setTask(restored); setPhase(restoredTaskPhase(restored)); }), [projectId]);
   useEffect(() => () => {
-    if (model) URL.revokeObjectURL(model.preview);
-    products.forEach((item) => URL.revokeObjectURL(item.preview));
+    if (model?.preview.startsWith("blob:")) URL.revokeObjectURL(model.preview);
+    products.forEach((item) => { if (item.preview.startsWith("blob:")) URL.revokeObjectURL(item.preview); });
   // Object URLs must remain valid while their current previews are rendered.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -43,13 +43,20 @@ export function ModelWearWorkspace() {
   const setModelFile = (file?: File) => { if (!file) return; if (!valid(file)) return setError("仅支持不超过 10MB 的 JPG、PNG、WebP 图片"); if (model) URL.revokeObjectURL(model.preview); setModel({ file, preview: URL.createObjectURL(file) }); setError(""); };
   const addProducts = (files?: FileList | null) => { if (!files) return; const next = [...files].filter(valid).slice(0, Math.max(0, 4 - products.length)).map((file) => ({ file, preview: URL.createObjectURL(file) })); if (!next.length) return setError("请选择不超过 10MB 的 JPG、PNG、WebP 图片"); setProducts((current) => [...current, ...next]); setError(""); };
   const applyCase = (item: (typeof modelWearCases)[number]) => { if (item.ratio && ratios.includes(item.ratio)) setRatio(item.ratio); setPrompt(item.prompt.slice(0, 1200)); setAppliedCaseId(item.id); setError(""); setTask(null); setPhase("idle"); };
-  const resetForm = () => { if (model) URL.revokeObjectURL(model.preview); products.forEach((item) => URL.revokeObjectURL(item.preview)); setModel(null); setProducts([]); setRatio("1:1"); setPrompt(""); setOutputCount(1); setAppliedCaseId(""); setError(""); setTask(null); setPhase("idle"); };
-  useAssistantPromptReceiver({ setPrompt, onApplied: () => { setError(""); setTask(null); setPhase("idle"); } });
+  const resetForm = () => { if (model?.preview.startsWith("blob:")) URL.revokeObjectURL(model.preview); products.forEach((item) => { if (item.preview.startsWith("blob:")) URL.revokeObjectURL(item.preview); }); setModel(null); setProducts([]); setRatio("1:1"); setPrompt(""); setOutputCount(1); setAppliedCaseId(""); setError(""); setTask(null); setPhase("idle"); };
+  useAssistantPromptReceiver({
+    setPrompt,
+    setReferenceImages: (images) => setProducts((current) => [
+      ...images.map((image) => ({ assetId: image.assetId, preview: image.url || "", name: image.name })),
+      ...current,
+    ].filter((item) => item.preview).filter((item, index, items) => items.findIndex((candidate) => (candidate.assetId && item.assetId ? candidate.assetId === item.assetId : candidate.preview === item.preview)) === index).slice(0, 4)),
+    onApplied: () => { setError(""); setTask(null); setPhase("idle"); },
+  });
   useAssistantWorkspaceContext(useMemo(() => ({
     images: products.map((item, index) => ({ url: item.preview, name: `商品图 ${index + 1}`, role: "product" as const })),
     productText: prompt,
   }), [products, prompt]));
-  const submit = async (event: FormEvent) => { event.preventDefault(); if (!model || !products.length || phase === "uploading" || phase === "generating") return; setError(""); setTask(null); setPhase("uploading"); try { const [modelAssetId, ...productAssetIds] = await Promise.all([uploadImageFile(model.file), ...products.map((item) => uploadImageFile(item.file))]); const created = await imageRequest<{ taskId: string }>("/api/tasks/model-wear/", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ modelAssetId, productAssetIds, aspectRatio: ratio, prompt, outputCount, draftId: projectId }) }); setPhase("generating"); await pollImageTask(created.taskId, setTask); setPhase("succeeded"); setAccount(await fetch("/api/auth/session/", { cache: "no-store" }).then((item) => item.json())); } catch (caught) { setError(caught instanceof Error ? caught.message : "生成失败"); setPhase("failed"); } };
+  const submit = async (event: FormEvent) => { event.preventDefault(); if (!model || !products.length || phase === "uploading" || phase === "generating") return; setError(""); setTask(null); setPhase("uploading"); try { const resolveAsset = async (item: Uploaded, label: string) => { if (item.assetId) return item.assetId; if (item.file) return uploadImageFile(item.file, label); throw new Error(`${label}缺少可用素材`); }; const [modelAssetId, ...productAssetIds] = await Promise.all([resolveAsset(model, "模特图"), ...products.map((item) => resolveAsset(item, "商品图"))]); const created = await imageRequest<{ taskId: string }>("/api/tasks/model-wear/", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ modelAssetId, productAssetIds, aspectRatio: ratio, prompt, outputCount, draftId: projectId }) }); setPhase("generating"); await pollImageTask(created.taskId, setTask); setPhase("succeeded"); setAccount(await fetch("/api/auth/session/", { cache: "no-store" }).then((item) => item.json())); } catch (caught) { setError(caught instanceof Error ? caught.message : "生成失败"); setPhase("failed"); } };
   if (!account) return <main className="workspace-loading"><span><Sparkles size={22} /></span><p>正在载入芭乐AIGC</p></main>;
   const busy = phase === "uploading" || phase === "generating";
   return <main className="creator-shell model-wear-shell"><header className="creator-header"><button className="icon-button" aria-label="返回图片创作" onClick={() => router.push("/tools")}><ArrowLeft size={19} /></button><div><strong>模特穿搭</strong><span>芭乐AIGC</span></div><div className="creator-points"><Sparkles size={15} />{account.user.isAdministrator ? "管理员免积分" : `${account.wallet.availablePoints} 积分`}</div></header>

@@ -86,7 +86,15 @@ export function ProductSceneImagePage() {
     setTask(null);
     setPhase("idle");
   };
-  useAssistantPromptReceiver({ setPrompt, setProductDescription, onApplied: resetTask });
+  useAssistantPromptReceiver({
+    setPrompt,
+    setProductDescription,
+    setReferenceImages: (images) => setProducts((current) => [
+      ...images.map((image) => ({ id: image.assetId, url: image.url || "", name: image.name })),
+      ...current,
+    ].filter((item) => item.url).filter((item, index, items) => items.findIndex((candidate) => (candidate.id && item.id ? candidate.id === item.id : candidate.url === item.url)) === index).slice(0, maxProductImages)),
+    onApplied: resetTask,
+  });
   useAssistantWorkspaceContext(useMemo(() => ({
     images: products.map((item) => ({ url: item.url, name: item.name, role: "product" as const })),
     productText: productDescription || prompt,
