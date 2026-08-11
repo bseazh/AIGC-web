@@ -1,10 +1,11 @@
 "use client";
 
-import { Check, ChevronLeft, Clipboard, Copy, ImageIcon, LoaderCircle, MessageCircleMore, Pencil, RotateCcw, Send, Sparkles, WandSparkles, X } from "lucide-react";
+import { Check, ChevronLeft, Clipboard, Copy, ImageIcon, ImagePlus, LoaderCircle, MessageCircleMore, Pencil, RotateCcw, Send, Sparkles, WandSparkles, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { projectStartHref } from "@/lib/project-workflows";
+import { imageRequest } from "@/app/features/image-creation/shared/image-task-api";
 import {
   CREATION_ASSISTANT_APPLY_EVENT,
   CREATION_ASSISTANT_CONTEXT_REQUEST_EVENT,
@@ -35,6 +36,7 @@ function initialState(workflowKey: ImageAssistantWorkflowKey): CreationAssistant
     prompt: "",
     recommendations: null,
     messages: [initialMessage],
+    referenceImages: [],
     handoffPending: false,
   };
 }
@@ -80,6 +82,7 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
   const [state, setState] = useState<CreationAssistantState>(() => initialState(workflowKey));
   const [hydrated, setHydrated] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [referenceBusy, setReferenceBusy] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [chatInput, setChatInput] = useState("");
@@ -170,6 +173,47 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
     }
   };
 
+  const addReferenceImages = async (files: FileList | null) => {
+    const selected = Array.from(files || []).slice(0, Math.max(0, 4 - state.referenceImages.length));
+    if (!selected.length) return;
+    const invalid = selected.find((file) => !["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size <= 0 || file.size > 10 * 1024 * 1024);
+    if (invalid) return setError("参考图仅支持 JPG、PNG、WebP，单张最大 10MB");
+    setReferenceBusy(true);
+    setError("");
+    try {
+      const uploaded: Array<{ assetId: string; name: string }> = [];
+      for (const file of selected) {
+        const presign = await imageRequest<{ assetId: string; uploadUrl?: string; duplicate?: boolean }>("/api/uploads/presign/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileName: file.name, mimeType: file.type, byteSize: file.size }),
+        });
+        if (presign.uploadUrl) {
+          const upload = await fetch(presign.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+          if (!upload.ok) throw new Error(`参考图上传失败 (${upload.status})`);
+          await imageRequest("/api/uploads/confirm/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ assetId: presign.assetId }),
+          });
+        }
+        uploaded.push({ assetId: presign.assetId, name: file.name });
+      }
+      const assets = await imageRequest<{ assets: Array<{ id: string; url: string; originalName: string }> }>("/api/assets/?kind=INPUT", { cache: "no-store" });
+      const urls = new Map(assets.assets.map((asset) => [asset.id, asset]));
+      setState((current) => ({
+        ...current,
+        referenceImages: [...current.referenceImages, ...uploaded.map((item) => ({ ...item, url: urls.get(item.assetId)?.url }))]
+          .filter((item, index, items) => items.findIndex((candidate) => candidate.assetId === item.assetId) === index)
+          .slice(0, 4),
+      }));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "参考图上传失败");
+    } finally {
+      setReferenceBusy(false);
+    }
+  };
+
   const visionImages = async () => {
     const current = collectWorkspaceContext();
     setWorkspaceContext(current);
@@ -183,19 +227,27 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
   const recommend = async () => {
     const context = await visionImages();
     const sourceText = state.sourceText.trim() || context.productText.trim();
-    if (sourceText.length < 2 && !context.imageUrls.length) return setError("请先描述商品，或在当前工作台上传商品图");
+    if (sourceText.length < 2 && !context.imageUrls.length && !state.referenceImages.length) return setError("请先描述商品，或添加商品参考图");
     setBusy(true);
     setError("");
     try {
       const response = await fetch("/api/creation-assistant/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "recommend", projectId, goal: state.goal, sourceText, imageUrls: context.imageUrls }),
+        body: JSON.stringify({
+          action: "recommend",
+          projectId,
+          goal: state.goal,
+          sourceText,
+          imageUrls: context.imageUrls,
+          referenceAssetIds: state.referenceImages.map((image) => image.assetId),
+        }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.message || "方向推荐失败");
       const recommendations = body.recommendations;
-      const userSummary = sourceText || `识别当前工作台的 ${context.imageUrls.length} 张商品图`;
+      const imageCount = Math.min(4, context.imageUrls.length + state.referenceImages.length);
+      const userSummary = sourceText || `识别当前提供的 ${imageCount} 张商品图`;
       setState((current) => ({
         ...current,
         sourceText: current.sourceText || sourceText,
@@ -340,6 +392,7 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
   };
 
   const hasWorkspaceImages = workspaceContext.images.length > 0;
+  const hasReferenceImages = state.referenceImages.length > 0;
   const hasWorkspaceProductText = Boolean(workspaceContext.productText?.trim());
   const targetDiffers = state.goal !== workflowKey;
 
@@ -370,13 +423,26 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
 
           {state.step === "product" && <section className="creation-assistant-step" ref={activeStepRef}>
             <div className="creation-assistant-step-title"><b>理解商品</b><span>2 / 4</span></div>
-            {hasWorkspaceImages && <p className="creation-assistant-image-context"><ImageIcon size={15} /><span>检测到当前工作台 {workspaceContext.images.length} 张图片，AI 推荐时会一起识别。</span></p>}
+            {hasWorkspaceImages && <div className="creation-assistant-reference-block">
+              <div className="creation-assistant-reference-heading"><span><ImageIcon size={15} />当前工作台</span><small>{workspaceContext.images.length} 张</small></div>
+              <div className="creation-assistant-reference-grid">{workspaceContext.images.map((image) => <figure key={image.url}><img src={image.url} alt={image.name || "工作台商品图"} /><figcaption>{image.name || "商品图"}</figcaption></figure>)}</div>
+            </div>}
+            <div className="creation-assistant-reference-block">
+              <div className="creation-assistant-reference-heading"><span><ImagePlus size={15} />补充参考图</span><small>{state.referenceImages.length} / 4</small></div>
+              {hasReferenceImages && <div className="creation-assistant-reference-grid">{state.referenceImages.map((image) => <figure key={image.assetId}>{image.url ? <img src={image.url} alt={image.name} /> : <span className="creation-assistant-reference-placeholder"><ImageIcon size={18} /></span>}<figcaption>{image.name}</figcaption><button type="button" aria-label={`移除${image.name}`} onClick={() => setState((current) => ({ ...current, referenceImages: current.referenceImages.filter((item) => item.assetId !== image.assetId) }))}><X size={12} /></button></figure>)}</div>}
+              {state.referenceImages.length < 4 && <label className="creation-assistant-reference-upload">
+                <input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={referenceBusy} onChange={(event) => { void addReferenceImages(event.target.files); event.currentTarget.value = ""; }} />
+                {referenceBusy ? <LoaderCircle className="spin" size={16} /> : <ImagePlus size={16} />}
+                <span>{referenceBusy ? "正在上传" : "添加商品或效果参考图"}</span>
+              </label>}
+              <small className="creation-assistant-reference-note">参考图会保存到素材库，并跟随当前项目助手记录。</small>
+            </div>
             <label className="creation-assistant-input">
               <textarea value={state.sourceText} onChange={(event) => setState((current) => ({ ...current, sourceText: event.target.value.slice(0, 3000) }))} placeholder={hasWorkspaceImages ? "可以不填；也可以补充商品名称、已知卖点或不能改变的细节。" : "例如：专业户外音箱，面向活动执行团队，希望突出覆盖范围和快速部署。"} />
               <small>{state.sourceText.length}/3000</small>
             </label>
             <button className="creation-assistant-paste" type="button" onClick={pasteProduct}><Clipboard size={15} />粘贴商品信息</button>
-            <div className="creation-assistant-footer"><button type="button" onClick={() => setState((current) => ({ ...current, step: "service" }))}><ChevronLeft size={15} />上一步</button><button className="primary" type="button" disabled={busy || (!hasWorkspaceImages && !hasWorkspaceProductText && state.sourceText.trim().length < 2)} onClick={recommend}>{busy ? <LoaderCircle className="spin" size={15} /> : <WandSparkles size={15} />}{hasWorkspaceImages ? "识别商品并推荐" : "AI 推荐方向"}</button></div>
+            <div className="creation-assistant-footer"><button type="button" onClick={() => setState((current) => ({ ...current, step: "service" }))}><ChevronLeft size={15} />上一步</button><button className="primary" type="button" disabled={busy || referenceBusy || (!hasWorkspaceImages && !hasReferenceImages && !hasWorkspaceProductText && state.sourceText.trim().length < 2)} onClick={recommend}>{busy ? <LoaderCircle className="spin" size={15} /> : <WandSparkles size={15} />}{hasWorkspaceImages || hasReferenceImages ? "识别图片并推荐" : "AI 推荐方向"}</button></div>
           </section>}
 
           {state.step === "direction" && state.recommendations && <section className="creation-assistant-step" ref={activeStepRef}>

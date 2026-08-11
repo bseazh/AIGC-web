@@ -1303,8 +1303,18 @@ a { color: inherit; text-decoration: none; }
 .creation-assistant-footer button.primary, .creation-assistant-result-actions button.primary { border-color: #176f82; color: #fff; background: #176f82; }
 .creation-assistant-footer button:disabled, .creation-assistant-result-actions button:disabled, .creation-assistant-regenerate:disabled { opacity: .45; cursor: not-allowed; }
 .creation-assistant-summary { margin: 0; padding: 9px 10px; border-left: 3px solid #d59a35; color: #536671; background: #fff9ed; font-size: 10px; line-height: 1.55; }
-.creation-assistant-image-context { margin: 0; padding: 9px 10px; display: flex; align-items: center; gap: 7px; border: 1px solid #bfe0d4; border-radius: 7px; color: #276a58; background: #f0fbf6; font-size: 10px; line-height: 1.5; }
-.creation-assistant-image-context svg { flex: 0 0 auto; }
+.creation-assistant-reference-block { min-width: 0; padding: 9px; display: grid; gap: 8px; border: 1px solid #d9e4e8; border-radius: 7px; background: #f8fafb; }
+.creation-assistant-reference-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.creation-assistant-reference-heading > span { display: inline-flex; align-items: center; gap: 6px; color: #38525e; font-size: 10px; font-weight: 800; }
+.creation-assistant-reference-heading > small, .creation-assistant-reference-note { color: #87969e; font-size: 9px; line-height: 1.45; }
+.creation-assistant-reference-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; }
+.creation-assistant-reference-grid figure { position: relative; min-width: 0; margin: 0; overflow: hidden; border: 1px solid #d7e1e5; border-radius: 6px; background: #fff; }
+.creation-assistant-reference-grid img, .creation-assistant-reference-placeholder { width: 100%; aspect-ratio: 1; display: grid; place-items: center; object-fit: cover; color: #79909a; background: #edf3f5; }
+.creation-assistant-reference-grid figcaption { padding: 4px 5px; overflow: hidden; color: #647681; font-size: 8px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.creation-assistant-reference-grid figure > button { position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.55); border-radius: 50%; color: #fff; background: rgba(33,48,58,.72); }
+.creation-assistant-reference-upload { min-height: 38px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 1px dashed #9eb8c1; border-radius: 6px; color: #476773; background: #fff; font-size: 10px; font-weight: 800; cursor: pointer; }
+.creation-assistant-reference-upload:hover { border-color: #4c98a7; color: #176f82; background: #f1fafb; }
+.creation-assistant-reference-upload input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
 .creation-assistant-choices { min-width: 0; margin: 0; padding: 0; border: 0; }
 .creation-assistant-choices legend { margin-bottom: 6px; color: #425865; font-size: 10px; font-weight: 800; }
 .creation-assistant-choices > div { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; }

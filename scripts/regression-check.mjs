@@ -1463,6 +1463,16 @@ const checks = [
     "imageUrls.slice(0, 4)",
   ],
   [
+    "Creation assistant exposes explicit reference image uploads",
+    "app/features/creation-assistant/components/creation-assistant.tsx",
+    "添加商品或效果参考图",
+  ],
+  [
+    "Creation assistant persists reference assets and refreshes signed URLs",
+    "app/api/creation-assistant/route.ts",
+    "ownedReferenceImages(referenceAssetIds, user.id)",
+  ],
+  [
     "Creation assistant keeps vision-only product context across later turns",
     "app/api/creation-assistant/route.ts",
     "const productContext = sourceText || recognizedProductText",

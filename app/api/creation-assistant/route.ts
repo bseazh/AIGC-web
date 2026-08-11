@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
+import { createSignedObjectUrl } from "@/lib/cos";
 import { authenticatedUser } from "@/lib/session";
 import { isImageAssistantWorkflow } from "@/app/features/creation-assistant/workflows";
 
@@ -59,6 +60,26 @@ async function ownedProject(projectId: string, userId: string) {
     [projectId, userId],
   );
   return result.rows[0] || null;
+}
+
+async function ownedReferenceImages(assetIds: string[], userId: string) {
+  const ids = [...new Set(assetIds.filter(validUuid))].slice(0, 4);
+  if (!ids.length) return [];
+  const result = await db.query<{ id: string; storage_key: string; original_name: string | null }>(
+    `SELECT id, storage_key, original_name
+     FROM assets
+     WHERE owner_id = $1
+       AND id = ANY($2::uuid[])
+       AND mime_type IN ('image/jpeg', 'image/png', 'image/webp')
+       AND audit_status = 'READY'`,
+    [userId, ids],
+  );
+  const byId = new Map(result.rows.map((asset) => [asset.id, asset]));
+  return Promise.all(ids.flatMap((id) => byId.has(id) ? [byId.get(id)!] : []).map(async (asset) => ({
+    assetId: asset.id,
+    name: asset.original_name || "参考图",
+    url: await createSignedObjectUrl(asset.storage_key, "GET", 3600),
+  })));
 }
 
 async function callAssistantLLM(options: {
@@ -130,6 +151,12 @@ function normalizeSavedState(value: unknown) {
         };
       }).filter((item) => item.content)
     : [];
+  const referenceImages = Array.isArray(record.referenceImages)
+    ? record.referenceImages.slice(0, 4).flatMap((item) => {
+        const image = item && typeof item === "object" ? item as Record<string, unknown> : {};
+        return validUuid(image.assetId) ? [{ assetId: image.assetId, name: compact(image.name, 255) || "参考图" }] : [];
+      })
+    : [];
   return {
     step: ["service", "product", "direction", "result"].includes(String(record.step)) ? record.step : "service",
     goal: isImageAssistantWorkflow(record.goal) ? record.goal : "image-generate",
@@ -151,6 +178,7 @@ function normalizeSavedState(value: unknown) {
       quickReplies: stringList(recommendations.quickReplies, 5, 60),
     } : null,
     messages,
+    referenceImages,
     handoffPending: record.handoffPending === true,
     expiresAt: new Date(Date.now() + sessionDays * 24 * 60 * 60 * 1000).toISOString(),
   };
@@ -184,7 +212,14 @@ export async function GET(request: NextRequest) {
     await db.query("UPDATE workflow_drafts SET payload_json = payload_json - 'creationAssistant', updated_at = NOW() WHERE id = $1", [project.id]);
     return NextResponse.json({ assistant: null, workflowKey: project.workflow_key, expired: true });
   }
-  return NextResponse.json({ assistant, workflowKey: project.workflow_key });
+  const referenceAssetIds = Array.isArray(assistant.referenceImages)
+    ? assistant.referenceImages.flatMap((item) => {
+        const image = item && typeof item === "object" ? item as Record<string, unknown> : {};
+        return validUuid(image.assetId) ? [image.assetId] : [];
+      })
+    : [];
+  const referenceImages = await ownedReferenceImages(referenceAssetIds, user.id);
+  return NextResponse.json({ assistant: { ...assistant, referenceImages }, workflowKey: project.workflow_key });
 }
 
 export async function PUT(request: NextRequest) {
@@ -215,20 +250,23 @@ export async function POST(request: NextRequest) {
   const sourceText = compact(body.sourceText, 3000);
   const action = body.action === "generate" ? "generate" : body.action === "refine" ? "refine" : "recommend";
   const imageUrls = stringList(body.imageUrls, 4, 1_500_000).filter((url) => url.startsWith("data:image/") || url.startsWith("https://"));
+  const referenceAssetIds = Array.isArray(body.referenceAssetIds) ? body.referenceAssetIds.flatMap((value) => validUuid(value) ? [value] : []).slice(0, 4) : [];
   const savedRecommendations = body.recommendations && typeof body.recommendations === "object" && !Array.isArray(body.recommendations)
     ? body.recommendations as Record<string, unknown>
     : null;
   const recognizedProductText = compact(body.productSummary, 500) || compact(savedRecommendations?.productSummary, 500);
   const productContext = sourceText || recognizedProductText;
-  if (action === "recommend" && sourceText.length < 2 && !imageUrls.length) {
-    return NextResponse.json({ code: "PRODUCT_REQUIRED", message: "请先描述商品，或在当前工作台上传商品图" }, { status: 400 });
-  }
   if (action !== "recommend" && productContext.length < 2) {
     return NextResponse.json({ code: "PRODUCT_REQUIRED", message: "商品信息已丢失，请返回上一步重新识别商品" }, { status: 400 });
   }
 
   try {
     if (action === "recommend") {
+      const referenceImages = await ownedReferenceImages(referenceAssetIds, user.id);
+      const visionUrls = [...referenceImages.map((image) => image.url), ...imageUrls].slice(0, 4);
+      if (sourceText.length < 2 && !visionUrls.length) {
+        return NextResponse.json({ code: "PRODUCT_REQUIRED", message: "请先描述商品，或添加商品参考图" }, { status: 400 });
+      }
       const result = await callAssistantLLM({
         operation: "image_creation_assistant_recommend",
         system: "你是资深电商视觉创意策划。根据少量商品信息主动发散，但不能虚构确定性的商品参数。只输出严格 JSON，不要 Markdown。",
@@ -243,7 +281,7 @@ export async function POST(request: NextRequest) {
           `目标图片类型：${goal}`,
           `用户提供的信息：${sourceText || "用户未填写文字，请重点识别当前商品图片"}`,
         ].join("\n"),
-        imageUrls,
+        imageUrls: visionUrls,
         requestLog: { userId: user.id, projectId: project.id, goal, sourceLength: sourceText.length },
       });
       return NextResponse.json({ recommendations: normalizeRecommendations(result, sourceText) });

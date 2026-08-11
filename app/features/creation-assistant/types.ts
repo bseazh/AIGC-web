@@ -40,8 +40,15 @@ export type CreationAssistantState = {
   prompt: string;
   recommendations: AssistantRecommendations | null;
   messages: AssistantMessage[];
+  referenceImages: AssistantReferenceImage[];
   handoffPending?: boolean;
   expiresAt?: string;
+};
+
+export type AssistantReferenceImage = {
+  assetId: string;
+  name: string;
+  url?: string;
 };
 
 export type AssistantApplyDetail = {
