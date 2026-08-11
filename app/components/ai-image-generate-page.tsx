@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { GenerationProgress } from "@/app/components/generation-progress";
 import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
+import { ImageOutputCountControl, type ImageOutputCount } from "@/app/components/image-output-count-control";
 import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import { aiImageCases } from "@/lib/image-workflow-cases";
 import { imageGenerateWorkflow } from "@/lib/product-config";
@@ -35,6 +36,7 @@ export function AiImageGeneratePage() {
   const [style, setStyle] = useState<string>(imageGenerateWorkflow.styles[0]);
   const [model, setModel] = useState<string>(modelOptions[0]);
   const [resolution, setResolution] = useState<string>(resolutions[0]);
+  const [outputCount, setOutputCount] = useState<ImageOutputCount>(1);
   const [sourceTab, setSourceTab] = useState<"local" | "asset">("local");
   const [references, setReferences] = useState<UploadedImage[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -195,6 +197,7 @@ export function AiImageGeneratePage() {
           style,
           imageProvider: imageProviderForModel(model),
           imageResolution: resolution,
+          outputCount,
           draftId: projectId,
         }),
       });
@@ -213,6 +216,7 @@ export function AiImageGeneratePage() {
     setStyle(imageGenerateWorkflow.styles[0]);
     setModel(modelOptions[0]);
     setResolution(resolutions[0]);
+    setOutputCount(1);
     setReferences((current) => {
       current.forEach((item) => {
         if (item.url.startsWith("blob:")) URL.revokeObjectURL(item.url);
@@ -247,6 +251,7 @@ export function AiImageGeneratePage() {
             {sourceTab === "local" ? <label className="yh-upload-drop"><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => chooseFiles(event.target.files)} /><span><Upload size={24} /></span><strong>参考图片（可选）</strong><small>不上传则文生图，上传后按参考图生成<br />已上传 {references.length}/{maxReferenceImages} 个</small></label> : <div className="yh-asset-picker">{assetsLoading ? <p><LoaderCircle size={18} />正在加载素材</p> : assets.length ? assets.slice(0, 12).map((asset) => <button type="button" key={asset.id} onClick={() => selectAsset(asset)}><img src={asset.url} alt="" /><span>{asset.originalName}</span></button>) : <p>暂无可用图片素材</p>}</div>}
             {references.length > 0 && <div className="yh-reference-list">{references.map((item, index) => <article key={`${item.url}-${index}`}><img src={item.url} alt="" /><button type="button" aria-label="移除参考图" onClick={() => removeReference(index)}><X size={13} /></button></article>)}</div>}
           </section>
+          <ImageOutputCountControl value={outputCount} onChange={setOutputCount} disabled={busy} />
           <p className="yh-credit"><Zap size={15} />{quotedText}</p>
           {error && <p className="creator-error" role="alert">{error}</p>}
           <TemporaryResultNotice result={task} />
@@ -255,7 +260,7 @@ export function AiImageGeneratePage() {
 
         <section className="yh-case-board">
           <header><span><Sparkles size={17} /></span><div><h1>案例参考</h1><p>选择案例可一键回填入参</p></div></header>
-          {busy && <GenerationProgress phase={phase} taskStatus={task?.status} title="AI生图" outputCount={4} />}
+          {busy && <GenerationProgress phase={phase} taskStatus={task?.status} title="AI生图" outputCount={outputCount} />}
           {phase === "succeeded" && task?.outputs.length ? <div className="yh-result-grid">{task.outputs.map((output, index) => <article key={output.assetId}><img src={output.url} alt={`AI生图结果 ${index + 1}`} /><GeneratedAssetActions output={output} onSaved={markSaved} /></article>)}</div> : phase === "succeeded" && task?.expiredOutputCount ? null : <div className="yh-case-grid">{aiImageCases.map((item) => <article className={appliedCaseId === item.id ? "active" : ""} key={item.id}><div className="yh-case-media"><img src={item.image} alt={item.title} /><span><ImageIcon size={12} />图片案例</span></div><strong>{item.title}</strong><button type="button" onClick={() => applyCase(item)}><Wand2 size={15} />做同款</button></article>)}</div>}
           <footer><button type="button" aria-label="上一页">‹</button><span>1 / 2</span><button type="button" aria-label="下一页">›</button></footer>
         </section>

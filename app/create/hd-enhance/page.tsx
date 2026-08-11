@@ -8,7 +8,7 @@ import { hdEnhanceWorkflow } from "@/lib/product-config";
 export default function HdEnhancePage() {
   return <ProjectRequiredGate workflowKey="hd-enhance"><ImageWorkflowPage
     title="高清优化"
-    description="单张输出，消耗 5 积分"
+    description="默认生成 1 张，可自定义生成数量，消耗 5 积分"
     submitUrl="/api/tasks/hd-enhance/"
     scenes={hdEnhanceWorkflow.scenes}
     styles={hdEnhanceWorkflow.styles}

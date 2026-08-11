@@ -8,7 +8,8 @@ export const heroImageWorkflow = {
   enabled: Boolean(imageProviderConfigured && process.env.COS_SECRET_ID),
   disabledReason: imageProviderConfigured && process.env.COS_SECRET_ID ? null : "PROVIDER_NOT_CONFIGURED",
   pointsPerTask: Number(process.env.HERO_IMAGE_TASK_POINTS || 10),
-  outputsPerTask: 4,
+  outputsPerTask: 1,
+  userSelectableOutputCount: true,
   acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
   maxFileBytes: 10 * 1024 * 1024,
   aspectRatios: ["1:1", "3:4", "4:3", "9:16"],
@@ -23,7 +24,8 @@ export const imageGenerateWorkflow = {
   enabled: Boolean(imageProviderConfigured && process.env.COS_SECRET_ID),
   disabledReason: imageProviderConfigured && process.env.COS_SECRET_ID ? null : "PROVIDER_NOT_CONFIGURED",
   pointsPerTask: Number(process.env.IMAGE_GENERATE_TASK_POINTS || 10),
-  outputsPerTask: 4,
+  outputsPerTask: 1,
+  userSelectableOutputCount: true,
   minAssets: 0,
   acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
   maxFileBytes: 10 * 1024 * 1024,
@@ -48,7 +50,8 @@ export const sceneImageWorkflow = {
   enabled: Boolean(imageProviderConfigured && process.env.COS_SECRET_ID),
   disabledReason: imageProviderConfigured && process.env.COS_SECRET_ID ? null : "PROVIDER_NOT_CONFIGURED",
   pointsPerTask: Number(process.env.SCENE_IMAGE_TASK_POINTS || 10),
-  outputsPerTask: 4,
+  outputsPerTask: 1,
+  userSelectableOutputCount: true,
   acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
   maxFileBytes: 10 * 1024 * 1024,
   aspectRatios: ["1:1", "3:4", "4:3", "9:16"],
@@ -62,7 +65,8 @@ export const modelWearWorkflow = {
   name: "模特穿搭",
   enabled: Boolean(imageProviderConfigured && process.env.COS_SECRET_ID),
   pointsPerTask: Number(process.env.MODEL_WEAR_TASK_POINTS || 10),
-  outputsPerTask: 4,
+  outputsPerTask: 1,
+  userSelectableOutputCount: true,
   acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
   maxFileBytes: 10 * 1024 * 1024,
   aspectRatios: ["1:1", "3:4", "4:3", "9:16"],
@@ -77,6 +81,7 @@ export const hdEnhanceWorkflow = {
   enabled: Boolean(imageProviderConfigured && process.env.COS_SECRET_ID),
   pointsPerTask: Number(process.env.HD_ENHANCE_TASK_POINTS || 5),
   outputsPerTask: 1,
+  userSelectableOutputCount: true,
   acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
   maxFileBytes: 10 * 1024 * 1024,
   aspectRatios: ["保持原比例"],
@@ -90,7 +95,8 @@ export const detailPageWorkflow = {
   name: "商品详情页",
   enabled: Boolean(imageProviderConfigured && process.env.COS_SECRET_ID),
   pointsPerTask: Number(process.env.DETAIL_PAGE_TASK_POINTS || 10),
-  outputsPerTask: 5,
+  outputsPerTask: 1,
+  userSelectableOutputCount: true,
   acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
   maxFileBytes: 10 * 1024 * 1024,
   aspectRatios: ["1:1", "3:4", "4:3", "9:16"],
@@ -99,7 +105,7 @@ export const detailPageWorkflow = {
   refundOnFailure: true,
 } as const;
 
-export const whiteBackgroundWorkflow = { ...hdEnhanceWorkflow, key: "white-background", name: "白底图生成", pointsPerTask: Number(process.env.WHITE_BACKGROUND_TASK_POINTS || 5), outputsPerTask: 4, scenes: ["纯白背景", "电商白底", "轻投影白底"], styles: ["商品静物", "干净裁切", "真实光影"] } as const;
+export const whiteBackgroundWorkflow = { ...hdEnhanceWorkflow, key: "white-background", name: "白底图生成", pointsPerTask: Number(process.env.WHITE_BACKGROUND_TASK_POINTS || 5), scenes: ["纯白背景", "电商白底", "轻投影白底"], styles: ["商品静物", "干净裁切", "真实光影"] } as const;
 export const resizeImageWorkflow = { ...hdEnhanceWorkflow, key: "resize-image", name: "图片比例调整", pointsPerTask: Number(process.env.RESIZE_IMAGE_TASK_POINTS || 5), outputsPerTask: 1, aspectRatios: ["1:1", "3:4", "4:3", "9:16"], scenes: ["智能扩图", "居中构图", "保留主体"], styles: ["自然延展", "电商留白", "真实背景"] } as const;
 export const recreateHeroWorkflow = { ...heroImageWorkflow, key: "recreate-product-hero", name: "复刻商品主图", pointsPerTask: Number(process.env.RECREATE_HERO_TASK_POINTS || 10), scenes: ["版式复刻", "构图复刻", "氛围复刻"], styles: ["原创商业", "高转化电商", "真实摄影"] } as const;
 export const recreateDetailWorkflow = { ...detailPageWorkflow, key: "recreate-detail-page", name: "复刻商详页", pointsPerTask: Number(process.env.RECREATE_DETAIL_TASK_POINTS || 10), scenes: ["卖点结构复刻", "模块节奏复刻", "长图版式复刻"], styles: ["原创电商", "清晰卖点", "克制留白"] } as const;
@@ -111,6 +117,7 @@ export const recreateReferenceWorkflow = {
   disabledReason: imageProviderConfigured && process.env.COS_SECRET_ID ? null : "PROVIDER_NOT_CONFIGURED",
   pointsPerTask: Number(process.env.RECREATE_REFERENCE_TASK_POINTS || 10),
   outputsPerTask: 1,
+  userSelectableOutputCount: false,
   aspectRatios: ["16:9", "1:1", "3:4", "4:3", "9:16"],
   scenes: ["人物多视图", "商品多视图", "场景多视图"],
   styles: ["参考板", "隐私遮挡", "真实摄影"],

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { GenerationProgress } from "@/app/components/generation-progress";
 import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
+import { ImageOutputCountControl, type ImageOutputCount } from "@/app/components/image-output-count-control";
 import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import { productSceneCases } from "@/lib/image-workflow-cases";
 import { sceneImageWorkflow } from "@/lib/product-config";
@@ -36,6 +37,7 @@ export function ProductSceneImagePage() {
   const [style, setStyle] = useState<string>(sceneImageWorkflow.styles[0]);
   const [model, setModel] = useState<string>(modelOptions[0]);
   const [resolution, setResolution] = useState<string>(resolutions[0]);
+  const [outputCount, setOutputCount] = useState<ImageOutputCount>(1);
   const [useModelReference, setUseModelReference] = useState(false);
   const [sourceTab, setSourceTab] = useState<"local" | "asset">("local");
   const [products, setProducts] = useState<ProductImage[]>([]);
@@ -204,7 +206,7 @@ export function ProductSceneImagePage() {
       const created = await request("/api/tasks/scene/", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({ assetIds, prompt: composedPrompt, aspectRatio: ratio, scene, style, imageProvider: imageProviderForModel(model), imageResolution: resolution, draftId: projectId }),
+        body: JSON.stringify({ assetIds, prompt: composedPrompt, aspectRatio: ratio, scene, style, imageProvider: imageProviderForModel(model), imageResolution: resolution, outputCount, draftId: projectId }),
       });
       setPhase("generating");
       await pollTask(created.taskId);
@@ -222,6 +224,7 @@ export function ProductSceneImagePage() {
     setStyle(sceneImageWorkflow.styles[0]);
     setModel(modelOptions[0]);
     setResolution(resolutions[0]);
+    setOutputCount(1);
     setUseModelReference(false);
     setProducts((current) => {
       current.forEach((item) => {
@@ -260,6 +263,7 @@ export function ProductSceneImagePage() {
           <label className="yh-field">使用场景<select value={scene} onChange={(event) => setScene(event.target.value)}>{sceneImageWorkflow.scenes.map((item) => <option key={item}>{item}</option>)}</select></label>
           <label className="yh-field wide">提示词<textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={1200} placeholder="例如：商品放在窗边桌面，保留自然投影与留白" /><small>{prompt.length}/1200</small></label>
           <label className="yh-toggle-field"><span><strong>指定模特图</strong><small>如果指定产品场景图中的人物模特，可上传模特图</small></span><input type="checkbox" checked={useModelReference} onChange={(event) => setUseModelReference(event.target.checked)} /><i /></label>
+          <ImageOutputCountControl value={outputCount} onChange={setOutputCount} disabled={busy} />
           <p className="yh-credit"><Zap size={15} />{quotedText}</p>
           {error && <p className="creator-error" role="alert">{error}</p>}
           <TemporaryResultNotice result={task} />
@@ -268,7 +272,7 @@ export function ProductSceneImagePage() {
 
         <section className="yh-case-board yh-scene-case-board">
           <header><span><Sparkles size={17} /></span><div><h1>案例参考</h1><p>选择案例可一键回填入参</p></div></header>
-          {busy && <GenerationProgress phase={phase} taskStatus={task?.status} title="生成产品场景图" outputCount={4} />}
+          {busy && <GenerationProgress phase={phase} taskStatus={task?.status} title="生成产品场景图" outputCount={outputCount} />}
           {phase === "succeeded" && task?.outputs.length ? <div className="yh-result-grid">{task.outputs.map((output, index) => <article key={output.assetId}><img src={output.url} alt={`场景图结果 ${index + 1}`} /><GeneratedAssetActions output={output} onSaved={markSaved} /></article>)}</div> : phase === "succeeded" && task?.expiredOutputCount ? null : <div className="yh-case-grid">{productSceneCases.map((item) => <article className={appliedCaseId === item.id ? "active" : ""} key={item.id}><div className="yh-case-media"><img src={item.image} alt={item.title} /><span><ImageIcon size={12} />图片案例</span></div><strong>{item.title}</strong><button type="button" onClick={() => applyCase(item)}><Wand2 size={15} />做同款</button></article>)}</div>}
         </section>
       </div>

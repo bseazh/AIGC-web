@@ -15,6 +15,7 @@ type ImageWorkflow = {
   enabled: boolean;
   pointsPerTask: number;
   outputsPerTask: number;
+  userSelectableOutputCount?: boolean;
   minAssets?: number;
   aspectRatios: readonly string[];
   durations?: readonly number[];
@@ -22,6 +23,16 @@ type ImageWorkflow = {
   scenes: readonly string[];
   styles: readonly string[];
 };
+
+const selectableImageOutputCounts = [1, 2, 4] as const;
+
+function requestedOutputCount(body: Record<string, unknown>, workflow: ImageWorkflow) {
+  if (!workflow.userSelectableOutputCount) return workflow.outputsPerTask;
+  const requested = Number(body.outputCount);
+  return selectableImageOutputCounts.includes(requested as (typeof selectableImageOutputCounts)[number])
+    ? requested
+    : workflow.outputsPerTask;
+}
 
 type AssetSelector = (body: Record<string, unknown>) => string[];
 type ReadyAsset = { id: string; storage_key: string; mime_type: string; metadata_json: Record<string, unknown>; audit_status: string };
@@ -104,7 +115,7 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
       return NextResponse.json({ code: "INSUFFICIENT_POINTS", message: "积分不足" }, { status: 402 });
     }
     const promptConfig = workflow.key.includes("video") ? await resolvePromptConfig(client, workflow.key, user.id) : undefined;
-    const input = { assetId: assets[0]?.id || null, storageKey: assets[0]?.storage_key || null, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), assetMimeTypes: assets.map((asset) => asset.mime_type), prompt, aspectRatio, duration, resolution, scene, style, outputs: workflow.outputsPerTask, ...(adminExempt ? { billingMode: ADMIN_EXEMPT_BILLING_MODE, quotedPoints: points } : {}), ...(promptConfig ? { promptConfig } : {}), ...(inputExtras?.(body) || {}) };
+    const input = { assetId: assets[0]?.id || null, storageKey: assets[0]?.storage_key || null, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), assetMimeTypes: assets.map((asset) => asset.mime_type), prompt, aspectRatio, duration, resolution, scene, style, outputs: requestedOutputCount(body, workflow), ...(adminExempt ? { billingMode: ADMIN_EXEMPT_BILLING_MODE, quotedPoints: points } : {}), ...(promptConfig ? { promptConfig } : {}), ...(inputExtras?.(body) || {}) };
     await client.query(
       `INSERT INTO generation_tasks (id, user_id, workflow_key, status, points, input_json, idempotency_key, request_id)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
@@ -124,7 +135,7 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
           draftId,
           user.id,
           workflow.key,
-          JSON.stringify({ taskId, assetCount: assets.length, duration, resolution, aspectRatio, status: inputsReady ? "QUEUED" : "PENDING_INPUT_REVIEW" }),
+          JSON.stringify({ taskId, assetCount: assets.length, outputCount: input.outputs, duration, resolution, aspectRatio, status: inputsReady ? "QUEUED" : "PENDING_INPUT_REVIEW" }),
           taskId,
         ],
       );

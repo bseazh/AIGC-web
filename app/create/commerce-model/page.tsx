@@ -10,7 +10,7 @@ export default function CommerceModelPage() {
     <ProjectRequiredGate workflowKey="commerce-model">
       <ImageWorkflowPage
         title="带货模特"
-        description="生成可复用带货模特资产，一次 4 张，消耗 10 积分"
+        description="生成可复用带货模特资产，默认 1 张，可自定义生成数量"
         submitUrl="/api/tasks/commerce-model/"
         scenes={imageGenerateWorkflow.scenes}
         styles={imageGenerateWorkflow.styles}

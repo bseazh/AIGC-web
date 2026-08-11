@@ -1330,6 +1330,17 @@ a { color: inherit; text-decoration: none; }
 .creation-assistant-handoff-note { margin: 0; padding: 8px 9px; border: 1px solid #c9d8f0; border-radius: 7px; color: #385a7a; background: #f2f7ff; font-size: 9px; line-height: 1.5; }
 .creation-assistant-error { margin: 10px 0 0; padding: 8px 10px; border: 1px solid #f0c6cb; border-radius: 7px; color: #a43f4b; background: #fff4f5; font-size: 10px; line-height: 1.5; }
 .creation-assistant-panel .spin { animation: assistant-spin .8s linear infinite; }
+.image-output-count-control { min-width: 0; padding: 10px; display: grid; gap: 9px; border: 1px solid #d8e2e7; border-radius: 7px; background: #f8fafb; }
+.image-output-count-control > div:first-child { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.image-output-count-control strong { color: #344c58; font-size: 11px; }
+.image-output-count-control > div:first-child small { color: #7c8d97; font-size: 9px; line-height: 1.4; text-align: right; }
+.image-output-count-control > div:last-child { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; }
+.image-output-count-control button { min-width: 0; height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid #ccd9df; border-radius: 6px; color: #526873; background: #fff; font-size: 11px; font-weight: 800; }
+.image-output-count-control button small { color: #8a6a28; font-size: 8px; }
+.image-output-count-control button:hover { border-color: #75b1bb; color: #176f82; }
+.image-output-count-control button.active { border-color: #176f82; color: #fff; background: #176f82; }
+.image-output-count-control button.active small { color: rgba(255,255,255,.8); }
+.image-output-count-control button:disabled { opacity: .5; cursor: not-allowed; }
 @keyframes assistant-spin { to { transform: rotate(360deg); } }
 @media (max-width: 640px) {
   .creation-assistant-launcher { right: 14px; bottom: 14px; }

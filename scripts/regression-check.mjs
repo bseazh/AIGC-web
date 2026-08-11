@@ -1488,6 +1488,26 @@ const checks = [
     "useAssistantPromptReceiver",
   ],
   [
+    "User-facing image generation defaults to one output",
+    "lib/product-config.ts",
+    "userSelectableOutputCount: true",
+  ],
+  [
+    "Image output count only accepts one two or four",
+    "lib/task-creation.ts",
+    "const selectableImageOutputCounts = [1, 2, 4] as const",
+  ],
+  [
+    "Image workspaces expose an explicit output count control",
+    "app/components/image-output-count-control.tsx",
+    "默认生成 1 张，需要更多结果时再主动选择",
+  ],
+  [
+    "Image worker no longer falls back to four outputs",
+    "scripts/worker.mjs",
+    "task.input_json.outputs || 1",
+  ],
+  [
     "Product scene generation accepts assistant prompt backfill",
     "app/components/product-scene-image-page.tsx",
     "useAssistantPromptReceiver",
