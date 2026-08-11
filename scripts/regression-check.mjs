@@ -381,9 +381,9 @@ const checks = [
     "gemini_image_fallback_to_sophnet",
   ],
   [
-    "Gemini image generation asks for text and image modalities",
+    "Gemini image generation asks for image-only responses",
     "scripts/worker.mjs",
-    'responseModalities: ["TEXT", "IMAGE"]',
+    'responseModalities: ["IMAGE"]',
   ],
   [
     "Gemini image generation supports a configurable relay endpoint",
@@ -427,6 +427,26 @@ const checks = [
     "Gemini image generation parses inline image data",
     "scripts/worker.mjs",
     "inlineData || imagePart?.inline_data",
+  ],
+  [
+    "Gemini image generation retries successful text-only responses",
+    "scripts/worker.mjs",
+    'const maxAttempts = 2',
+    'GEMINI_EMPTY_IMAGE_RESPONSE',
+    '上一次响应没有返回图片',
+  ],
+  [
+    "Image generation treats the first reference as the subject source of truth",
+    "scripts/worker.mjs",
+    '第一张图是主体外观的最高事实来源',
+    '不得换商品、改变款式、重塑结构',
+  ],
+  [
+    "Image generation submits a detailed production brief",
+    "scripts/worker.mjs",
+    '主体表现：主体边缘完整清晰',
+    '光影执行：主光方向统一',
+    '响应要求：立即执行图像生成',
   ],
   [
     "Recreate video face mask fallback does not cover landscape identity boards",

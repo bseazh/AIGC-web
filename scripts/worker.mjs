@@ -162,6 +162,25 @@ async function createSophnetImage(inputUrls, prompt, generationTaskId, outputInd
   return { url, temporaryKey: null, provider: "sophnet", model: payload?.model || model };
 }
 
+function geminiImageResponse(payload) {
+  const candidates = Array.isArray(payload?.candidates) ? payload.candidates : [];
+  const parts = candidates.flatMap((candidate) => Array.isArray(candidate?.content?.parts) ? candidate.content.parts : []);
+  const imagePart = parts.find((part) => part?.inlineData?.data || part?.inline_data?.data);
+  const text = parts.map((part) => typeof part?.text === "string" ? part.text.trim() : "").filter(Boolean).join(" ");
+  return {
+    inlineData: imagePart?.inlineData || imagePart?.inline_data || null,
+    text,
+    finishReason: candidates.map((candidate) => candidate?.finishReason).find(Boolean) || payload?.promptFeedback?.blockReason || "UNKNOWN",
+  };
+}
+
+function geminiImageFailureMessage(status, payload, parsed, attempts) {
+  const providerMessage = payload?.error?.message || payload?.message;
+  if (providerMessage) return `Gemini ${status}: ${providerMessage}`;
+  const detail = parsed.text ? `；模型仅返回文字：${parsed.text.slice(0, 120)}` : "";
+  return `Gemini ${status}: 未返回图片（${parsed.finishReason}，已尝试 ${attempts} 次）${detail}`;
+}
+
 async function createGeminiImage(inputUrls, prompt, generationTaskId, outputIndex, aspectRatio = "1:1") {
   const apiKey = process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.NANO_BANANA_API_KEY;
   const model = process.env.GOOGLE_IMAGE_MODEL || "gemini-2.5-flash-image";
@@ -181,42 +200,52 @@ async function createGeminiImage(inputUrls, prompt, generationTaskId, outputInde
     });
     if (index >= 2 && model === "gemini-2.5-flash-image") break;
   }
-  const requestBody = {
-    contents: [{
-      parts: [
-        { text: prompt },
-        ...imageParts,
-      ],
-    }],
-    generationConfig: {
-      responseModalities: ["TEXT", "IMAGE"],
-      responseFormat: {
-        image: {
-          aspectRatio: responseAspectRatio,
+  const maxAttempts = 2;
+  let lastFailure = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const retryDirection = attempt === 1 ? "" : [
+      "上一次响应没有返回图片。现在必须直接执行图像生成。",
+      "只输出最终图片数据，不要解释、确认、复述提示词或回复任何纯文字内容。",
+    ].join("\n");
+    const requestBody = {
+      contents: [{
+        parts: [
+          { text: [prompt, retryDirection].filter(Boolean).join("\n") },
+          ...imageParts,
+        ],
+      }],
+      generationConfig: {
+        responseModalities: ["IMAGE"],
+        responseFormat: {
+          image: {
+            aspectRatio: responseAspectRatio,
+          },
         },
       },
-    },
-  };
-  const response = await googleFetch(googleAiUrl(`/models/${model}:generateContent`, apiKey), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(requestBody),
-  });
-  const payload = await response.json().catch(() => null);
-  await logProviderCall(generationTaskId, "google-gemini", "generate_image", { model, outputIndex, inputCount: imageParts.length, promptLength: prompt.length, aspectRatio, responseAspectRatio }, response.status, payload, response.ok ? null : "GEMINI_IMAGE_FAILED", payload?.responseId || response.headers.get("x-request-id"));
-  const parts = payload?.candidates?.[0]?.content?.parts || [];
-  const imagePart = parts.find((part) => part?.inlineData?.data || part?.inline_data?.data);
-  const inlineData = imagePart?.inlineData || imagePart?.inline_data;
-  if (!response.ok || !inlineData?.data) {
-    const message = payload?.error?.message || payload?.message || "image generation failed";
-    throw new Error(`Gemini ${response.status}: ${message}`);
+    };
+    const response = await googleFetch(googleAiUrl(`/models/${model}:generateContent`, apiKey), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+    const payload = await response.json().catch(() => null);
+    const parsed = geminiImageResponse(payload);
+    const errorCode = !response.ok ? "GEMINI_IMAGE_HTTP_ERROR" : !parsed.inlineData?.data ? "GEMINI_EMPTY_IMAGE_RESPONSE" : null;
+    await logProviderCall(generationTaskId, "google-gemini", "generate_image", { model, outputIndex, inputCount: imageParts.length, promptLength: prompt.length, aspectRatio, responseAspectRatio, attempt, responseModalities: ["IMAGE"] }, response.status, payload, errorCode, payload?.responseId || response.headers.get("x-request-id"));
+    if (response.ok && parsed.inlineData?.data) {
+      const buffer = Buffer.from(parsed.inlineData.data, "base64");
+      const contentType = parsed.inlineData.mimeType || parsed.inlineData.mime_type || "image/png";
+      const extension = contentType === "image/jpeg" ? "jpg" : contentType === "image/webp" ? "webp" : "png";
+      const key = `temporary/gemini/${generationTaskId}/${outputIndex + 1}-${randomUUID()}.${extension}`;
+      await putObject(key, buffer, contentType);
+      return { url: await cosUrl(key, "GET", 3600), temporaryKey: key, provider: "google-gemini", model };
+    }
+    lastFailure = geminiImageFailureMessage(response.status, payload, parsed, attempt);
+    const retryable = response.ok || response.status === 429 || response.status >= 500;
+    if (!retryable || attempt === maxAttempts) break;
+    await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
   }
-  const buffer = Buffer.from(inlineData.data, "base64");
-  const contentType = inlineData.mimeType || inlineData.mime_type || "image/png";
-  const extension = contentType === "image/jpeg" ? "jpg" : contentType === "image/webp" ? "webp" : "png";
-  const key = `temporary/gemini/${generationTaskId}/${outputIndex + 1}-${randomUUID()}.${extension}`;
-  await putObject(key, buffer, contentType);
-  return { url: await cosUrl(key, "GET", 3600), temporaryKey: key, provider: "google-gemini", model };
+  throw new Error(lastFailure || "Gemini image generation failed");
 }
 
 async function createGeminiImageWithSophnetFallback(inputUrls, prompt, generationTaskId, outputIndex, aspectRatio = "1:1", sophnetInput = {}) {
@@ -350,6 +379,23 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
   const detailCardDirection = detailCard
     ? `本卡片作用：${detailCard.role}。排版文案主标题：${detailCard.title}。辅助文案：${detailCard.subtitle || "无"}。画面导演要求：${detailCard.visualPrompt}。只生成承载该文案的干净商品画面并预留明确排版空间，不要把主标题、辅助文案或任何文字直接画进图片。`
     : `本卡片阶段：${detailStage}。`;
+  const referenceDirection = inputUrls.length
+    ? [
+        `参考素材规则：已提供 ${inputUrls.length} 张输入图。第一张图是主体外观的最高事实来源，后续图片用于补充视角、材质、结构或构图信息。`,
+        "先识别并锁定主体的品类、轮廓、长宽比例、颜色、表面材质、部件结构、接口/按键位置、装饰细节以及可见标识位置，再进行场景和构图创作。",
+        "除非用户明确要求修改，不得换商品、改变款式、重塑结构、增删部件、虚构配件或把参考商品替换成相似品；不同参考图有冲突时以第一张为准。",
+        "参考图只约束需要保留的主体事实。背景、机位和氛围按本次创作要求重新设计，不要机械复制参考图背景，也不要把参考图做成贴图或画中画。",
+      ].join("\n")
+    : "未提供参考图：严格依据用户描述建立唯一、清晰、结构合理的主体，不自行添加会改变商品品类或核心用途的部件。";
+  const productionDirection = [
+    "成片质量：输出一张完整、可直接使用的高质量商业图像，不是草图、分镜、拼贴、九宫格、设计说明或带边框的样机。",
+    "主体表现：主体边缘完整清晰，比例可信，关键结构可辨认；材质高光、粗糙度、反射和纹理符合真实物理属性，避免塑料感、融化、变形和重复部件。",
+    "构图执行：严格落实用户指定的景别、机位、镜头焦段、主体位置和留白；没有明确指定时，使用稳定的商业构图和清晰视觉层级，避免主体被裁切或被道具遮挡。",
+    "光影执行：主光方向统一，环境光、接触阴影、反射与景深自然；主体与场景必须有真实接触关系，避免悬浮、抠图边缘和不一致透视。",
+    "内容边界：不要添加无关商品、错误手指/肢体、重复主体、随机文字、价格、二维码、边框或水印。需要保留参考图已有标识时保持位置和形态，不要自行杜撰难以辨认的标识。",
+    `输出规格：只生成 1 张最终图片，画幅比例 ${input.aspectRatio || "1:1"}，${input.imageResolution === "2K" ? "目标清晰度 2K" : "目标清晰度 1K"}。`,
+    "响应要求：立即执行图像生成，只返回最终图片，不要解释、确认需求、复述提示词或输出纯文字回复。",
+  ].join("\n");
   const shared = workflowKey === "image-generate" || workflowKey === "commerce-model"
     ? "按提示词生成原创图像，画面干净完整，不添加文字、水印、价格或无关标识。"
     : workflowKey === "hd-enhance"
@@ -402,10 +448,13 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
     ? `根据商品与用户描述自动导演真实使用场景，${variation}，画幅比例${input.aspectRatio}，场景光线与商品接触阴影自然，突出商品主体。`
     : `生成电商商品主图，${variation}，画幅比例${input.aspectRatio}，真实摄影，干净背景，柔和自然阴影。`;
   const prompt = [
+    "任务：根据以下完整导演指令生成最终图片。执行优先级为：用户明确要求 > 工作流任务要求 > 自动补充的质量规则；发生冲突时服从优先级更高的要求。",
+    workflowKey === "recreate-reference-image" ? "" : referenceDirection,
     workflowKey === "recreate-reference-image" ? "" : shared,
     workflowKey === "recreate-reference-image" || !input.internalPrompt ? "" : `工作流内置策略：${input.internalPrompt}`,
-    taskPrompt,
-    input.prompt ? `用户补充要求：${input.prompt}` : "",
+    `工作流任务要求：${taskPrompt}`,
+    input.prompt ? `用户创作要求（必须逐项落实）：\n${input.prompt}` : "",
+    productionDirection,
   ].filter(Boolean).join("\n");
   if (workflowKey === "recreate-reference-image") {
     if (geminiImageConfigured()) {
