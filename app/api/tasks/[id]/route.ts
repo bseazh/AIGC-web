@@ -15,6 +15,7 @@ function summarizeInput(input: Record<string, unknown>) {
     duration: typeof input.duration === "number" || typeof input.duration === "string" ? String(input.duration) : "",
     resolution: typeof input.resolution === "string" ? input.resolution : "",
     assetCount: Array.isArray(input.assetIds) ? input.assetIds.length : 0,
+    detailCards: Array.isArray(input.detailCards) ? input.detailCards : [],
   };
 }
 

@@ -9,6 +9,7 @@ import { structuredLog, requestContext } from "@/lib/logger";
 import { isAdministrator } from "@/lib/admin";
 import { ADMIN_EXEMPT_BILLING_MODE } from "@/lib/task-billing";
 import { contentReviewEnabled } from "@/lib/content-review";
+import { DETAIL_PAGE_MAX_CARDS, DETAIL_PAGE_MIN_CARDS, normalizeDetailCards } from "@/lib/detail-page-plans";
 
 type ImageWorkflow = {
   key: string;
@@ -16,6 +17,7 @@ type ImageWorkflow = {
   pointsPerTask: number;
   outputsPerTask: number;
   userSelectableOutputCount?: boolean;
+  structuredDetailCards?: boolean;
   minAssets?: number;
   aspectRatios: readonly string[];
   durations?: readonly number[];
@@ -27,6 +29,10 @@ type ImageWorkflow = {
 const selectableImageOutputCounts = [1, 2, 4] as const;
 
 function requestedOutputCount(body: Record<string, unknown>, workflow: ImageWorkflow) {
+  if (workflow.structuredDetailCards) {
+    const count = normalizeDetailCards(body.detailCards).length;
+    return count >= DETAIL_PAGE_MIN_CARDS && count <= DETAIL_PAGE_MAX_CARDS ? count : workflow.outputsPerTask;
+  }
   if (!workflow.userSelectableOutputCount) return workflow.outputsPerTask;
   const requested = Number(body.outputCount);
   return selectableImageOutputCounts.includes(requested as (typeof selectableImageOutputCounts)[number])
@@ -115,7 +121,12 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
       return NextResponse.json({ code: "INSUFFICIENT_POINTS", message: "积分不足" }, { status: 402 });
     }
     const promptConfig = workflow.key.includes("video") ? await resolvePromptConfig(client, workflow.key, user.id) : undefined;
-    const input = { assetId: assets[0]?.id || null, storageKey: assets[0]?.storage_key || null, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), assetMimeTypes: assets.map((asset) => asset.mime_type), prompt, aspectRatio, duration, resolution, scene, style, outputs: requestedOutputCount(body, workflow), ...(adminExempt ? { billingMode: ADMIN_EXEMPT_BILLING_MODE, quotedPoints: points } : {}), ...(promptConfig ? { promptConfig } : {}), ...(inputExtras?.(body) || {}) };
+    const detailCards = workflow.structuredDetailCards ? normalizeDetailCards(body.detailCards) : [];
+    if (workflow.structuredDetailCards && detailCards.length < DETAIL_PAGE_MIN_CARDS) {
+      await client.query("ROLLBACK");
+      return NextResponse.json({ code: "DETAIL_CARDS_REQUIRED", message: `请至少保留 ${DETAIL_PAGE_MIN_CARDS} 张详情页卡片` }, { status: 400 });
+    }
+    const input = { assetId: assets[0]?.id || null, storageKey: assets[0]?.storage_key || null, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), assetMimeTypes: assets.map((asset) => asset.mime_type), prompt, aspectRatio, duration, resolution, scene, style, outputs: requestedOutputCount(body, workflow), ...(detailCards.length ? { detailCards } : {}), ...(adminExempt ? { billingMode: ADMIN_EXEMPT_BILLING_MODE, quotedPoints: points } : {}), ...(promptConfig ? { promptConfig } : {}), ...(inputExtras?.(body) || {}) };
     await client.query(
       `INSERT INTO generation_tasks (id, user_id, workflow_key, status, points, input_json, idempotency_key, request_id)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,

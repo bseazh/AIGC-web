@@ -346,6 +346,10 @@ function geminiImageResponseAspectRatio(value) {
 async function generateOne(inputUrls, input, index, workflowKey, generationTaskId) {
   const variation = ["正面居中构图", "轻微侧角构图", "留出营销文案空间", "更强调商品材质细节"][index] || "商业构图";
   const detailStage = ["品牌定位与首屏商品展示长图", "核心卖点解析长图", "材质、结构与工艺细节长图", "真实使用场景与效果长图", "规格、服务与购买理由长图"][index] || "商品详情长图";
+  const detailCard = Array.isArray(input.detailCards) ? input.detailCards[index] : null;
+  const detailCardDirection = detailCard
+    ? `本卡片作用：${detailCard.role}。排版文案主标题：${detailCard.title}。辅助文案：${detailCard.subtitle || "无"}。画面导演要求：${detailCard.visualPrompt}。只生成承载该文案的干净商品画面并预留明确排版空间，不要把主标题、辅助文案或任何文字直接画进图片。`
+    : `本卡片阶段：${detailStage}。`;
   const shared = workflowKey === "image-generate" || workflowKey === "commerce-model"
     ? "按提示词生成原创图像，画面干净完整，不添加文字、水印、价格或无关标识。"
     : workflowKey === "hd-enhance"
@@ -391,9 +395,9 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
     : workflowKey === "recreate-product-hero"
     ? `基于参考图的${input.scene}方向生成原创商品首屏主图，风格为${input.style}，${variation}，画幅比例${input.aspectRatio}。`
     : workflowKey === "recreate-detail-page"
-    ? `生成原创商品详情页中的${detailStage}，参考${input.scene}，风格为${input.style}；各张图表达不同卖点，画幅比例${input.aspectRatio}，不生成文字、水印或价格。`
+    ? `生成原创商品详情页卡片。${detailCardDirection}参考${input.scene}，风格为${input.style}；各张图表达不同卖点，画幅比例${input.aspectRatio}，不生成文字、水印或价格。`
     : workflowKey === "product-detail-page"
-    ? `生成商品详情页中的${detailStage}。同一任务生成多张时，各张长图必须围绕不同商品特性表达，不得重复构图或重复卖点；从输入商品中识别可见的材质、结构、用途和适用人群。整体为${input.scene}视觉方向和${input.style}风格，${variation}，竖向长图画幅比例${input.aspectRatio}。为后续商家排版保留清晰、干净的图文留白，但画面内不要生成文字、价格、标签或水印。`
+    ? `生成商品详情页独立卡片。${detailCardDirection}同一任务的各张图必须围绕不同商品特性表达，不得重复构图或重复卖点；从输入商品中识别可见的材质、结构、用途和适用人群。整体为${input.scene}视觉方向和${input.style}风格，${variation}，竖向画幅比例${input.aspectRatio}。画面内不要生成文字、价格、标签或水印。`
     : workflowKey === "scene-image"
     ? `将商品自然融入${input.scene}场景，风格为${input.style}，${variation}，画幅比例${input.aspectRatio}，真实商业摄影，场景光线与商品接触阴影自然，突出商品主体。`
     : `生成${input.scene}环境中的${input.style}电商商品主图，${variation}，画幅比例${input.aspectRatio}，真实摄影，干净背景，柔和自然阴影。`;
@@ -428,6 +432,20 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
     return createGeminiImage(inputUrls, prompt, generationTaskId, index, geminiAspectRatio(input.aspectRatio));
   }
   return createSophnetImage(inputUrls, prompt, generationTaskId, index, input);
+}
+
+async function generateImageOutputs(inputUrls, input, workflowKey, generationTaskId) {
+  const count = Math.max(1, Number(input.outputs) || 1);
+  const outputs = new Array(count);
+  let nextIndex = 0;
+  const run = async () => {
+    while (nextIndex < count) {
+      const index = nextIndex++;
+      outputs[index] = await generateOne(inputUrls, input, index, workflowKey, generationTaskId);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(2, count) }, run));
+  return outputs;
 }
 
 async function generateVideo(inputUrls, input, workflowKey, taskId) {
@@ -629,7 +647,7 @@ const worker = new Worker("generation", async (job) => {
       ? [await generateMix(inputUrls, task.input_json, task)]
       : ["product-ad-video", "recreate-video", "seedance-video", "model-spokesperson-video"].includes(task.workflow_key)
       ? [{ url: await generateVideo(inputUrls, task.input_json, task.workflow_key, task.id), temporaryKey: null }]
-      : await Promise.all(Array.from({ length: task.input_json.outputs || 1 }, (_, index) => generateOne(inputUrls, task.input_json, index, task.workflow_key, task.id)));
+      : await generateImageOutputs(inputUrls, task.input_json, task.workflow_key, task.id);
     temporaryKeys = temporaryOutputs.flatMap((output) => output.temporaryKey ? [output.temporaryKey] : []);
     const savedAssets = [];
     for (const [index, output] of temporaryOutputs.entries()) {
@@ -647,10 +665,11 @@ const worker = new Worker("generation", async (job) => {
       const auditStatus = contentReviewEnabled ? "PENDING_REVIEW" : "READY";
       const generatedAt = new Date();
       const expiresAt = new Date(generatedAt.getTime() + Number(process.env.TEMP_OUTPUT_RETENTION_HOURS || 48) * 60 * 60 * 1000);
+      const detailCard = Array.isArray(task.input_json.detailCards) ? task.input_json.detailCards[index] : null;
       const asset = await pool.query(
         `INSERT INTO assets (owner_id, kind, storage_key, mime_type, byte_size, audit_status, original_name, metadata_json)
          VALUES ($1, 'OUTPUT', $2, $3, $4, $5, $6, $7::jsonb) RETURNING id`,
-        [task.user_id, key, contentType, buffer.length, auditStatus, `${task.workflow_key}-${index + 1}.${extension}`, JSON.stringify({ taskId: task.id, workflowKey: task.workflow_key, provider, model, aiGenerated: true, aiContentLabel: "AI_GENERATED", provenance: { generatedAt: generatedAt.toISOString(), workerId }, library: { saved: false, retention: "TEMPORARY_OUTPUT", expiresAt: expiresAt.toISOString() }, moderation: { status: contentReviewEnabled ? "PENDING_REVIEW" : "BYPASSED" } })],
+        [task.user_id, key, contentType, buffer.length, auditStatus, detailCard?.title ? `${String(detailCard.title).slice(0, 40)}.${extension}` : `${task.workflow_key}-${index + 1}.${extension}`, JSON.stringify({ taskId: task.id, workflowKey: task.workflow_key, ...(detailCard ? { detailPageCard: detailCard } : {}), provider, model, aiGenerated: true, aiContentLabel: "AI_GENERATED", provenance: { generatedAt: generatedAt.toISOString(), workerId }, library: { saved: false, retention: "TEMPORARY_OUTPUT", expiresAt: expiresAt.toISOString() }, moderation: { status: contentReviewEnabled ? "PENDING_REVIEW" : "BYPASSED" } })],
       );
       savedAssets.push({ assetId: asset.rows[0].id, storageKey: key });
     }

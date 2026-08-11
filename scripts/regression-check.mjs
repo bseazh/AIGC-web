@@ -1505,7 +1505,7 @@ const checks = [
   [
     "Image worker no longer falls back to four outputs",
     "scripts/worker.mjs",
-    "task.input_json.outputs || 1",
+    "Number(input.outputs) || 1",
   ],
   [
     "Product scene generation accepts assistant prompt backfill",
@@ -1516,6 +1516,36 @@ const checks = [
     "Model wear accepts assistant prompt backfill",
     "app/create/model-wear/page.tsx",
     "useAssistantPromptReceiver",
+  ],
+  [
+    "Detail page workflows use a dedicated staged studio",
+    "app/create/product-detail/page.tsx",
+    "<DetailPageStudio",
+  ],
+  [
+    "Recreated detail pages use the same structured studio",
+    "app/create/recreate-detail-page/page.tsx",
+    "<DetailPageStudio",
+  ],
+  [
+    "Detail page plans are generated from product vision",
+    "app/api/workflows/detail-page-plan/route.ts",
+    "detail_page_plan",
+  ],
+  [
+    "Detail page card counts are server constrained",
+    "lib/task-creation.ts",
+    "structuredDetailCards",
+  ],
+  [
+    "Detail page cards drive individual worker prompts",
+    "scripts/worker.mjs",
+    "detailCardDirection",
+  ],
+  [
+    "Image generation batches limit provider concurrency",
+    "scripts/worker.mjs",
+    "Math.min(2, count)",
   ],
 ];
 

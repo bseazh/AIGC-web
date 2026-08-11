@@ -20,6 +20,7 @@ export type GeneratedTaskResult = {
   expiredOutputCount?: number;
   originalOutputCount?: number;
   workflowKey?: string;
+  inputSummary?: { detailCards?: unknown; [key: string]: unknown };
 };
 
 export async function loadProjectTaskResult(projectId: string) {
