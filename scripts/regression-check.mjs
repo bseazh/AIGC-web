@@ -373,7 +373,7 @@ const checks = [
   [
     "Worker routes recreate references to Nano Banana image generation with fallback",
     "scripts/worker.mjs",
-    "createGeminiImageWithSophnetFallback(inputUrls, prompt, generationTaskId, index, input.aspectRatio, input)",
+    "createGeminiImageWithSophnetFallback(inputUrls, prompt, generationTaskId, index, input.aspectRatio, input, referencePlan)",
   ],
   [
     "Gemini image generation falls back to SophNet when configured",
@@ -438,22 +438,38 @@ const checks = [
   [
     "Image generation treats the first reference as the subject source of truth",
     "scripts/worker.mjs",
-    '第一张图是商品身份源图',
-    '商品身份锁定优先级最高',
+    '商品/主体身份源图',
+    '商品/主体身份锁定优先级最高',
     '双圆形旋转刀头不能变成长柄往复式刀头或三头剃须刀',
   ],
   [
     "Gemini labels inline images as identity references",
     "scripts/worker.mjs",
     'const referenceParts = imageParts.flatMap',
-    '参考图 1（主体身份源图）',
+    'referencePlan[index]?.label',
     '...referenceParts',
   ],
   [
     "Image references outrank scene directions in generated prompts",
     "scripts/worker.mjs",
-    '参考图商品身份锁定 > 用户对场景与表达的明确要求',
+    '参考图角色与不可变内容 > 用户对场景与表达的明确要求',
     '用户文字默认只控制人物、动作、场景、构图、镜头和光线',
+  ],
+  [
+    "Every image workflow assigns explicit reference roles",
+    "scripts/worker.mjs",
+    'function imageReferencePlan',
+    '模特身份源图',
+    '穿戴商品源图',
+    '待处理完整源图',
+    '商品抠图源图',
+    '商品/主体身份源图',
+  ],
+  [
+    "Every image provider logs reference roles",
+    "scripts/worker.mjs",
+    'referenceRoles: referencePlan.map',
+    'referenceRoles: referencePlan.slice',
   ],
   [
     "Image generation submits a detailed production brief",

@@ -144,7 +144,7 @@ async function sophnet(path, init = {}, audit = {}) {
   }
 }
 
-async function createSophnetImage(inputUrls, prompt, generationTaskId, outputIndex, input = {}) {
+async function createSophnetImage(inputUrls, prompt, generationTaskId, outputIndex, input = {}, referencePlan = []) {
   const model = process.env.AI_MODEL || "Doubao-Seedream-5.0-pro";
   const size = input.imageResolution === "2K" ? "2K" : "1K";
   const payload = await sophnet("", {
@@ -156,7 +156,7 @@ async function createSophnetImage(inputUrls, prompt, generationTaskId, outputInd
       watermark: false,
       ...(inputUrls.length ? { image: inputUrls } : {}),
     }),
-  }, { taskId: generationTaskId, operation: "generate_image", request: { outputIndex, inputCount: inputUrls.length, promptLength: prompt.length, size } });
+  }, { taskId: generationTaskId, operation: "generate_image", request: { outputIndex, inputCount: inputUrls.length, referenceRoles: referencePlan.map((item) => item.label), promptLength: prompt.length, size } });
   const url = payload?.data?.[0]?.url;
   if (!url) throw new Error("SophNet Seedream did not return an image URL");
   return { url, temporaryKey: null, provider: "sophnet", model: payload?.model || model };
@@ -181,7 +181,7 @@ function geminiImageFailureMessage(status, payload, parsed, attempts) {
   return `Gemini ${status}: 未返回图片（${parsed.finishReason}，已尝试 ${attempts} 次）${detail}`;
 }
 
-async function createGeminiImage(inputUrls, prompt, generationTaskId, outputIndex, aspectRatio = "1:1") {
+async function createGeminiImage(inputUrls, prompt, generationTaskId, outputIndex, aspectRatio = "1:1", referencePlan = []) {
   const apiKey = process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.NANO_BANANA_API_KEY;
   const model = process.env.GOOGLE_IMAGE_MODEL || "gemini-2.5-flash-image";
   if (!apiKey) throw new Error("GOOGLE_AI_API_KEY is required for Nano Banana image generation");
@@ -202,9 +202,7 @@ async function createGeminiImage(inputUrls, prompt, generationTaskId, outputInde
   }
   const referenceParts = imageParts.flatMap((imagePart, index) => [
     {
-      text: index === 0
-        ? "参考图 1（主体身份源图）：只提取并保留图中真实商品本体。商品的外形、头部结构、机身长宽比例、部件数量、颜色、材质和标识位置不可改变；原广告背景和广告文案不属于商品本体。"
-        : `参考图 ${index + 1}（补充视角）：只用于补充同一主体的结构、材质或视角，不得引入另一个款式。`,
+      text: `参考图 ${index + 1}（${referencePlan[index]?.label || "内容参考图"}）：${referencePlan[index]?.cue || "必须在最终图片中落实这张参考图提供的主体、结构、材质或视觉信息，不得忽略。"}`,
     },
     imagePart,
   ]);
@@ -239,7 +237,7 @@ async function createGeminiImage(inputUrls, prompt, generationTaskId, outputInde
     const payload = await response.json().catch(() => null);
     const parsed = geminiImageResponse(payload);
     const errorCode = !response.ok ? "GEMINI_IMAGE_HTTP_ERROR" : !parsed.inlineData?.data ? "GEMINI_EMPTY_IMAGE_RESPONSE" : null;
-    await logProviderCall(generationTaskId, "google-gemini", "generate_image", { model, outputIndex, inputCount: imageParts.length, promptLength: prompt.length, aspectRatio, responseAspectRatio, attempt, responseModalities: ["IMAGE"] }, response.status, payload, errorCode, payload?.responseId || response.headers.get("x-request-id"));
+    await logProviderCall(generationTaskId, "google-gemini", "generate_image", { model, outputIndex, inputCount: imageParts.length, referenceRoles: referencePlan.slice(0, imageParts.length).map((item) => item.label), promptLength: prompt.length, aspectRatio, responseAspectRatio, attempt, responseModalities: ["IMAGE"] }, response.status, payload, errorCode, payload?.responseId || response.headers.get("x-request-id"));
     if (response.ok && parsed.inlineData?.data) {
       const buffer = Buffer.from(parsed.inlineData.data, "base64");
       const contentType = parsed.inlineData.mimeType || parsed.inlineData.mime_type || "image/png";
@@ -256,15 +254,15 @@ async function createGeminiImage(inputUrls, prompt, generationTaskId, outputInde
   throw new Error(lastFailure || "Gemini image generation failed");
 }
 
-async function createGeminiImageWithSophnetFallback(inputUrls, prompt, generationTaskId, outputIndex, aspectRatio = "1:1", sophnetInput = {}) {
+async function createGeminiImageWithSophnetFallback(inputUrls, prompt, generationTaskId, outputIndex, aspectRatio = "1:1", sophnetInput = {}, referencePlan = []) {
   try {
-    return await createGeminiImage(inputUrls, prompt, generationTaskId, outputIndex, aspectRatio);
+    return await createGeminiImage(inputUrls, prompt, generationTaskId, outputIndex, aspectRatio, referencePlan);
   } catch (error) {
     if (!sophnetImageConfigured()) throw error;
     const geminiMessage = error instanceof Error ? error.message : "Gemini image generation failed";
     log("warn", "gemini_image_fallback_to_sophnet", { taskId: generationTaskId, outputIndex, reason: geminiMessage.slice(0, 200) });
     try {
-      return await createSophnetImage(inputUrls, prompt, generationTaskId, outputIndex, sophnetInput);
+      return await createSophnetImage(inputUrls, prompt, generationTaskId, outputIndex, sophnetInput, referencePlan);
     } catch (fallbackError) {
       const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : "SophNet fallback failed";
       throw new Error(`${geminiMessage}; SophNet fallback failed: ${fallbackMessage}`);
@@ -380,6 +378,74 @@ function geminiImageResponseAspectRatio(value) {
   })[value] || "ASPECT_RATIO_ONE_BY_ONE";
 }
 
+function imageReferencePlan(workflowKey, count, input = {}) {
+  return Array.from({ length: count }, (_, index) => {
+    if (workflowKey === "model-wear") {
+      return index === 0
+        ? { label: "模特身份源图", cue: "锁定这位模特的脸型、五官关系、发型、肤色、体型和人体比例；最终图必须保持同一人物身份，不得换脸或换人。" }
+        : { label: `穿戴商品源图 ${index}`, cue: "锁定这件服装或商品的品类、版型、结构、颜色、图案、材质和细节；将它自然穿戴到参考图 1 的模特身上，不得换款。" };
+    }
+    if (workflowKey === "commerce-model") {
+      return index === 0
+        ? { label: "模特身份参考图", cue: "以图中人物作为身份和外形参考，保留脸型、五官关系、发型、肤色、年龄感与体型；用户要求只改变造型、动作、场景和摄影表达。" }
+        : { label: `模特补充参考图 ${index + 1}`, cue: "补充同一人物的角度、体态或造型信息，不得生成另一个人物身份。" };
+    }
+    if (["hd-enhance", "resize-image"].includes(workflowKey)) {
+      return { label: "待处理完整源图", cue: "整张图片都是不可随意重绘的源内容；保留主体身份、构图、文字、颜色、部件和空间关系，只执行当前工作流指定的增强或扩图操作。" };
+    }
+    if (workflowKey === "white-background") {
+      return { label: "商品抠图源图", cue: "精确保留图中商品本体的轮廓、结构、颜色、材质、部件与标识，只移除原背景并生成规范白底和自然轻投影。" };
+    }
+    if (workflowKey === "recreate-reference-image") {
+      const subject = input.scene === "人物多视图" ? "人物身份" : input.scene === "场景多视图" ? "场景空间" : "商品身份";
+      return index === 0
+        ? { label: `${subject}源图`, cue: `把图中${subject}作为多视图参考板的唯一核心来源，保留可见身份、结构、比例、材质和空间关系。` }
+        : { label: `${subject}补充图 ${index + 1}`, cue: `只补充同一${subject}的其他角度和细节，不得引入不同主体。` };
+    }
+    return index === 0
+      ? { label: "商品/主体身份源图", cue: "锁定图中真实商品或核心主体的几何轮廓、比例、部件类型与数量、颜色、材质、Logo 和标识位置；最终图必须是同一款主体，不得替换成同品类常见款。" }
+      : { label: `商品/主体补充参考图 ${index + 1}`, cue: "补充同一商品或核心主体的视角、背面、材质、结构或配件关系；不得覆盖参考图 1 的身份，也不得引入另一个款式。" };
+  });
+}
+
+function imageReferenceDirection(workflowKey, referencePlan) {
+  if (!referencePlan.length) return "未提供参考图：严格依据用户描述建立唯一、清晰、结构合理的主体，不自行添加会改变主体身份或核心用途的内容。";
+  const numberedRoles = referencePlan.map((item, index) => `参考图 ${index + 1}【${item.label}】：${item.cue}`).join("\n");
+  if (workflowKey === "model-wear") {
+    return [
+      "任务模式：这是多参考图穿搭合成。每张图角色不同，所有参考图都必须被使用。",
+      numberedRoles,
+      "合成规则：人物身份只来自模特源图，服装/商品身份只来自对应商品源图；不得把模特原穿搭当目标商品，也不得用商品图中的模特替换目标人物。最终穿戴关系、遮挡、褶皱、透视和接触阴影必须自然。",
+    ].join("\n");
+  }
+  if (["hd-enhance", "resize-image", "white-background"].includes(workflowKey)) {
+    return [
+      "任务模式：这是严格的源图处理任务，不是从零文生图。参考图本身就是待处理内容，必须实际参与生成。",
+      numberedRoles,
+      "除当前工作流明确要求改变的部分外，其余像素语义和主体身份均应保持；禁止借机换商品、换人物、重做构图或添加新内容。",
+    ].join("\n");
+  }
+  if (workflowKey === "commerce-model") {
+    return [
+      "任务模式：这是带人物参考的模特再创作任务，不是随机生成人物。",
+      numberedRoles,
+      "参考人物身份约束优先于通用审美模板；不得生成通用网红脸或与参考图无关的人物。场景、服装和动作可按用户要求调整。",
+    ].join("\n");
+  }
+  if (workflowKey === "recreate-reference-image") {
+    return ["任务模式：所有输入图都必须作为多视图参考板的依据。", numberedRoles, "先读取参考图，再生成同一主体或同一场景的互补视角；禁止只根据文字猜测。"].join("\n");
+  }
+  return [
+    "任务模式：这是严格的参考图商品/主体再创作、换景或合成任务，不是忽略图片后从零文生图。每张参考图都必须在最终图片中承担明确作用。",
+    numberedRoles,
+    "商品/主体身份锁定优先级最高：先逐项观察并锁定整体几何轮廓、长宽厚比例、顶部/正面/侧面结构、部件数量与相对位置、接口/按键位置、颜色、材质、装饰细节、Logo 与标识位置。最终主体必须让人一眼认出就是参考图中的同一款，而不只是同品类。",
+    "不得重画成常见品类原型、相似款或另一款主体；禁止改变头部类型、机身形态、部件数量和开合结构。例如双圆形旋转刀头不能变成长柄往复式刀头或三头剃须刀。",
+    "如果源图同时出现主设备、保护盖、包装或配件，先区分各对象，不得把保护盖融合成机身、把两个对象拼成新商品，也不得凭空增加部件。",
+    "用户文字默认只控制人物、动作、场景、构图、镜头和光线，不得覆盖参考图中的主体身份。源图广告背景和外围宣传文案可以移除；主体本体的结构、按键、Logo 与标识位置应保留。",
+    "不要把源图贴入画面或做成画中画。应保持主体身份不变，将同一主体真实地重新拍摄或合成到目标场景，并匹配透视、接触阴影、反射和环境色。",
+  ].join("\n");
+}
+
 async function generateOne(inputUrls, input, index, workflowKey, generationTaskId) {
   const variation = ["正面居中构图", "轻微侧角构图", "留出营销文案空间", "更强调商品材质细节"][index] || "商业构图";
   const detailStage = ["品牌定位与首屏商品展示长图", "核心卖点解析长图", "材质、结构与工艺细节长图", "真实使用场景与效果长图", "规格、服务与购买理由长图"][index] || "商品详情长图";
@@ -387,17 +453,8 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
   const detailCardDirection = detailCard
     ? `本卡片作用：${detailCard.role}。排版文案主标题：${detailCard.title}。辅助文案：${detailCard.subtitle || "无"}。画面导演要求：${detailCard.visualPrompt}。只生成承载该文案的干净商品画面并预留明确排版空间，不要把主标题、辅助文案或任何文字直接画进图片。`
     : `本卡片阶段：${detailStage}。`;
-  const referenceDirection = inputUrls.length
-    ? [
-        `任务模式：这是严格的参考图商品换景/合成任务，不是从零文生图。已提供 ${inputUrls.length} 张输入图；第一张图是商品身份源图，后续图片只补充视角、材质和结构。`,
-        "商品身份锁定优先级最高：先逐项观察并锁定真实商品的整体几何轮廓、长宽厚比例、顶部/正面/侧面结构、部件数量与相对位置、接口/按键位置、颜色、表面材质、装饰细节、Logo 与标识位置。生成图中的商品必须让人一眼认出就是参考图中的同一款，而不只是同品类商品。",
-        "必须把参考图中的实际商品本体作为不可变资产放入新场景，可以改变商品的拍摄角度、尺寸和环境光，但不得重画成常见品类原型、相似款或另一款商品。尤其禁止改变头部类型、机身形态、部件数量和开合结构，例如双圆形旋转刀头不能变成长柄往复式刀头或三头剃须刀。",
-        "如果源图同时出现主设备、保护盖、包装或配件，先区分各对象，不得把保护盖融合成机身、把两个对象拼成新商品，也不得凭空添加源图不存在的部件。只有用户明确要求展示配件时才加入配件。",
-        "用户文字默认只控制人物、动作、场景、构图、镜头和光线，不得覆盖商品身份。只有用户明确说要改造商品某个结构时，才允许修改对应结构；模糊的品类描述不能推翻参考图可见事实。",
-        "源图中的广告背景、广告排版和外围宣传文案不是商品结构，应移除后重新布景；商品本体上真实存在的 Logo、按键和标识位置应保留，不要杜撰新的文字。",
-        "不要把源图直接贴进画面、做成画中画或复制原广告版式。应保持商品身份不变，将同一商品真实地重新拍摄或合成到目标场景，并匹配新场景的透视、接触阴影、反射和环境色。",
-      ].join("\n")
-    : "未提供参考图：严格依据用户描述建立唯一、清晰、结构合理的主体，不自行添加会改变商品品类或核心用途的部件。";
+  const referencePlan = imageReferencePlan(workflowKey, inputUrls.length, input);
+  const referenceDirection = imageReferenceDirection(workflowKey, referencePlan);
   const productionDirection = [
     "成片质量：输出一张完整、可直接使用的高质量商业图像，不是草图、分镜、拼贴、九宫格、设计说明或带边框的样机。",
     "主体表现：主体边缘完整清晰，比例可信，关键结构可辨认；材质高光、粗糙度、反射和纹理符合真实物理属性，避免塑料感、融化、变形和重复部件。",
@@ -459,8 +516,8 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
     ? `根据商品与用户描述自动导演真实使用场景，${variation}，画幅比例${input.aspectRatio}，场景光线与商品接触阴影自然，突出商品主体。`
     : `生成电商商品主图，${variation}，画幅比例${input.aspectRatio}，真实摄影，干净背景，柔和自然阴影。`;
   const prompt = [
-    `任务：根据以下完整导演指令生成最终图片。执行优先级为：${inputUrls.length ? "参考图商品身份锁定 > 用户对场景与表达的明确要求 > 工作流任务要求 > 自动补充的质量规则" : "用户明确要求 > 工作流任务要求 > 自动补充的质量规则"}；发生冲突时服从优先级更高的要求。`,
-    workflowKey === "recreate-reference-image" ? "" : referenceDirection,
+    `任务：根据以下完整导演指令生成最终图片。执行优先级为：${inputUrls.length ? "参考图角色与不可变内容 > 用户对场景与表达的明确要求 > 工作流任务要求 > 自动补充的质量规则" : "用户明确要求 > 工作流任务要求 > 自动补充的质量规则"}；发生冲突时服从优先级更高的要求。`,
+    referenceDirection,
     workflowKey === "recreate-reference-image" ? "" : shared,
     workflowKey === "recreate-reference-image" || !input.internalPrompt ? "" : `工作流内置策略：${input.internalPrompt}`,
     `工作流任务要求：${taskPrompt}`,
@@ -469,30 +526,30 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
   ].filter(Boolean).join("\n");
   if (workflowKey === "recreate-reference-image") {
     if (geminiImageConfigured()) {
-      return createGeminiImageWithSophnetFallback(inputUrls, prompt, generationTaskId, index, input.aspectRatio, input);
+      return createGeminiImageWithSophnetFallback(inputUrls, prompt, generationTaskId, index, input.aspectRatio, input, referencePlan);
     }
-    return createSophnetImage(inputUrls, prompt, generationTaskId, index, input);
+    return createSophnetImage(inputUrls, prompt, generationTaskId, index, input, referencePlan);
   }
   if (workflowKey === "image-generate" || workflowKey === "commerce-model") {
     if (input.imageProvider === "sophnet") {
       if (!sophnetImageConfigured()) throw new Error("SophNet image generation is not configured");
-      return createSophnetImage(inputUrls, prompt, generationTaskId, index, input);
+      return createSophnetImage(inputUrls, prompt, generationTaskId, index, input, referencePlan);
     }
     if (!geminiImageConfigured()) throw new Error("Gemini image generation is not configured");
-    return createGeminiImage(inputUrls, prompt, generationTaskId, index, geminiAspectRatio(input.aspectRatio));
+    return createGeminiImage(inputUrls, prompt, generationTaskId, index, geminiAspectRatio(input.aspectRatio), referencePlan);
   }
   if (input.imageProvider === "gemini") {
     if (!geminiImageConfigured()) throw new Error("Gemini image generation is not configured");
-    return createGeminiImage(inputUrls, prompt, generationTaskId, index, geminiAspectRatio(input.aspectRatio));
+    return createGeminiImage(inputUrls, prompt, generationTaskId, index, geminiAspectRatio(input.aspectRatio), referencePlan);
   }
   if (input.imageProvider === "sophnet") {
     if (!sophnetImageConfigured()) throw new Error("SophNet image generation is not configured");
-    return createSophnetImage(inputUrls, prompt, generationTaskId, index, input);
+    return createSophnetImage(inputUrls, prompt, generationTaskId, index, input, referencePlan);
   }
   if (!sophnetImageConfigured() && geminiImageConfigured()) {
-    return createGeminiImage(inputUrls, prompt, generationTaskId, index, geminiAspectRatio(input.aspectRatio));
+    return createGeminiImage(inputUrls, prompt, generationTaskId, index, geminiAspectRatio(input.aspectRatio), referencePlan);
   }
-  return createSophnetImage(inputUrls, prompt, generationTaskId, index, input);
+  return createSophnetImage(inputUrls, prompt, generationTaskId, index, input, referencePlan);
 }
 
 async function generateImageOutputs(inputUrls, input, workflowKey, generationTaskId) {
