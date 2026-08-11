@@ -1,10 +1,8 @@
 export const dynamic = "force-dynamic";
 
-import { ImageWorkflowPage } from "@/app/components/image-workflow-page";
 import { ProjectRequiredGate } from "@/app/components/project-required-gate";
-import { productHeroCases } from "@/lib/image-workflow-cases";
-import { heroImageWorkflow } from "@/lib/product-config";
+import { ProductHeroWorkspace } from "@/app/features/image-creation/product-hero/product-hero-workspace";
 
 export default function ProductHeroPage() {
-  return <ProjectRequiredGate workflowKey="product-hero-image"><ImageWorkflowPage title="商品主图" description="默认生成 1 张，可自定义生成数量，消耗 10 积分" submitUrl="/api/tasks/" scenes={heroImageWorkflow.scenes} styles={heroImageWorkflow.styles} sourceTitle="上传商品图片" sourceHint="JPG、PNG、WebP，最大 10MB" submitLabel="生成商品主图" nextStepHref="/create/product-detail" nextStepLabel="用此图生成详情页" cases={productHeroCases} productDescriptionLabel="商品信息" /></ProjectRequiredGate>;
+  return <ProjectRequiredGate workflowKey="product-hero-image"><ProductHeroWorkspace /></ProjectRequiredGate>;
 }

@@ -43,8 +43,6 @@ export async function POST(request: NextRequest) {
 
   const imageUrl = await createSignedObjectUrl(asset.storage_key, "GET", 900);
   const productDescription = clean(body?.productDescription, 900);
-  const scene = clean(body?.scene, 60);
-  const style = clean(body?.style, 60);
   const mode = body?.mode === "recreate" ? "recreate" : "original";
   const prompt = [
     "你是资深电商详情页策划、文案和视觉导演。先识别商品图片中的品类、结构、材质、可见卖点和适用人群，再设计详情页。",
@@ -55,7 +53,7 @@ export async function POST(request: NextRequest) {
     "卡片应覆盖首屏价值、用户痛点或需求、核心卖点、结构材质或不同角度、真实使用场景、规格或适配信息、信任收口。不要虚构无法从图片或商品描述确认的参数和认证。",
     mode === "recreate" ? "这是复刻商详任务：只参考用户指定的模块节奏与商业方向，必须为当前商品创作原创画面和文案。" : "这是原创商品详情页任务。",
     `用户商品信息：${productDescription || "未补充，请以图片识别为主"}`,
-    `视觉方向：${scene || "智能推荐"}；风格：${style || "智能推荐"}`,
+    "视觉场景、风格和构图由商品识别结果与用户文字共同决定，不使用预设枚举。",
   ].join("\n");
   const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
@@ -72,7 +70,7 @@ export async function POST(request: NextRequest) {
   await db.query(
     `INSERT INTO provider_call_logs (provider, operation, request_json, response_status, response_json, error_code, provider_request_id)
      VALUES ('sophnet-chat', 'detail_page_plan', $1::jsonb, $2, $3::jsonb, $4, $5)`,
-    [JSON.stringify({ model, mode, assetId, scene, style }), response.status, JSON.stringify(payload || {}), response.ok ? null : "DETAIL_PLAN_LLM_FAILED", payload?.id || response.headers.get("x-request-id") || randomUUID()],
+    [JSON.stringify({ model, mode, assetId }), response.status, JSON.stringify(payload || {}), response.ok ? null : "DETAIL_PLAN_LLM_FAILED", payload?.id || response.headers.get("x-request-id") || randomUUID()],
   );
   if (!response.ok) return NextResponse.json({ code: "LLM_FAILED", message: payload?.error?.message || payload?.message || "详情页方案生成失败" }, { status: 502 });
   const raw = payload?.choices?.[0]?.message?.content;

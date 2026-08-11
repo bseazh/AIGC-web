@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
 import { GenerationProgress } from "@/app/components/generation-progress";
+import { imageRequest, pollImageTask, uploadImageFile } from "@/app/features/image-creation/shared/image-task-api";
 import { DETAIL_PAGE_MAX_CARDS, DETAIL_PAGE_MIN_CARDS, normalizeDetailCards, normalizeDetailPlans, type DetailPageCard, type DetailPagePlan } from "@/lib/detail-page-plans";
 import type { ImageWorkflowCase } from "@/lib/image-workflow-cases";
 
@@ -18,8 +19,6 @@ type Props = {
   title: string;
   description: string;
   submitUrl: string;
-  scenes: readonly string[];
-  styles: readonly string[];
   cases: readonly ImageWorkflowCase[];
   sourceTitle: string;
   sourceHint: string;
@@ -46,8 +45,6 @@ export function DetailPageStudio(props: Props) {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [assetsLoading, setAssetsLoading] = useState(false);
   const [productDescription, setProductDescription] = useState("");
-  const [scene, setScene] = useState(props.scenes[0]);
-  const [style, setStyle] = useState(props.styles[0]);
   const [plans, setPlans] = useState<DetailPagePlan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [cards, setCards] = useState<DetailPageCard[]>([]);
@@ -87,8 +84,6 @@ export function DetailPageStudio(props: Props) {
         const asset = availableAssets.find((item: Asset) => item.id === assetId) || null;
         if (asset) { setSelectedAsset(asset); setResolvedAssetId(asset.id); setPreview(asset.url); }
         if (typeof saved.productDescription === "string") setProductDescription(saved.productDescription.slice(0, 900));
-        if (typeof saved.scene === "string" && props.scenes.includes(saved.scene)) setScene(saved.scene);
-        if (typeof saved.style === "string" && props.styles.includes(saved.style)) setStyle(saved.style);
         const restoredPlans = normalizeDetailPlans(saved.plans);
         const restoredCards = normalizeDetailCards(saved.cards);
         setPlans(restoredPlans);
@@ -100,7 +95,7 @@ export function DetailPageStudio(props: Props) {
       }
       hydrated.current = true;
     }).catch(() => { hydrated.current = true; });
-  }, [account, projectId, props.scenes, props.styles]);
+  }, [account, projectId]);
 
   useEffect(() => watchProjectTaskResult(projectId, (restored) => {
     setTask(restored);
@@ -136,19 +131,12 @@ export function DetailPageStudio(props: Props) {
           id: projectId,
           workflowKey: props.workflowKey,
           title: projectTitle,
-          payload: { step: stage, detailPageStudio: { assetId: resolvedAssetId || selectedAsset?.id || "", productDescription, scene, style, plans, selectedPlanId, cards, productUnderstanding } },
+          payload: { step: stage, detailPageStudio: { assetId: resolvedAssetId || selectedAsset?.id || "", productDescription, plans, selectedPlanId, cards, productUnderstanding } },
         }),
       }).catch(() => undefined);
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [cards, plans, productDescription, productUnderstanding, projectId, projectTitle, props.workflowKey, resolvedAssetId, scene, selectedAsset?.id, selectedPlanId, stage, style]);
-
-  const request = async (url: string, init: RequestInit) => {
-    const response = await fetch(url, init);
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.message || body.code || "请求失败");
-    return body;
-  };
+  }, [cards, plans, productDescription, productUnderstanding, projectId, projectTitle, props.workflowKey, resolvedAssetId, selectedAsset?.id, selectedPlanId, stage]);
 
   const chooseFile = (nextFile?: File) => {
     if (!nextFile) return;
@@ -163,18 +151,15 @@ export function DetailPageStudio(props: Props) {
     if (resolvedAssetId) return resolvedAssetId;
     if (selectedAsset) { setResolvedAssetId(selectedAsset.id); return selectedAsset.id; }
     if (!file) throw new Error("请先上传商品图片");
-    const presign = await request("/api/uploads/presign/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: file.name, mimeType: file.type, byteSize: file.size }) });
-    const upload = await fetch(presign.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
-    if (!upload.ok) throw new Error(`素材上传失败 (${upload.status})`);
-    await request("/api/uploads/confirm/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assetId: presign.assetId }) });
-    setResolvedAssetId(presign.assetId);
-    return presign.assetId as string;
+    const assetId = await uploadImageFile(file);
+    setResolvedAssetId(assetId);
+    return assetId;
   };
 
   const openLibrary = async () => {
     setLibraryOpen(true); setAssetsLoading(true); setError("");
     try {
-      const body = await request("/api/assets/?kind=ALL", { cache: "no-store" });
+      const body = await imageRequest<{ assets?: Asset[] }>("/api/assets/?kind=ALL", { cache: "no-store" });
       setAssets((body.assets || []).filter((asset: Asset) => asset.mimeType.startsWith("image/")));
     } catch { setError("素材库加载失败，请稍后重试"); }
     finally { setAssetsLoading(false); }
@@ -192,10 +177,10 @@ export function DetailPageStudio(props: Props) {
     try {
       const assetId = await uploadSource();
       setPhase("planning");
-      const body = await request("/api/workflows/detail-page-plan/", {
+      const body = await imageRequest<{ plans: unknown; productUnderstanding?: string }>("/api/workflows/detail-page-plan/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assetId, productDescription, scene, style, mode: props.workflowKey === "recreate-detail-page" ? "recreate" : "original" }),
+        body: JSON.stringify({ assetId, productDescription, mode: props.workflowKey === "recreate-detail-page" ? "recreate" : "original" }),
       });
       const nextPlans = normalizeDetailPlans(body.plans);
       if (nextPlans.length !== 3) throw new Error("方案结构不完整，请重新生成");
@@ -219,39 +204,24 @@ export function DetailPageStudio(props: Props) {
     return next;
   });
 
-  const pollTask = async (taskId: string) => {
-    const deadline = Date.now() + 10 * 60 * 1000;
-    while (Date.now() < deadline) {
-      const response = await fetch(`/api/tasks/${taskId}/`, { cache: "no-store" });
-      const current = await response.json();
-      if (!response.ok) throw new Error(current.message || "任务查询失败");
-      setTask(current);
-      if (current.status === "SUCCEEDED") { setPhase("succeeded"); setStage("results"); return; }
-      if (["FAILED", "REJECTED", "CANCELED"].includes(current.status)) throw new Error(current.errorCode || "生成失败，积分已退回");
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-    }
-    throw new Error("任务等待超时，请稍后在任务中心查看");
-  };
-
   const submit = async () => {
     const normalized = normalizeDetailCards(cards);
     if (normalized.length < DETAIL_PAGE_MIN_CARDS || busy) return setError(`请至少保留 ${DETAIL_PAGE_MIN_CARDS} 张内容完整的卡片`);
     setError(""); setTask(null); setPhase("uploading");
     try {
       const assetId = await uploadSource();
-      const body = await request(props.submitUrl, {
+      const body = await imageRequest<{ taskId: string }>(props.submitUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({ assetId, prompt: productDescription, productDescription, aspectRatio: "3:4", scene, style, detailCards: normalized, draftId: projectId }),
+        body: JSON.stringify({ assetId, prompt: productDescription, productDescription, aspectRatio: "3:4", detailCards: normalized, draftId: projectId }),
       });
       setCards(normalized); setPhase("generating"); setStage("results");
-      await pollTask(body.taskId);
+      await pollImageTask(body.taskId, setTask, 10 * 60 * 1000);
+      setPhase("succeeded"); setStage("results");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "生成失败"); setPhase("failed"); }
   };
 
   const applyCase = (item: ImageWorkflowCase) => {
-    if (item.scene && props.scenes.includes(item.scene)) setScene(item.scene);
-    if (item.style && props.styles.includes(item.style)) setStyle(item.style);
     if (item.productDescription) setProductDescription(item.productDescription.slice(0, 900));
   };
 
@@ -277,7 +247,6 @@ export function DetailPageStudio(props: Props) {
           {!preview ? <><div className="yh-upload-tabs"><span className="active"><Upload size={14} />本地上传</span><button type="button" onClick={openLibrary}><FolderOpen size={14} />资产库</button></div><label className="yh-upload-drop compact"><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => chooseFile(event.target.files?.[0])} /><span><Upload size={22} /></span><strong>{props.sourceTitle}</strong><small>{props.sourceHint}</small></label></> : <div className="detail-source-preview"><img src={preview} alt="商品素材" /><button type="button" aria-label="更换商品图片" onClick={() => { setFile(null); setSelectedAsset(null); setResolvedAssetId(""); setPreview(""); setPlans([]); setCards([]); setStage("brief"); }}><X size={14} /></button></div>}
         </section>
         <label className="yh-field wide">{props.productDescriptionLabel}<textarea value={productDescription} onChange={(event) => setProductDescription(event.target.value)} maxLength={900} placeholder={props.productDescriptionPlaceholder} /><small>{productDescription.length}/900</small></label>
-        <div className="yh-field-grid"><label className="yh-field">视觉方向<select value={scene} onChange={(event) => setScene(event.target.value)}>{props.scenes.map((item) => <option key={item}>{item}</option>)}</select></label><label className="yh-field">视觉风格<select value={style} onChange={(event) => setStyle(event.target.value)}>{props.styles.map((item) => <option key={item}>{item}</option>)}</select></label></div>
         <button className="detail-primary-action" type="button" disabled={!preview || busy} onClick={generatePlans}>{phase === "uploading" || phase === "planning" ? <LoaderCircle className="generation-spinner" size={16} /> : <Wand2 size={16} />}{phase === "uploading" ? "正在上传商品" : phase === "planning" ? "正在策划三套方案" : plans.length ? "重新生成方案" : "生成 A / B / C 方案"}</button>
         <p className="yh-credit"><Sparkles size={14} />{account.user.isAdministrator ? `管理员免积分 · 报价 ${props.pointsPerTask} 积分` : `整套生成预估 ${props.pointsPerTask} 积分`}</p>
         {error && <p className="creator-error" role="alert">{error}</p>}

@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { GenerationProgress } from "@/app/components/generation-progress";
 import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
-import { ImageOutputCountControl, type ImageOutputCount } from "@/app/components/image-output-count-control";
+import { ImageOutputCountControl, type ImageOutputCount } from "@/app/features/image-creation/shared/image-output-count-control";
+import { imageRequest, pollImageTask, uploadImageFile } from "@/app/features/image-creation/shared/image-task-api";
 import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import type { ImageWorkflowCase } from "@/lib/image-workflow-cases";
 import { appendProjectId } from "@/lib/project-workflows";
@@ -14,8 +15,6 @@ type Props = {
   title: string;
   description: string;
   submitUrl: string;
-  scenes: readonly string[];
-  styles: readonly string[];
   sourceTitle: string;
   sourceHint: string;
   submitLabel: string;
@@ -23,8 +22,6 @@ type Props = {
   outputCount?: ImageOutputCount;
   showAspectRatio?: boolean;
   defaultRatio?: string;
-  sceneLabel?: string;
-  styleLabel?: string;
   nextStepHref?: string;
   nextStepLabel?: string;
   requireSource?: boolean;
@@ -44,8 +41,6 @@ export function ImageWorkflowPage({
   title,
   description,
   submitUrl,
-  scenes,
-  styles,
   sourceTitle,
   sourceHint,
   submitLabel,
@@ -53,8 +48,6 @@ export function ImageWorkflowPage({
   outputCount: initialOutputCount = 1,
   showAspectRatio = true,
   defaultRatio = "1:1",
-  sceneLabel = "使用场景",
-  styleLabel = "视觉风格",
   nextStepHref,
   nextStepLabel,
   requireSource = true,
@@ -73,8 +66,6 @@ export function ImageWorkflowPage({
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [assetsLoading, setAssetsLoading] = useState(false);
   const [ratio, setRatio] = useState(defaultRatio);
-  const [scene, setScene] = useState(scenes[0]);
-  const [style, setStyle] = useState(styles[0]);
   const [prompt, setPrompt] = useState("");
   const [productDescription, setProductDescription] = useState("");
   const [outputCount, setOutputCount] = useState<ImageOutputCount>(initialOutputCount);
@@ -99,13 +90,9 @@ export function ImageWorkflowPage({
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const presetScene = params.get("scene");
-    const presetStyle = params.get("style");
     const presetPrompt = params.get("prompt");
-    if (presetScene && scenes.includes(presetScene)) setScene(presetScene);
-    if (presetStyle && styles.includes(presetStyle)) setStyle(presetStyle);
     if (presetPrompt) setPrompt(presetPrompt.slice(0, 1200));
-  }, [scenes, styles]);
+  }, []);
 
   useEffect(() => () => {
     if (preview.startsWith("blob:")) URL.revokeObjectURL(preview);
@@ -126,13 +113,6 @@ export function ImageWorkflowPage({
       .catch(() => undefined);
   }, [account, file, selectedAsset]);
 
-  const request = async (url: string, init: RequestInit) => {
-    const response = await fetch(url, init);
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.message || body.code || "请求失败");
-    return body;
-  };
-
   const resetTask = () => {
     setError("");
     setTask(null);
@@ -146,8 +126,6 @@ export function ImageWorkflowPage({
 
   const applyCase = (item: ImageWorkflowCase) => {
     if (item.ratio && ratios.includes(item.ratio)) setRatio(item.ratio);
-    if (item.scene && scenes.includes(item.scene)) setScene(item.scene);
-    if (item.style && styles.includes(item.style)) setStyle(item.style);
     setPrompt(item.prompt.slice(0, 1200));
     if (item.productDescription) setProductDescription(item.productDescription.slice(0, 900));
     setAppliedCaseId(item.id);
@@ -190,25 +168,6 @@ export function ImageWorkflowPage({
     resetTask();
   };
 
-  const pollTask = async (taskId: string) => {
-    const deadline = Date.now() + 6 * 60 * 1000;
-    while (Date.now() < deadline) {
-      const response = await fetch(`/api/tasks/${taskId}/`, { cache: "no-store" });
-      const current = await response.json();
-      if (!response.ok) throw new Error(current.message || "任务查询失败");
-      setTask(current);
-      if (current.status === "SUCCEEDED") {
-        setPhase("succeeded");
-        const session = await fetch("/api/auth/session/", { cache: "no-store" }).then((item) => item.json());
-        setAccount(session);
-        return;
-      }
-      if (["FAILED", "REJECTED", "CANCELED"].includes(current.status)) throw new Error(current.errorCode || "生成失败，积分已退回");
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-    }
-    throw new Error("任务等待超时，请稍后在任务中心查看");
-  };
-
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if ((requireSource && !file && !selectedAsset) || (!requireSource && !prompt.trim()) || ["uploading", "generating"].includes(phase)) return;
@@ -218,31 +177,21 @@ export function ImageWorkflowPage({
     try {
       let assetId = selectedAsset?.id;
       if (file) {
-        const presign = await request("/api/uploads/presign/", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fileName: file.name, mimeType: file.type, byteSize: file.size }),
-        });
-        const upload = await fetch(presign.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
-        if (!upload.ok) throw new Error(`素材上传失败 (${upload.status})`);
-        await request("/api/uploads/confirm/", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ assetId: presign.assetId }),
-        });
-        assetId = presign.assetId;
+        assetId = await uploadImageFile(file);
       }
       const composedPrompt = [
         productDescription.trim() ? `商品描述：${productDescription.trim()}` : "",
         prompt.trim() ? `提示词：${prompt.trim()}` : "",
       ].filter(Boolean).join("\n");
-      const created = await request(submitUrl, {
+      const created = await imageRequest<{ taskId: string }>(submitUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({ assetId, prompt: composedPrompt || prompt, productDescription, aspectRatio: ratio, scene, style, outputCount, draftId: projectId }),
+        body: JSON.stringify({ assetId, prompt: composedPrompt || prompt, productDescription, aspectRatio: ratio, outputCount, draftId: projectId }),
       });
       setPhase("generating");
-      await pollTask(created.taskId);
+      await pollImageTask(created.taskId, setTask);
+      setPhase("succeeded");
+      setAccount(await fetch("/api/auth/session/", { cache: "no-store" }).then((item) => item.json()));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "生成失败");
       setPhase("failed");
@@ -273,16 +222,12 @@ export function ImageWorkflowPage({
           </section>}
           {productDescriptionLabel && <label className="yh-field wide">{productDescriptionLabel}<textarea value={productDescription} onChange={(event) => setProductDescription(event.target.value)} maxLength={900} placeholder={productDescriptionPlaceholder} /><small>{productDescription.length}/900</small></label>}
           {showAspectRatio && <label className="yh-field">图片比例 <em>*</em><select value={ratio} onChange={(event) => setRatio(event.target.value)}>{ratios.map((item) => <option key={item}>{item}</option>)}</select></label>}
-          <div className="yh-field-grid">
-            <label className="yh-field">{sceneLabel}<select value={scene} onChange={(event) => setScene(event.target.value)}>{scenes.map((item) => <option key={item}>{item}</option>)}</select></label>
-            <label className="yh-field">{styleLabel}<select value={style} onChange={(event) => setStyle(event.target.value)}>{styles.map((item) => <option key={item}>{item}</option>)}</select></label>
-          </div>
           <label className="yh-field wide">提示词 <em>*</em><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={1200} placeholder={requireSource ? "例如：商品放在窗边桌面，保留自然投影与留白" : "请输入图像描述，例如：清新自然的电商带货模特，真实摄影质感"} /><small>{prompt.length}/1200</small></label>
           <ImageOutputCountControl value={outputCount} onChange={setOutputCount} disabled={busy} />
           <p className="yh-credit"><Sparkles size={15} />{creditText}</p>
           {error && <p className="creator-error" role="alert">{error}</p>}
           <TemporaryResultNotice result={task} />
-          <div className="yh-actions"><button type="submit" disabled={!canSubmit}><Wand2 size={16} />{busy ? "任务处理中" : submitLabel}</button><button type="button" onClick={() => { if (preview.startsWith("blob:")) URL.revokeObjectURL(preview); setFile(null); setSelectedAsset(null); setPreview(""); setRatio(defaultRatio); setScene(scenes[0]); setStyle(styles[0]); setPrompt(""); setProductDescription(""); setOutputCount(1); setAppliedCaseId(""); resetTask(); }}>重置</button></div>
+          <div className="yh-actions"><button type="submit" disabled={!canSubmit}><Wand2 size={16} />{busy ? "任务处理中" : submitLabel}</button><button type="button" onClick={() => { if (preview.startsWith("blob:")) URL.revokeObjectURL(preview); setFile(null); setSelectedAsset(null); setPreview(""); setRatio(defaultRatio); setPrompt(""); setProductDescription(""); setOutputCount(1); setAppliedCaseId(""); resetTask(); }}>重置</button></div>
         </form>
 
         <section className="yh-case-board">
@@ -319,8 +264,6 @@ export function ImageWorkflowPage({
       <aside className="creator-panel">
         <div className="panel-title"><span><Sparkles size={18} /></span><div><h1>生成设置</h1><p>{account.user.isAdministrator ? `管理员免积分 · 报价 ${pointsPerTask} 积分计入成本审计` : description}</p></div></div>
         {showAspectRatio && <><label className="field-label">画幅比例</label><div className="ratio-control">{ratios.map((item) => <button type="button" key={item} className={ratio === item ? "active" : ""} onClick={() => setRatio(item)}>{item}</button>)}</div></>}
-        <label className="field-label">{sceneLabel}<select value={scene} onChange={(event) => setScene(event.target.value)}>{scenes.map((item) => <option key={item}>{item}</option>)}</select></label>
-        <label className="field-label">{styleLabel}<select value={style} onChange={(event) => setStyle(event.target.value)}>{styles.map((item) => <option key={item}>{item}</option>)}</select></label>
         {productDescriptionLabel && <label className="field-label">{productDescriptionLabel}<textarea value={productDescription} onChange={(event) => setProductDescription(event.target.value)} maxLength={900} placeholder={productDescriptionPlaceholder} /><small>{productDescription.length}/900</small></label>}
         <label className="field-label">{requireSource ? "提示词" : "提示词"}<textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={1200} placeholder={requireSource ? "例如：商品放在窗边桌面，保留自然投影与留白" : "请输入图像描述，例如：一只可爱的橘猫在阳光下打盹，温暖真实摄影"} /><small>{prompt.length}/1200</small></label>
         <ImageOutputCountControl value={outputCount} onChange={setOutputCount} disabled={busy} />

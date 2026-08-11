@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { GenerationProgress } from "@/app/components/generation-progress";
 import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
-import { ImageOutputCountControl, type ImageOutputCount } from "@/app/components/image-output-count-control";
+import { ImageOutputCountControl, type ImageOutputCount } from "@/app/features/image-creation/shared/image-output-count-control";
+import { imageRequest, pollImageTask, uploadImageFile } from "@/app/features/image-creation/shared/image-task-api";
 import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import { aiImageCases } from "@/lib/image-workflow-cases";
 import { imageGenerateWorkflow } from "@/lib/product-config";
@@ -32,8 +33,6 @@ export function AiImageGeneratePage() {
   const [account, setAccount] = useState<Account | null>(null);
   const [prompt, setPrompt] = useState("");
   const [ratio, setRatio] = useState<string>("9:16");
-  const [scene, setScene] = useState<string>(imageGenerateWorkflow.scenes[0]);
-  const [style, setStyle] = useState<string>(imageGenerateWorkflow.styles[0]);
   const [model, setModel] = useState<string>(modelOptions[0]);
   const [resolution, setResolution] = useState<string>(resolutions[0]);
   const [outputCount, setOutputCount] = useState<ImageOutputCount>(1);
@@ -78,13 +77,6 @@ export function AiImageGeneratePage() {
   }), [prompt, references]));
   const markSaved = (assetId: string) => setTask((current) => current ? { ...current, outputs: current.outputs.map((output) => output.assetId === assetId ? { ...output, savedToLibrary: true, expiresAt: null } : output) } : current);
 
-  const request = async (url: string, init: RequestInit) => {
-    const response = await fetch(url, init);
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.message || body.code || "请求失败");
-    return body;
-  };
-
   const chooseFiles = (fileList: FileList | null) => {
     if (!fileList) return;
     const nextFiles = Array.from(fileList).slice(0, maxReferenceImages - references.length);
@@ -127,8 +119,6 @@ export function AiImageGeneratePage() {
 
   const applyCase = (item: (typeof aiImageCases)[number]) => {
     if (item.ratio && ratios.includes(item.ratio)) setRatio(item.ratio);
-    if (item.scene && (imageGenerateWorkflow.scenes as readonly string[]).includes(item.scene)) setScene(item.scene);
-    if (item.style && (imageGenerateWorkflow.styles as readonly string[]).includes(item.style)) setStyle(item.style);
     setPrompt(item.prompt.slice(0, 1200));
     setAppliedCaseId(item.id);
     resetTask();
@@ -138,40 +128,9 @@ export function AiImageGeneratePage() {
     const assetIds = references.filter((item) => item.id).map((item) => item.id as string);
     for (const item of references) {
       if (!item.file) continue;
-      const presign = await request("/api/uploads/presign/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileName: item.file.name, mimeType: item.file.type, byteSize: item.file.size }),
-      });
-      const upload = await fetch(presign.uploadUrl, { method: "PUT", headers: { "Content-Type": item.file.type }, body: item.file });
-      if (!upload.ok) throw new Error(`参考图上传失败 (${upload.status})`);
-      await request("/api/uploads/confirm/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assetId: presign.assetId }),
-      });
-      assetIds.push(presign.assetId);
+      assetIds.push(await uploadImageFile(item.file, "参考图"));
     }
     return assetIds;
-  };
-
-  const pollTask = async (taskId: string) => {
-    const deadline = Date.now() + 6 * 60 * 1000;
-    while (Date.now() < deadline) {
-      const response = await fetch(`/api/tasks/${taskId}/`, { cache: "no-store" });
-      const current = await response.json();
-      if (!response.ok) throw new Error(current.message || "任务查询失败");
-      setTask(current);
-      if (current.status === "SUCCEEDED") {
-        setPhase("succeeded");
-        const session = await fetch("/api/auth/session/", { cache: "no-store" }).then((item) => item.json());
-        setAccount(session);
-        return;
-      }
-      if (["FAILED", "REJECTED", "CANCELED"].includes(current.status)) throw new Error(current.errorCode || "生成失败，积分已退回");
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-    }
-    throw new Error("任务等待超时，请稍后在任务中心查看");
   };
 
   const submit = async (event: FormEvent) => {
@@ -182,19 +141,14 @@ export function AiImageGeneratePage() {
     setPhase("uploading");
     try {
       const assetIds = await uploadReferences();
-      const composedPrompt = [
-        prompt.trim(),
-        `内置参数：清晰度 ${resolution}，画面比例 ${ratio}，使用场景 ${scene}，视觉风格 ${style}。`,
-      ].join("\n");
-      const created = await request("/api/tasks/image-generate/", {
+      const composedPrompt = [prompt.trim(), `输出要求：清晰度 ${resolution}，画面比例 ${ratio}。`].join("\n");
+      const created = await imageRequest<{ taskId: string }>("/api/tasks/image-generate/", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
         body: JSON.stringify({
           assetIds,
           prompt: composedPrompt,
           aspectRatio: ratio,
-          scene,
-          style,
           imageProvider: imageProviderForModel(model),
           imageResolution: resolution,
           outputCount,
@@ -202,7 +156,9 @@ export function AiImageGeneratePage() {
         }),
       });
       setPhase("generating");
-      await pollTask(created.taskId);
+      await pollImageTask(created.taskId, setTask);
+      setPhase("succeeded");
+      setAccount(await fetch("/api/auth/session/", { cache: "no-store" }).then((item) => item.json()));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "生成失败");
       setPhase("failed");
@@ -212,8 +168,6 @@ export function AiImageGeneratePage() {
   const resetForm = () => {
     setPrompt("");
     setRatio("9:16");
-    setScene(imageGenerateWorkflow.scenes[0]);
-    setStyle(imageGenerateWorkflow.styles[0]);
     setModel(modelOptions[0]);
     setResolution(resolutions[0]);
     setOutputCount(1);
@@ -240,9 +194,7 @@ export function AiImageGeneratePage() {
             <label className="yh-field">首选模型 <em>*</em><select value={model} onChange={(event) => setModel(event.target.value)}>{modelOptions.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label className="yh-field">清晰度 <em>*</em><select value={resolution} onChange={(event) => setResolution(event.target.value)}>{resolutions.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label className="yh-field">图片比例 <em>*</em><select value={ratio} onChange={(event) => setRatio(event.target.value)}>{ratios.map((item) => <option key={item}>{item}</option>)}</select></label>
-            <label className="yh-field">视觉风格 <em>*</em><select value={style} onChange={(event) => setStyle(event.target.value)}>{imageGenerateWorkflow.styles.map((item) => <option key={item}>{item}</option>)}</select></label>
           </div>
-          <label className="yh-field">使用场景<select value={scene} onChange={(event) => setScene(event.target.value)}>{imageGenerateWorkflow.scenes.map((item) => <option key={item}>{item}</option>)}</select></label>
           <section className="yh-reference-upload">
             <div className="yh-upload-tabs">
               <button className={sourceTab === "local" ? "active" : ""} type="button" onClick={() => setSourceTab("local")}><Upload size={14} />本地上传</button>

@@ -18,12 +18,13 @@ type ImageWorkflow = {
   outputsPerTask: number;
   userSelectableOutputCount?: boolean;
   structuredDetailCards?: boolean;
+  internalPrompt?: string;
   minAssets?: number;
   aspectRatios: readonly string[];
   durations?: readonly number[];
   resolutions?: readonly string[];
-  scenes: readonly string[];
-  styles: readonly string[];
+  scenes?: readonly string[];
+  styles?: readonly string[];
 };
 
 const selectableImageOutputCounts = [1, 2, 4] as const;
@@ -81,13 +82,14 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
   const prompt = typeof body?.prompt === "string" ? body.prompt.trim().slice(0, promptLimit) : "";
   if ((workflow.minAssets ?? 1) === 0 && !prompt) return NextResponse.json({ code: "INVALID_REQUEST", message: "请输入提示词" }, { status: 400 });
   const requestedAspectRatio = typeof body.aspectRatio === "string" ? body.aspectRatio : "";
-  const requestedScene = typeof body.scene === "string" ? body.scene : "";
-  const requestedStyle = typeof body.style === "string" ? body.style : "";
+  const acceptsStructuredDirection = workflow.key.includes("video") || workflow.key === "recreate-reference-image";
+  const requestedScene = acceptsStructuredDirection && typeof body.scene === "string" ? body.scene : "";
+  const requestedStyle = acceptsStructuredDirection && typeof body.style === "string" ? body.style : "";
   const requestedDuration = Number(body.duration);
   const requestedResolution = typeof body.resolution === "string" ? body.resolution : "";
   const aspectRatio = workflow.aspectRatios.includes(requestedAspectRatio) ? requestedAspectRatio : workflow.aspectRatios[0];
-  const scene = workflow.scenes.includes(requestedScene) ? requestedScene : workflow.scenes[0];
-  const style = workflow.styles.includes(requestedStyle) ? requestedStyle : workflow.styles[0];
+  const scene = workflow.scenes?.includes(requestedScene) ? requestedScene : workflow.scenes?.[0] || "";
+  const style = workflow.styles?.includes(requestedStyle) ? requestedStyle : workflow.styles?.[0] || "";
   const duration = workflow.durations?.includes(requestedDuration) ? requestedDuration : workflow.durations?.[workflow.durations.length - 1] || 15;
   const resolution = workflow.resolutions?.includes(requestedResolution) ? requestedResolution : workflow.resolutions?.[1] || "720p";
   const reviewEnabled = contentReviewEnabled();
@@ -126,7 +128,7 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
       await client.query("ROLLBACK");
       return NextResponse.json({ code: "DETAIL_CARDS_REQUIRED", message: `请至少保留 ${DETAIL_PAGE_MIN_CARDS} 张详情页卡片` }, { status: 400 });
     }
-    const input = { assetId: assets[0]?.id || null, storageKey: assets[0]?.storage_key || null, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), assetMimeTypes: assets.map((asset) => asset.mime_type), prompt, aspectRatio, duration, resolution, scene, style, outputs: requestedOutputCount(body, workflow), ...(detailCards.length ? { detailCards } : {}), ...(adminExempt ? { billingMode: ADMIN_EXEMPT_BILLING_MODE, quotedPoints: points } : {}), ...(promptConfig ? { promptConfig } : {}), ...(inputExtras?.(body) || {}) };
+    const input = { assetId: assets[0]?.id || null, storageKey: assets[0]?.storage_key || null, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), assetMimeTypes: assets.map((asset) => asset.mime_type), prompt, aspectRatio, duration, resolution, ...(acceptsStructuredDirection ? { scene, style } : {}), internalPrompt: workflow.internalPrompt || "", outputs: requestedOutputCount(body, workflow), ...(detailCards.length ? { detailCards } : {}), ...(adminExempt ? { billingMode: ADMIN_EXEMPT_BILLING_MODE, quotedPoints: points } : {}), ...(promptConfig ? { promptConfig } : {}), ...(inputExtras?.(body) || {}) };
     await client.query(
       `INSERT INTO generation_tasks (id, user_id, workflow_key, status, points, input_json, idempotency_key, request_id)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,

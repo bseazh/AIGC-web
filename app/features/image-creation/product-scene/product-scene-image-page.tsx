@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { GenerationProgress } from "@/app/components/generation-progress";
 import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
-import { ImageOutputCountControl, type ImageOutputCount } from "@/app/components/image-output-count-control";
+import { ImageOutputCountControl, type ImageOutputCount } from "@/app/features/image-creation/shared/image-output-count-control";
+import { imageRequest, pollImageTask, uploadImageFile } from "@/app/features/image-creation/shared/image-task-api";
 import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import { productSceneCases } from "@/lib/image-workflow-cases";
 import { sceneImageWorkflow } from "@/lib/product-config";
@@ -33,8 +34,6 @@ export function ProductSceneImagePage() {
   const [productDescription, setProductDescription] = useState("");
   const [prompt, setPrompt] = useState("");
   const [ratio, setRatio] = useState<string>("9:16");
-  const [scene, setScene] = useState<string>(sceneImageWorkflow.scenes[0]);
-  const [style, setStyle] = useState<string>(sceneImageWorkflow.styles[0]);
   const [model, setModel] = useState<string>(modelOptions[0]);
   const [resolution, setResolution] = useState<string>(resolutions[0]);
   const [outputCount, setOutputCount] = useState<ImageOutputCount>(1);
@@ -93,13 +92,6 @@ export function ProductSceneImagePage() {
     productText: productDescription || prompt,
   }), [productDescription, products, prompt]));
 
-  const request = async (url: string, init: RequestInit) => {
-    const response = await fetch(url, init);
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.message || body.code || "请求失败");
-    return body;
-  };
-
   const chooseFiles = (fileList: FileList | null) => {
     if (!fileList) return;
     const nextFiles = Array.from(fileList).slice(0, maxProductImages - products.length);
@@ -142,8 +134,6 @@ export function ProductSceneImagePage() {
 
   const applyCase = (item: (typeof productSceneCases)[number]) => {
     if (item.ratio && ratios.includes(item.ratio)) setRatio(item.ratio);
-    if (item.scene && (sceneImageWorkflow.scenes as readonly string[]).includes(item.scene)) setScene(item.scene);
-    if (item.style && (sceneImageWorkflow.styles as readonly string[]).includes(item.style)) setStyle(item.style);
     if (item.productDescription) setProductDescription(item.productDescription.slice(0, 900));
     setPrompt(item.prompt.slice(0, 1200));
     setAppliedCaseId(item.id);
@@ -154,40 +144,9 @@ export function ProductSceneImagePage() {
     const assetIds = products.filter((item) => item.id).map((item) => item.id as string);
     for (const item of products) {
       if (!item.file) continue;
-      const presign = await request("/api/uploads/presign/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileName: item.file.name, mimeType: item.file.type, byteSize: item.file.size }),
-      });
-      const upload = await fetch(presign.uploadUrl, { method: "PUT", headers: { "Content-Type": item.file.type }, body: item.file });
-      if (!upload.ok) throw new Error(`商品图上传失败 (${upload.status})`);
-      await request("/api/uploads/confirm/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assetId: presign.assetId }),
-      });
-      assetIds.push(presign.assetId);
+      assetIds.push(await uploadImageFile(item.file, "商品图"));
     }
     return assetIds;
-  };
-
-  const pollTask = async (taskId: string) => {
-    const deadline = Date.now() + 6 * 60 * 1000;
-    while (Date.now() < deadline) {
-      const response = await fetch(`/api/tasks/${taskId}/`, { cache: "no-store" });
-      const current = await response.json();
-      if (!response.ok) throw new Error(current.message || "任务查询失败");
-      setTask(current);
-      if (current.status === "SUCCEEDED") {
-        setPhase("succeeded");
-        const session = await fetch("/api/auth/session/", { cache: "no-store" }).then((item) => item.json());
-        setAccount(session);
-        return;
-      }
-      if (["FAILED", "REJECTED", "CANCELED"].includes(current.status)) throw new Error(current.errorCode || "生成失败，积分已退回");
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-    }
-    throw new Error("任务等待超时，请稍后在任务中心查看");
   };
 
   const submit = async (event: FormEvent) => {
@@ -201,15 +160,17 @@ export function ProductSceneImagePage() {
       const composedPrompt = [
         `产品描述：${productDescription.trim()}`,
         prompt.trim() ? `提示词：${prompt.trim()}` : "",
-        `内置参数：清晰度 ${resolution}，图片比例 ${ratio}，使用场景 ${scene}，视觉风格 ${style}${useModelReference ? "，允许参考指定模特图" : ""}。`,
+        `输出要求：清晰度 ${resolution}，图片比例 ${ratio}${useModelReference ? "，允许参考指定模特图" : ""}。`,
       ].filter(Boolean).join("\n");
-      const created = await request("/api/tasks/scene/", {
+      const created = await imageRequest<{ taskId: string }>("/api/tasks/scene/", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({ assetIds, prompt: composedPrompt, aspectRatio: ratio, scene, style, imageProvider: imageProviderForModel(model), imageResolution: resolution, outputCount, draftId: projectId }),
+        body: JSON.stringify({ assetIds, prompt: composedPrompt, aspectRatio: ratio, imageProvider: imageProviderForModel(model), imageResolution: resolution, outputCount, draftId: projectId }),
       });
       setPhase("generating");
-      await pollTask(created.taskId);
+      await pollImageTask(created.taskId, setTask);
+      setPhase("succeeded");
+      setAccount(await fetch("/api/auth/session/", { cache: "no-store" }).then((item) => item.json()));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "生成失败");
       setPhase("failed");
@@ -220,8 +181,6 @@ export function ProductSceneImagePage() {
     setProductDescription("");
     setPrompt("");
     setRatio("9:16");
-    setScene(sceneImageWorkflow.scenes[0]);
-    setStyle(sceneImageWorkflow.styles[0]);
     setModel(modelOptions[0]);
     setResolution(resolutions[0]);
     setOutputCount(1);
@@ -258,9 +217,7 @@ export function ProductSceneImagePage() {
             <label className="yh-field">首选模型 <em>*</em><select value={model} onChange={(event) => setModel(event.target.value)}>{modelOptions.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label className="yh-field">清晰度 <em>*</em><select value={resolution} onChange={(event) => setResolution(event.target.value)}>{resolutions.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label className="yh-field">图片比例 <em>*</em><select value={ratio} onChange={(event) => setRatio(event.target.value)}>{ratios.map((item) => <option key={item}>{item}</option>)}</select></label>
-            <label className="yh-field">视觉风格 <em>*</em><select value={style} onChange={(event) => setStyle(event.target.value)}>{sceneImageWorkflow.styles.map((item) => <option key={item}>{item}</option>)}</select></label>
           </div>
-          <label className="yh-field">使用场景<select value={scene} onChange={(event) => setScene(event.target.value)}>{sceneImageWorkflow.scenes.map((item) => <option key={item}>{item}</option>)}</select></label>
           <label className="yh-field wide">提示词<textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={1200} placeholder="例如：商品放在窗边桌面，保留自然投影与留白" /><small>{prompt.length}/1200</small></label>
           <label className="yh-toggle-field"><span><strong>指定模特图</strong><small>如果指定产品场景图中的人物模特，可上传模特图</small></span><input type="checkbox" checked={useModelReference} onChange={(event) => setUseModelReference(event.target.checked)} /><i /></label>
           <ImageOutputCountControl value={outputCount} onChange={setOutputCount} disabled={busy} />

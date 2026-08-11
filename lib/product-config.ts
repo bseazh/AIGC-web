@@ -13,8 +13,7 @@ export const heroImageWorkflow = {
   acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
   maxFileBytes: 10 * 1024 * 1024,
   aspectRatios: ["1:1", "3:4", "4:3", "9:16"],
-  scenes: ["纯色棚拍", "简约家居", "自然户外", "办公通勤", "节日礼赠"],
-  styles: ["真实摄影", "清透商业", "低饱和高级", "明快促销"],
+  internalPrompt: "根据商品图片、商品信息和用户提示词自行判断最合适的商业场景、光线与视觉表达，不向用户追加固定风格。",
   refundOnFailure: true,
 } as const;
 
@@ -30,8 +29,7 @@ export const imageGenerateWorkflow = {
   acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
   maxFileBytes: 10 * 1024 * 1024,
   aspectRatios: ["1:1", "3:4", "4:3", "9:16"],
-  scenes: ["自由创作", "商品灵感", "人物氛围", "室内空间", "自然风景"],
-  styles: ["真实摄影", "清透商业", "电影感", "插画质感", "明快促销"],
+  internalPrompt: "完整遵循用户提示词中的场景与视觉要求；用户没有指定时，根据主体内容选择自然、协调的表达，不强加固定风格。",
   refundOnFailure: true,
 } as const;
 
@@ -40,8 +38,7 @@ export const commerceModelWorkflow = {
   key: "commerce-model",
   name: "带货模特",
   pointsPerTask: Number(process.env.COMMERCE_MODEL_TASK_POINTS || 10),
-  scenes: ["人物氛围", "室内棚拍", "通勤街拍", "自然居家"],
-  styles: ["真实摄影", "清透商业", "轻奢时尚", "清新日常"],
+  internalPrompt: "围绕用户描述生成自然可信的带货模特资产，并根据商品、人群与用途自动确定场景、造型和摄影语言。",
 } as const;
 
 export const sceneImageWorkflow = {
@@ -55,8 +52,7 @@ export const sceneImageWorkflow = {
   acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
   maxFileBytes: 10 * 1024 * 1024,
   aspectRatios: ["1:1", "3:4", "4:3", "9:16"],
-  scenes: ["自然居家", "户外生活", "精品店陈列", "咖啡桌面", "节日礼赠"],
-  styles: ["明亮生活方式", "低饱和质感", "轻奢商业", "清新自然"],
+  internalPrompt: "根据商品属性、用户描述和参考图自动导演最有说服力的真实使用场景，确保商品与环境光影、尺度和接触关系自然。",
   refundOnFailure: true,
 } as const;
 
@@ -70,8 +66,7 @@ export const modelWearWorkflow = {
   acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
   maxFileBytes: 10 * 1024 * 1024,
   aspectRatios: ["1:1", "3:4", "4:3", "9:16"],
-  scenes: ["简约棚拍", "通勤街拍", "自然居家", "精品店试穿"],
-  styles: ["自然真实", "轻奢时尚", "清新日常", "电商展示"],
+  internalPrompt: "根据模特、服装商品和用户补充要求自动确定自然的穿搭场景与摄影表达，优先保证人物身份、人体结构和服装细节准确。",
   refundOnFailure: true,
 } as const;
 
@@ -85,8 +80,7 @@ export const hdEnhanceWorkflow = {
   acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
   maxFileBytes: 10 * 1024 * 1024,
   aspectRatios: ["保持原比例"],
-  scenes: ["2 倍增强", "4 倍增强"],
-  styles: ["自然细节", "商品质感", "人像清晰", "降噪净化"],
+  internalPrompt: "智能判断图像问题并进行高清增强、降噪和细节修复；保持原始内容准确，避免过度锐化或重绘。",
   refundOnFailure: true,
 } as const;
 
@@ -101,15 +95,14 @@ export const detailPageWorkflow = {
   acceptedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
   maxFileBytes: 10 * 1024 * 1024,
   aspectRatios: ["1:1", "3:4", "4:3", "9:16"],
-  scenes: ["简约品牌", "自然生活", "轻奢质感", "科技清爽"],
-  styles: ["清晰卖点", "克制留白", "真实摄影", "高转化电商"],
+  internalPrompt: "根据商品识别结果、用户信息和已确认卡片方案自动统一整套详情页的视觉语言，不使用固定场景或风格枚举。",
   refundOnFailure: true,
 } as const;
 
-export const whiteBackgroundWorkflow = { ...hdEnhanceWorkflow, key: "white-background", name: "白底图生成", pointsPerTask: Number(process.env.WHITE_BACKGROUND_TASK_POINTS || 5), scenes: ["纯白背景", "电商白底", "轻投影白底"], styles: ["商品静物", "干净裁切", "真实光影"] } as const;
-export const resizeImageWorkflow = { ...hdEnhanceWorkflow, key: "resize-image", name: "图片比例调整", pointsPerTask: Number(process.env.RESIZE_IMAGE_TASK_POINTS || 5), outputsPerTask: 1, aspectRatios: ["1:1", "3:4", "4:3", "9:16"], scenes: ["智能扩图", "居中构图", "保留主体"], styles: ["自然延展", "电商留白", "真实背景"] } as const;
-export const recreateHeroWorkflow = { ...heroImageWorkflow, key: "recreate-product-hero", name: "复刻商品主图", pointsPerTask: Number(process.env.RECREATE_HERO_TASK_POINTS || 10), scenes: ["版式复刻", "构图复刻", "氛围复刻"], styles: ["原创商业", "高转化电商", "真实摄影"] } as const;
-export const recreateDetailWorkflow = { ...detailPageWorkflow, key: "recreate-detail-page", name: "复刻商详页", pointsPerTask: Number(process.env.RECREATE_DETAIL_TASK_POINTS || 10), scenes: ["卖点结构复刻", "模块节奏复刻", "长图版式复刻"], styles: ["原创电商", "清晰卖点", "克制留白"] } as const;
+export const whiteBackgroundWorkflow = { ...hdEnhanceWorkflow, key: "white-background", name: "白底图生成", pointsPerTask: Number(process.env.WHITE_BACKGROUND_TASK_POINTS || 5), internalPrompt: "精确保留商品主体、颜色、材质、边缘与标识，自动生成符合电商规范的纯白背景和自然轻投影。" } as const;
+export const resizeImageWorkflow = { ...hdEnhanceWorkflow, key: "resize-image", name: "图片比例调整", pointsPerTask: Number(process.env.RESIZE_IMAGE_TASK_POINTS || 5), outputsPerTask: 1, aspectRatios: ["1:1", "3:4", "4:3", "9:16"], internalPrompt: "只延展主体以外的画面以适配目标比例，根据原图内容自动延续背景、光线和透视，不改变商品主体。" } as const;
+export const recreateHeroWorkflow = { ...heroImageWorkflow, key: "recreate-product-hero", name: "复刻商品主图", pointsPerTask: Number(process.env.RECREATE_HERO_TASK_POINTS || 10), internalPrompt: "只参考输入图的构图层级、留白和商业节奏，为当前商品生成原创主图；场景与视觉表达由用户描述和参考图共同决定。" } as const;
+export const recreateDetailWorkflow = { ...detailPageWorkflow, key: "recreate-detail-page", name: "复刻商详页", pointsPerTask: Number(process.env.RECREATE_DETAIL_TASK_POINTS || 10), internalPrompt: "只参考输入内容的模块节奏，为当前商品生成原创详情页卡片；整套视觉方向由商品、用户描述和卡片方案自动统一。" } as const;
 export const recreateReferenceWorkflow = {
   ...sceneImageWorkflow,
   key: "recreate-reference-image",

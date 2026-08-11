@@ -6,8 +6,6 @@ export type ImageWorkflowCase = {
   prompt: string;
   productDescription?: string;
   ratio?: string;
-  scene?: string;
-  style?: string;
 };
 
 export const aiImageCases: ImageWorkflowCase[] = [
@@ -18,8 +16,6 @@ export const aiImageCases: ImageWorkflowCase[] = [
     image: "https://images.unsplash.com/photo-1496747611176-843222e1e57c?auto=format&fit=crop&w=900&q=88",
     prompt: "超写实手机抓拍质感的人像摄影，夜晚城市暖光背景，自然姿态，浅景深，真实皮肤纹理，电影感光影，画面高级且自然。",
     ratio: "9:16",
-    scene: "自由创作",
-    style: "真实摄影",
   },
   {
     id: "perfume-still",
@@ -28,8 +24,6 @@ export const aiImageCases: ImageWorkflowCase[] = [
     image: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=900&q=88",
     prompt: "POV 视角夜间约会肖像，人物看向镜头，餐厅暖光、玻璃反射、自然笑容，手机摄影真实质感，高级浅景深。",
     ratio: "9:16",
-    scene: "人物氛围",
-    style: "真实摄影",
   },
   {
     id: "neon-sneaker",
@@ -38,8 +32,6 @@ export const aiImageCases: ImageWorkflowCase[] = [
     image: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=900&q=88",
     prompt: "未来感潮流杂志封面插画，年轻角色穿机能服装，强烈版式构图，东京街头元素，鲜明色彩，封面级视觉但不要生成可读文字。",
     ratio: "3:4",
-    scene: "自由创作",
-    style: "插画质感",
   },
   {
     id: "stadium-cheer",
@@ -48,8 +40,6 @@ export const aiImageCases: ImageWorkflowCase[] = [
     image: "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=900&q=88",
     prompt: "体育赛事宣传海报，热烈球场氛围，人物举起围巾欢呼，绿色与黄色主色，灯光强烈，动感商业摄影，清晰主体。",
     ratio: "4:3",
-    scene: "人物氛围",
-    style: "明快促销",
   },
   {
     id: "fashion-green",
@@ -58,8 +48,6 @@ export const aiImageCases: ImageWorkflowCase[] = [
     image: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&w=900&q=88",
     prompt: "时尚肖像摄影，荧光绿色造型，湿润透明背景材质，人物佩戴夸张眼镜，棚拍灯光，强烈潮流杂志质感。",
     ratio: "3:4",
-    scene: "人物氛围",
-    style: "清透商业",
   },
   {
     id: "summer-poster",
@@ -68,8 +56,6 @@ export const aiImageCases: ImageWorkflowCase[] = [
     image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=900&q=88",
     prompt: "夏日街头潮流海报，霓虹涂鸦背景，动感人物姿态，紫色和黄色高对比，商业宣传视觉，强烈层次感，不要生成可读文字。",
     ratio: "4:3",
-    scene: "自由创作",
-    style: "明快促销",
   },
 ];
 
@@ -82,8 +68,6 @@ export const productSceneCases: ImageWorkflowCase[] = [
     productDescription: "精品咖啡或饮品杯，主打现制饮品、香气和社交分享场景。",
     prompt: "把商品自然放在咖啡桌面，双手拿起杯子碰杯，背景有柔焦咖啡机和暖色灯光，真实门店生活方式摄影。",
     ratio: "1:1",
-    scene: "咖啡桌面",
-    style: "明亮生活方式",
   },
   {
     id: "outdoor-bottle",
@@ -93,8 +77,6 @@ export const productSceneCases: ImageWorkflowCase[] = [
     productDescription: "绿色随行水杯，磨砂质感，适合通勤、运动和户外补水，强调简洁、便携、耐用。",
     prompt: "把商品置于干净浅色背景或户外桌面，突出杯身轮廓和瓶盖结构，柔和自然光，干净商业构图。",
     ratio: "9:16",
-    scene: "户外生活",
-    style: "低饱和质感",
   },
   {
     id: "gift-watch",
@@ -104,8 +86,6 @@ export const productSceneCases: ImageWorkflowCase[] = [
     productDescription: "白色智能腕表或配饰礼盒，适合礼赠、节日促销和精品陈列。",
     prompt: "把商品放在浅灰礼盒场景中，两个商品形成对角构图，轻奢质感，柔和阴影，突出材质细节。",
     ratio: "1:1",
-    scene: "节日礼赠",
-    style: "轻奢商业",
   },
   {
     id: "baby-romper",
@@ -115,8 +95,6 @@ export const productSceneCases: ImageWorkflowCase[] = [
     productDescription: "婴儿纯棉连体衣，柔软亲肤，适合居家穿着和母婴店展示。",
     prompt: "把商品呈现在明亮婴儿房或柔软床品场景，浅色背景，温柔自然光，强调亲肤和柔软质感。",
     ratio: "9:16",
-    scene: "自然居家",
-    style: "明亮生活方式",
   },
   {
     id: "male-pants",
@@ -126,8 +104,6 @@ export const productSceneCases: ImageWorkflowCase[] = [
     productDescription: "男士休闲裤，宽松版型，适合通勤和日常穿搭。",
     prompt: "让模特在室内门廊自然站立，穿着商品裤子，光线柔和，强调裤型、垂坠感和日常穿搭氛围。",
     ratio: "9:16",
-    scene: "精品店陈列",
-    style: "低饱和质感",
   },
   {
     id: "female-pants",
@@ -137,8 +113,6 @@ export const productSceneCases: ImageWorkflowCase[] = [
     productDescription: "女士休闲阔腿裤，高腰版型，适合居家、通勤和轻运动场景。",
     prompt: "让模特在自然居家卧室场景中穿着商品裤子，站姿自然，浅色床品背景，强调裤型和面料舒适度。",
     ratio: "9:16",
-    scene: "自然居家",
-    style: "明亮生活方式",
   },
 ];
 
@@ -151,8 +125,6 @@ export const productHeroCases: ImageWorkflowCase[] = [
     productDescription: "磨砂随行水杯，主打通勤、运动补水和简洁耐用。",
     prompt: "生成干净电商首图，商品居中偏下，浅色背景，柔和自然阴影，保留上方留白用于后期排版，突出杯身轮廓和材质。",
     ratio: "1:1",
-    scene: "简约家居",
-    style: "清透商业",
   },
   {
     id: "beauty-bottle-hero",
@@ -162,8 +134,6 @@ export const productHeroCases: ImageWorkflowCase[] = [
     productDescription: "香氛或护肤瓶装产品，强调玻璃材质、精致反光和礼赠质感。",
     prompt: "棚拍质感商品主图，柔光反射，浅灰或奶白背景，商品边缘清晰，高级低饱和，避免文字、价格和多余品牌元素。",
     ratio: "3:4",
-    scene: "纯色棚拍",
-    style: "低饱和高级",
   },
   {
     id: "home-storage-hero",
@@ -173,8 +143,6 @@ export const productHeroCases: ImageWorkflowCase[] = [
     productDescription: "家居收纳或生活方式商品，适合店铺首屏展示。",
     prompt: "在简约家居场景中生成商品首图，背景干净、光线柔和、商品主体明确，保留电商留白，整体克制高级。",
     ratio: "4:3",
-    scene: "简约家居",
-    style: "真实摄影",
   },
 ];
 
@@ -187,8 +155,6 @@ export const productDetailCases: ImageWorkflowCase[] = [
     productDescription: "厨房小家电，主打容量、易清洁、安全材质和日常效率。",
     prompt: "生成商品详情页套图：开场氛围、核心卖点、材质细节、使用场景、收束展示五个模块。不要生成可读文字，保留排版留白。",
     ratio: "9:16",
-    scene: "简约品牌",
-    style: "清晰卖点",
   },
   {
     id: "skincare-detail",
@@ -198,8 +164,6 @@ export const productDetailCases: ImageWorkflowCase[] = [
     productDescription: "护肤精华或面霜，强调质地、成分感、温和修护和精致包装。",
     prompt: "生成美妆详情页视觉：产品瓶身、质地延展、手部使用、浴室/梳妆台场景、礼赠陈列。画面干净高级，不生成文字。",
     ratio: "9:16",
-    scene: "轻奢质感",
-    style: "真实摄影",
   },
   {
     id: "travel-bag-detail",
@@ -209,8 +173,6 @@ export const productDetailCases: ImageWorkflowCase[] = [
     productDescription: "通勤包，主打容量分区、皮革纹理、五金细节和商务穿搭。",
     prompt: "生成箱包详情页长图模块：整体轮廓、容量展示、材质细节、通勤上身/手提场景、收纳对比。避免可读文字和价格。",
     ratio: "9:16",
-    scene: "自然生活",
-    style: "克制留白",
   },
 ];
 
@@ -223,8 +185,6 @@ export const recreateHeroCases: ImageWorkflowCase[] = [
     productDescription: "参考清爽电商构图，只复刻布局节奏，不复制原图内容。",
     prompt: "提取参考图的主体位置、留白比例、光线方向和背景层次，用上传商品生成原创主图。不要复制参考图中的具体商品、文字或品牌。",
     ratio: "1:1",
-    scene: "构图复刻",
-    style: "原创商业",
   },
   {
     id: "premium-recreate",
@@ -234,8 +194,6 @@ export const recreateHeroCases: ImageWorkflowCase[] = [
     productDescription: "参考高级棚拍质感，重建商品光影和材质表达。",
     prompt: "复刻参考图的棚拍光影、反射质感和层次关系，商品主体必须换成上传商品，整体原创且无文字水印。",
     ratio: "3:4",
-    scene: "氛围复刻",
-    style: "真实摄影",
   },
 ];
 
@@ -248,8 +206,6 @@ export const recreateDetailCases: ImageWorkflowCase[] = [
     productDescription: "参考竞品详情页的卖点顺序，生成原创商品详情页视觉。",
     prompt: "提取参考详情页的模块节奏：首屏吸引、核心卖点、细节特写、使用场景、结尾陈列。只学习结构，不复制文字、商品或品牌。",
     ratio: "9:16",
-    scene: "卖点结构复刻",
-    style: "原创电商",
   },
   {
     id: "minimal-detail-flow",
@@ -259,8 +215,6 @@ export const recreateDetailCases: ImageWorkflowCase[] = [
     productDescription: "适合百货、家居和数码类商品的干净详情页节奏。",
     prompt: "按参考图的留白、景别切换和材质展示节奏生成原创详情页套图，商品换成上传素材，画面内不生成可读文字。",
     ratio: "9:16",
-    scene: "长图版式复刻",
-    style: "克制留白",
   },
 ];
 
@@ -273,8 +227,6 @@ export const utilityImageCases: ImageWorkflowCase[] = [
     productDescription: "保留商品主体和自然接触阴影，生成平台可用白底图。",
     prompt: "保留商品真实轮廓、颜色、材质和关键细节，背景替换为纯净白底，阴影自然，不改变商品结构。",
     ratio: "1:1",
-    scene: "电商白底",
-    style: "真实光影",
   },
   {
     id: "ratio-expand",
@@ -284,8 +236,6 @@ export const utilityImageCases: ImageWorkflowCase[] = [
     productDescription: "在不改变主体的前提下扩展背景，适配平台比例。",
     prompt: "保持主体位置、比例和边缘自然，扩展外部背景，生成连续真实的电商留白画面。",
     ratio: "9:16",
-    scene: "智能扩图",
-    style: "电商留白",
   },
   {
     id: "hd-product",
@@ -295,8 +245,6 @@ export const utilityImageCases: ImageWorkflowCase[] = [
     productDescription: "修复商品边缘、材质、纹理和细节清晰度。",
     prompt: "增强图片清晰度、商品边缘和材质细节，降低噪点，保持真实自然，不改变商品款式和颜色。",
     ratio: "1:1",
-    scene: "2 倍增强",
-    style: "商品质感",
   },
 ];
 
@@ -313,8 +261,6 @@ export const modelWearCases: ImageWorkflowCase[] = [
     productDescription: "风衣、衬衫、阔腿裤等通勤服饰，强调版型、垂坠和日常上身效果。",
     prompt: "保持模特五官、发型和自然站姿，将商品自然穿在模特身上，衣服版型清晰，面料垂坠真实，背景为通勤街拍氛围。",
     ratio: "3:4",
-    scene: "通勤街拍",
-    style: "自然真实",
   },
   {
     id: "boutique-dress-wear",
@@ -324,8 +270,6 @@ export const modelWearCases: ImageWorkflowCase[] = [
     productDescription: "连衣裙、套装或女装单品，适合店铺模特展示图。",
     prompt: "生成精品店试穿效果，商品完整自然上身，保持模特比例协调，布料纹理和边缘清晰，画面有轻奢时尚感。",
     ratio: "9:16",
-    scene: "精品店试穿",
-    style: "轻奢时尚",
   },
   {
     id: "home-knit-wear",
@@ -335,8 +279,6 @@ export const modelWearCases: ImageWorkflowCase[] = [
     productDescription: "针织衫、家居服、休闲裤等日常穿搭商品。",
     prompt: "让模特在自然居家环境中展示商品，动作放松，商品穿着贴合但不变形，整体清新日常，适合电商服饰主图。",
     ratio: "4:3",
-    scene: "自然居家",
-    style: "清新日常",
   },
 ];
 
@@ -349,8 +291,6 @@ export const commerceModelCases: ImageWorkflowCase[] = [
     productDescription: "适合女装、饰品、生活方式商品的可复用带货模特形象。",
     prompt: "生成一位清新自然的电商带货模特，全身或半身构图，年轻时尚，干净背景，真实商业摄影质感，可作为后续穿搭和口播资产使用，不生成文字、水印或品牌标识。",
     ratio: "3:4",
-    scene: "人物氛围",
-    style: "真实摄影",
   },
   {
     id: "urban-commerce-model",
@@ -360,8 +300,6 @@ export const commerceModelCases: ImageWorkflowCase[] = [
     productDescription: "适合通勤服饰、箱包、鞋履等商品的都市模特资产。",
     prompt: "生成都市通勤风电商模特，姿态自然自信，穿基础款服装，背景为干净街拍或浅色室内，突出真实可复用的带货人物形象，不生成文字、水印或品牌标识。",
     ratio: "9:16",
-    scene: "人物氛围",
-    style: "清透商业",
   },
   {
     id: "premium-commerce-model",
@@ -371,7 +309,5 @@ export const commerceModelCases: ImageWorkflowCase[] = [
     productDescription: "适合美妆、珠宝、精品服饰等高质感商品。",
     prompt: "生成轻奢精品风格带货模特，棚拍柔光，面部自然，姿态克制高级，服装简洁，背景干净，适合作为高端商品营销人物资产，不生成文字、水印或品牌标识。",
     ratio: "3:4",
-    scene: "人物氛围",
-    style: "清透商业",
   },
 ];

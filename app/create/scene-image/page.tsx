@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { ProductSceneImagePage } from "@/app/components/product-scene-image-page";
+import { ProductSceneImagePage } from "@/app/features/image-creation/product-scene/product-scene-image-page";
 import { ProjectRequiredGate } from "@/app/components/project-required-gate";
 
 export default function SceneImagePage() {

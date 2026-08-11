@@ -378,31 +378,32 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
     : workflowKey === "recreate-reference-image" && input.scene === "场景多视图"
     ? `生成一张场景/背景多视图参考板，参考 environment concept board，不是商品主图。以空间结构、光线方向、背景层次、材质、关键道具、前中远景和可摆放主体区域为核心，不要把画面中的单个商品或人物当成唯一主主体。必须在同一张图中包含：正面空间视角、左侧空间视角、右侧空间视角、纵深/俯视空间视角、近景材质细节、光线氛围小图、可放置模特/商品的留白区域示意。所有视角必须保持同一个场景的色调、材质、空间关系、道具位置和光线逻辑一致，只改变镜头位置、景别和关注点。不要出现清晰真人脸、品牌水印、字幕、箭头、UI 或不可控文字。输出干净、高清、电影级构图的场景参考板。画幅比例${input.aspectRatio}。`
     : workflowKey === "image-generate" || workflowKey === "commerce-model"
-    ? `根据用户提示词生成图像，风格为${input.style}，场景方向为${input.scene}，${variation}，画幅比例${input.aspectRatio}。`
+    ? `根据用户提示词生成图像，${variation}，画幅比例${input.aspectRatio}。`
     : workflowKey === "recreate-reference-image"
     ? `生成一张商品/物体多视图参考板，不是普通商品主图、不是带模特图、不是场景海报。以用户选择的商品/物体为唯一主主体，保留轮廓、结构、颜色、材质、比例、Logo/标识位置和关键卖点。必须在同一张图中包含：正面、左 45 度、右 45 度、侧面、背面/反面、顶部或底部、材质细节、尺寸比例关系、可选使用方式小图。所有视角必须是同一个商品，品类、颜色、材质、结构和品牌标识位置保持一致，不要凭空换款式、换品类或增加无关配件。如果输入是服装静物且用户选择了商品类型，则输出服装商品多视图；不要补成人物模特。若画面中意外出现真人脸，必须弱化或遮挡，不保留可识别真实身份。不要套用普通商品主图逻辑。画幅比例${input.aspectRatio}。`
     : "";
   const taskPrompt = workflowKey === "model-wear"
-    ? `以第一张图片中的模特为主体，将后续图片中的服装或商品自然穿戴到模特身上。保持模特身份、面部、体型和人体结构自然，服装版型、材质、颜色和图案准确。场景为${input.scene}，风格为${input.style}，${variation}，画幅比例${input.aspectRatio}。`
+    ? `以第一张图片中的模特为主体，将后续图片中的服装或商品自然穿戴到模特身上。保持模特身份、面部、体型和人体结构自然，服装版型、材质、颜色和图案准确。${variation}，画幅比例${input.aspectRatio}。`
     : workflowKey === "recreate-reference-image"
     ? recreateReferencePrompt
     : workflowKey === "hd-enhance"
-    ? `对原图进行${input.scene}高清优化，策略为${input.style}。重点修复压缩噪点、边缘锯齿和模糊细节，保持画面自然，避免过度锐化、塑料感或内容重绘。`
+    ? "智能分析原图后进行高清优化。重点修复压缩噪点、边缘锯齿和模糊细节，保持画面自然，避免过度锐化、塑料感或内容重绘。"
     : workflowKey === "white-background"
-    ? `生成${input.scene}商品图，风格为${input.style}。主体居中、完整可见，边缘干净，背景为均匀纯白。`
+    ? "生成规范商品白底图。主体居中、完整可见，边缘干净，背景为均匀纯白。"
     : workflowKey === "resize-image"
-    ? `将图片调整为${input.aspectRatio}比例，采用${input.scene}与${input.style}策略，仅对主体外区域进行真实、连续的扩展。`
+    ? `将图片调整为${input.aspectRatio}比例，仅对主体外区域进行真实、连续的扩展。`
     : workflowKey === "recreate-product-hero"
-    ? `基于参考图的${input.scene}方向生成原创商品首屏主图，风格为${input.style}，${variation}，画幅比例${input.aspectRatio}。`
+    ? `基于参考图生成原创商品首屏主图，${variation}，画幅比例${input.aspectRatio}。`
     : workflowKey === "recreate-detail-page"
-    ? `生成原创商品详情页卡片。${detailCardDirection}参考${input.scene}，风格为${input.style}；各张图表达不同卖点，画幅比例${input.aspectRatio}，不生成文字、水印或价格。`
+    ? `生成原创商品详情页卡片。${detailCardDirection}各张图表达不同卖点，画幅比例${input.aspectRatio}，不生成文字、水印或价格。`
     : workflowKey === "product-detail-page"
-    ? `生成商品详情页独立卡片。${detailCardDirection}同一任务的各张图必须围绕不同商品特性表达，不得重复构图或重复卖点；从输入商品中识别可见的材质、结构、用途和适用人群。整体为${input.scene}视觉方向和${input.style}风格，${variation}，竖向画幅比例${input.aspectRatio}。画面内不要生成文字、价格、标签或水印。`
+    ? `生成商品详情页独立卡片。${detailCardDirection}同一任务的各张图必须围绕不同商品特性表达，不得重复构图或重复卖点；从输入商品中识别可见的材质、结构、用途和适用人群。${variation}，竖向画幅比例${input.aspectRatio}。画面内不要生成文字、价格、标签或水印。`
     : workflowKey === "scene-image"
-    ? `将商品自然融入${input.scene}场景，风格为${input.style}，${variation}，画幅比例${input.aspectRatio}，真实商业摄影，场景光线与商品接触阴影自然，突出商品主体。`
-    : `生成${input.scene}环境中的${input.style}电商商品主图，${variation}，画幅比例${input.aspectRatio}，真实摄影，干净背景，柔和自然阴影。`;
+    ? `根据商品与用户描述自动导演真实使用场景，${variation}，画幅比例${input.aspectRatio}，场景光线与商品接触阴影自然，突出商品主体。`
+    : `生成电商商品主图，${variation}，画幅比例${input.aspectRatio}，真实摄影，干净背景，柔和自然阴影。`;
   const prompt = [
     workflowKey === "recreate-reference-image" ? "" : shared,
+    workflowKey === "recreate-reference-image" || !input.internalPrompt ? "" : `工作流内置策略：${input.internalPrompt}`,
     taskPrompt,
     input.prompt ? `用户补充要求：${input.prompt}` : "",
   ].filter(Boolean).join("\n");

@@ -68,7 +68,7 @@ const checks = [
   ],
   [
     "image workflows show elapsed generation time",
-    "app/components/image-workflow-page.tsx",
+    "app/features/image-creation/shared/image-workflow-page.tsx",
     "<GenerationProgress",
   ],
   [
@@ -79,13 +79,13 @@ const checks = [
   ],
   [
     "AI image generation uses a dedicated case-board layout",
-    "app/components/ai-image-generate-page.tsx",
+    "app/features/image-creation/ai-image/ai-image-generate-page.tsx",
     "yh-image-form-card",
     "yh-case-board",
   ],
   [
     "Product scene image uses the recreated case-board layout",
-    "app/components/product-scene-image-page.tsx",
+    "app/features/image-creation/product-scene/product-scene-image-page.tsx",
     "生成产品场景图",
     "yh-scene-case-board",
   ],
@@ -97,13 +97,13 @@ const checks = [
   ],
   [
     "Image workflows expose case references and same-style apply",
-    "app/components/image-workflow-page.tsx",
+    "app/features/image-creation/shared/image-workflow-page.tsx",
     "案例参考",
     "做同款",
   ],
   [
     "model wear shows elapsed generation time",
-    "app/create/model-wear/page.tsx",
+    "app/features/image-creation/model-wear/model-wear-workspace.tsx",
     "<GenerationProgress",
   ],
   [
@@ -409,7 +409,7 @@ const checks = [
   ],
   [
     "AI image generation sends the selected provider to the backend",
-    "app/components/ai-image-generate-page.tsx",
+    "app/features/image-creation/ai-image/ai-image-generate-page.tsx",
     "imageProvider: imageProviderForModel(model)",
     "不上传则文生图，上传后按参考图生成",
   ],
@@ -708,26 +708,26 @@ const checks = [
   ],
   [
     "All shared image workflows use manual result saving",
-    "app/components/image-workflow-page.tsx",
+    "app/features/image-creation/shared/image-workflow-page.tsx",
     "GeneratedAssetActions",
     "TemporaryResultNotice",
     "draftId: projectId",
   ],
   [
     "AI image generation uses manual result saving",
-    "app/components/ai-image-generate-page.tsx",
+    "app/features/image-creation/ai-image/ai-image-generate-page.tsx",
     "GeneratedAssetActions",
     "TemporaryResultNotice",
   ],
   [
     "Product scene generation uses manual result saving",
-    "app/components/product-scene-image-page.tsx",
+    "app/features/image-creation/product-scene/product-scene-image-page.tsx",
     "GeneratedAssetActions",
     "TemporaryResultNotice",
   ],
   [
     "Model wear uses manual result saving",
-    "app/create/model-wear/page.tsx",
+    "app/features/image-creation/model-wear/model-wear-workspace.tsx",
     "GeneratedAssetActions",
     "draftId: projectId",
   ],
@@ -1479,12 +1479,12 @@ const checks = [
   ],
   [
     "Shared image workflows accept assistant prompt backfill",
-    "app/components/image-workflow-page.tsx",
+    "app/features/image-creation/shared/image-workflow-page.tsx",
     "useAssistantPromptReceiver",
   ],
   [
     "AI image generation accepts assistant prompt backfill",
-    "app/components/ai-image-generate-page.tsx",
+    "app/features/image-creation/ai-image/ai-image-generate-page.tsx",
     "useAssistantPromptReceiver",
   ],
   [
@@ -1499,7 +1499,7 @@ const checks = [
   ],
   [
     "Image workspaces expose an explicit output count control",
-    "app/components/image-output-count-control.tsx",
+    "app/features/image-creation/shared/image-output-count-control.tsx",
     "默认生成 1 张，需要更多结果时再主动选择",
   ],
   [
@@ -1509,22 +1509,22 @@ const checks = [
   ],
   [
     "Product scene generation accepts assistant prompt backfill",
-    "app/components/product-scene-image-page.tsx",
+    "app/features/image-creation/product-scene/product-scene-image-page.tsx",
     "useAssistantPromptReceiver",
   ],
   [
     "Model wear accepts assistant prompt backfill",
-    "app/create/model-wear/page.tsx",
+    "app/features/image-creation/model-wear/model-wear-workspace.tsx",
     "useAssistantPromptReceiver",
   ],
   [
     "Detail page workflows use a dedicated staged studio",
-    "app/create/product-detail/page.tsx",
+    "app/features/image-creation/product-detail/product-detail-workspace.tsx",
     "<DetailPageStudio",
   ],
   [
     "Recreated detail pages use the same structured studio",
-    "app/create/recreate-detail-page/page.tsx",
+    "app/features/image-creation/recreate-detail-page/recreate-detail-page-workspace.tsx",
     "<DetailPageStudio",
   ],
   [
@@ -1547,12 +1547,90 @@ const checks = [
     "scripts/worker.mjs",
     "Math.min(2, count)",
   ],
+  [
+    "Image workflows keep visual direction in backend prompts",
+    "lib/product-config.ts",
+    "internalPrompt",
+  ],
+  [
+    "User image tasks ignore client scene and style fields",
+    "lib/task-creation.ts",
+    "const acceptsStructuredDirection = workflow.key.includes(\"video\") || workflow.key === \"recreate-reference-image\"",
+  ],
+  [
+    "Image creation modules have a shared task API",
+    "app/features/image-creation/shared/image-task-api.ts",
+    "pollImageTask",
+  ],
+  [
+    "Model wear route delegates to its feature workspace",
+    "app/create/model-wear/page.tsx",
+    "@/app/features/image-creation/model-wear/model-wear-workspace",
+  ],
+  [
+    "Commerce model route delegates to its feature workspace",
+    "app/create/commerce-model/page.tsx",
+    "@/app/features/image-creation/commerce-model/commerce-model-workspace",
+  ],
+  [
+    "Product hero route delegates to its feature workspace",
+    "app/create/product-hero/page.tsx",
+    "@/app/features/image-creation/product-hero/product-hero-workspace",
+  ],
+  [
+    "Product detail route delegates to its feature workspace",
+    "app/create/product-detail/page.tsx",
+    "@/app/features/image-creation/product-detail/product-detail-workspace",
+  ],
+  [
+    "Recreate hero route delegates to its feature workspace",
+    "app/create/recreate-product-hero/page.tsx",
+    "@/app/features/image-creation/recreate-product-hero/recreate-product-hero-workspace",
+  ],
+  [
+    "Recreate detail route delegates to its feature workspace",
+    "app/create/recreate-detail-page/page.tsx",
+    "@/app/features/image-creation/recreate-detail-page/recreate-detail-page-workspace",
+  ],
+  [
+    "HD enhance route delegates to its feature workspace",
+    "app/create/hd-enhance/page.tsx",
+    "@/app/features/image-creation/hd-enhance/hd-enhance-workspace",
+  ],
+  [
+    "Resize image route delegates to its feature workspace",
+    "app/create/resize-image/page.tsx",
+    "@/app/features/image-creation/resize-image/resize-image-workspace",
+  ],
+  [
+    "White background route delegates to its feature workspace",
+    "app/create/white-background/page.tsx",
+    "@/app/features/image-creation/white-background/white-background-workspace",
+  ],
+];
+
+const forbiddenChecks = [
+  ["Shared image form hides scene selector", "app/features/image-creation/shared/image-workflow-page.tsx", "使用场景<select"],
+  ["Shared image form hides style selector", "app/features/image-creation/shared/image-workflow-page.tsx", "视觉风格 <select"],
+  ["AI image form hides scene selector", "app/features/image-creation/ai-image/ai-image-generate-page.tsx", "使用场景<select"],
+  ["AI image form hides style selector", "app/features/image-creation/ai-image/ai-image-generate-page.tsx", "视觉风格 <em>"],
+  ["Product scene form hides scene selector", "app/features/image-creation/product-scene/product-scene-image-page.tsx", "使用场景<select"],
+  ["Product scene form hides style selector", "app/features/image-creation/product-scene/product-scene-image-page.tsx", "视觉风格 <em>"],
+  ["Model wear form hides scene selector", "app/features/image-creation/model-wear/model-wear-workspace.tsx", "使用场景<select"],
+  ["Model wear form hides style selector", "app/features/image-creation/model-wear/model-wear-workspace.tsx", "视觉风格<select"],
+  ["Detail page studio hides fixed visual selectors", "app/features/image-creation/detail-page/detail-page-studio.tsx", "视觉风格<select"],
 ];
 
 let failed = false;
 for (const [name, path, expected] of checks) {
   const source = await readFile(path, "utf8");
   const ok = source.includes(expected);
+  console.log(`${ok ? "PASS" : "FAIL"}: ${name}`);
+  if (!ok) failed = true;
+}
+for (const [name, path, forbidden] of forbiddenChecks) {
+  const source = await readFile(path, "utf8");
+  const ok = !source.includes(forbidden);
   console.log(`${ok ? "PASS" : "FAIL"}: ${name}`);
   if (!ok) failed = true;
 }
