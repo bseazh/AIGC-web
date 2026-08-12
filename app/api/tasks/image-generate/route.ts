@@ -12,6 +12,7 @@ export async function POST(request: NextRequest) {
     (body) => ({
       imageProvider: body.imageProvider === "sophnet" ? "sophnet" : "gemini",
       imageResolution: body.imageResolution === "2K" ? "2K" : "1K",
+      referenceRoles: Array.isArray(body.referenceRoles) ? body.referenceRoles.filter((role): role is string => ["subject", "product", "style", "composition", "scene"].includes(String(role))).slice(0, 3) : [],
     }),
   );
 }

@@ -401,6 +401,20 @@ function geminiImageResponseAspectRatio(value) {
 
 function imageReferencePlan(workflowKey, count, input = {}) {
   return Array.from({ length: count }, (_, index) => {
+    if (workflowKey === "image-generate") {
+      const role = Array.isArray(input.referenceRoles) ? input.referenceRoles[index] : index === 0 ? "subject" : "product";
+      const roleDirections = {
+        subject: { label: "主体身份源图", cue: "把图中核心人物、商品或物体作为最终画面的身份来源。逐项锁定轮廓、比例、结构、颜色、材质和可识别特征；场景和动作可以改变，但不得换成相似主体。" },
+        product: { label: "商品细节参考图", cue: "提取并锁定商品的品类、外形、部件数量与位置、颜色、材质、纹理、Logo/标识和配件关系；这些商品信息必须真实出现在最终图中，不得换款或臆造结构。" },
+        style: { label: "视觉风格参考图", cue: "只参考色彩体系、光线质感、材质表现、摄影/插画语言和后期氛围；不要复制图中的具体人物、商品、文字、品牌或构图。" },
+        composition: { label: "构图布局参考图", cue: "只参考主体位置、景别、机位、视觉动线、前中后景层次和留白分配；用当前任务的主体替换原图内容，不复制原图文字和品牌。" },
+        scene: { label: "场景环境参考图", cue: "锁定空间类型、背景结构、关键道具、光线方向、色温、透视和环境材质；把当前主体自然放入该环境，不复制场景中的其他商品、人物身份或文字。" },
+      };
+      return roleDirections[role] || roleDirections.product;
+    }
+    if (workflowKey === "scene-image") {
+      return { label: `独立商品源图 ${index + 1}`, cue: `把这张图中的商品识别为场景中必须出现的第 ${index + 1} 个独立商品。锁定其轮廓、结构、比例、颜色、材质、部件、Logo/标识和配件；不得与其他参考图商品融合、替换或误认为同一商品的不同角度。` };
+    }
     if (workflowKey === "model-wear") {
       return index === 0
         ? { label: "模特身份源图", cue: "锁定这位模特的脸型、五官关系、发型、肤色、体型和人体比例；最终图必须保持同一人物身份，不得换脸或换人。" }
@@ -456,6 +470,23 @@ function imageReferenceDirection(workflowKey, referencePlan) {
   if (workflowKey === "recreate-reference-image") {
     return ["任务模式：所有输入图都必须作为多视图参考板的依据。", numberedRoles, "先读取参考图，再生成同一主体或同一场景的互补视角；禁止只根据文字猜测。"].join("\n");
   }
+  if (workflowKey === "image-generate") {
+    return [
+      "任务模式：这是带有明确参考角色的图像创作。必须先逐张读取图片，再进行生成；禁止只根据用户文字从零猜测。",
+      numberedRoles,
+      "参考执行顺序：第一步盘点每张图提供的信息；第二步区分不可变内容与可变表达；第三步按角色合并，主体/商品身份约束不得被风格、构图或场景参考覆盖。",
+      "多图冲突处理：主体身份以“主体身份源图”为准，商品结构以“商品细节参考图”为准，画面语言以“视觉风格参考图”为准，空间布局以“构图布局参考图”和“场景环境参考图”为准。不得把不同图片中的主体融合成一个新款式。",
+      "最终画面必须真正重建参考信息，不得把原图直接贴进画面、做成画中画、拼贴、边框样机或参考图展示板。",
+    ].join("\n");
+  }
+  if (workflowKey === "scene-image") {
+    return [
+      "任务模式：这是多商品真实场景合成。所有输入图都是独立商品来源，每一件商品都必须被识别并出现在最终画面中。",
+      numberedRoles,
+      "先建立商品清单，逐件保持身份、尺度和结构，再根据用途安排自然空间关系；禁止遗漏商品、融合商品、重复商品或让一件商品替代另一件。",
+      "场景可以重新设计，但商品本体不可重画成同品类常见款。每件商品与桌面、地面、手部或其他承托物的透视、接触阴影、反射和遮挡必须自然。",
+    ].join("\n");
+  }
   return [
     "任务模式：这是严格的参考图商品/主体再创作、换景或合成任务，不是忽略图片后从零文生图。每张参考图都必须在最终图片中承担明确作用。",
     numberedRoles,
@@ -482,6 +513,8 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
     "构图执行：严格落实用户指定的景别、机位、镜头焦段、主体位置和留白；没有明确指定时，使用稳定的商业构图和清晰视觉层级，避免主体被裁切或被道具遮挡。",
     "光影执行：主光方向统一，环境光、接触阴影、反射与景深自然；主体与场景必须有真实接触关系，避免悬浮、抠图边缘和不一致透视。",
     "内容边界：不要添加无关商品、错误手指/肢体、重复主体、随机文字、价格、二维码、边框或水印。需要保留参考图已有标识时保持位置和形态，不要自行杜撰难以辨认的标识。",
+    inputUrls.length ? "生成前内部检查：确认每张参考图已被读取，并列出其对应角色、必须保留的信息和允许变化的信息；不要把检查过程输出给用户。" : "",
+    inputUrls.length ? "生成后内部自检：逐项核对主体是否同款、关键部件是否齐全、颜色材质是否一致、Logo/标识位置是否合理、各参考角色是否落实。发现换款、漏图、结构错误或角色混用时，在返回前自行修正。" : "",
     `输出规格：只生成 1 张最终图片，画幅比例 ${input.aspectRatio || "1:1"}，${input.imageResolution === "2K" ? "目标清晰度 2K" : "目标清晰度 1K"}。`,
     "响应要求：立即执行图像生成，只返回最终图片，不要解释、确认需求、复述提示词或输出纯文字回复。",
   ].join("\n");

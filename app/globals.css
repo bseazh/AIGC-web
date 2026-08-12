@@ -1786,6 +1786,11 @@ a { color: inherit; text-decoration: none; }
 .yh-reference-list article { position:relative; overflow:hidden; border-radius:8px; background:#eef3f8; }
 .yh-reference-list img { width:100%; aspect-ratio:1; display:block; object-fit:cover; }
 .yh-reference-list button { position:absolute; top:4px; right:4px; width:20px; height:20px; display:grid; place-items:center; border:0; border-radius:50%; color:#fff; background:rgba(28,36,48,.68); }
+.yh-reference-list.with-roles { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.yh-reference-list.with-roles article { overflow:visible; border:1px solid #dfe7f0; background:#fff; }
+.yh-reference-list.with-roles article>label { padding:6px; display:grid; gap:4px; color:#718198; font-size:9px; font-weight:700; }
+.yh-reference-list.with-roles select { min-width:0; width:100%; height:28px; padding:0 5px; border:1px solid #d8e1ec; border-radius:6px; color:#43566d; background:#fff; font-size:10px; }
+@media(max-width:520px) { .yh-reference-list.with-roles { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 .yh-credit { min-height:38px; margin:14px 0 0; padding:0 11px; display:flex; align-items:center; gap:7px; border:1px solid #ccefee; border-radius:9px; color:#30818f; background:#effdfd; font-size:12px; font-weight:700; }
 .yh-credit svg { color:#13aee5; }
 .yh-actions { margin-top:14px; display:grid; grid-template-columns:minmax(0,1fr) 86px; gap:11px; }

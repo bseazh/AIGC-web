@@ -14,14 +14,22 @@ import { imageGenerateWorkflow } from "@/lib/product-config";
 
 type Account = { user: { isAdministrator?: boolean }; wallet: { availablePoints: number } };
 type Asset = { id: string; mimeType: string; originalName: string; url: string; kind: string };
-type UploadedImage = { id?: string; file?: File; url: string; name: string };
+type ReferenceRole = "subject" | "product" | "style" | "composition" | "scene";
+type UploadedImage = { id?: string; file?: File; url: string; name: string; role: ReferenceRole };
 type TaskResult = GeneratedTaskResult;
 type Phase = "idle" | "uploading" | "generating" | "succeeded" | "failed";
 
 const ratios = ["1:1", "3:4", "4:3", "9:16"];
 const modelOptions = ["Gemini 2.5 Flash Image", "豆包 Seedream 5.0 Pro"];
 const resolutions = ["1K", "2K"];
-const maxReferenceImages = 10;
+const maxReferenceImages = 3;
+const referenceRoleOptions: Array<{ value: ReferenceRole; label: string }> = [
+  { value: "subject", label: "主体身份" },
+  { value: "product", label: "商品细节" },
+  { value: "style", label: "视觉风格" },
+  { value: "composition", label: "构图布局" },
+  { value: "scene", label: "场景环境" },
+];
 
 function imageProviderForModel(model: string) {
   return model === "豆包 Seedream 5.0 Pro" ? "sophnet" : "gemini";
@@ -74,7 +82,7 @@ export function AiImageGeneratePage() {
   useAssistantPromptReceiver({
     setPrompt,
     setReferenceImages: (images) => setReferences((current) => [
-      ...images.map((image) => ({ id: image.assetId, url: image.url || "", name: image.name })),
+      ...images.map((image) => ({ id: image.assetId, url: image.url || "", name: image.name, role: "subject" as const })),
       ...current,
     ].filter((item) => item.url).filter((item, index, items) => items.findIndex((candidate) => (candidate.id && item.id ? candidate.id === item.id : candidate.url === item.url)) === index).slice(0, maxReferenceImages)),
     onApplied: resetTask,
@@ -90,7 +98,7 @@ export function AiImageGeneratePage() {
     const nextFiles = Array.from(fileList).slice(0, maxReferenceImages - references.length);
     const valid = nextFiles.filter((file) => ["image/jpeg", "image/png", "image/webp"].includes(file.type) && file.size <= 10 * 1024 * 1024);
     if (valid.length !== nextFiles.length) setError("仅支持 10MB 内 JPG、PNG、WebP 图片");
-    setReferences((current) => [...current, ...valid.map((file) => ({ file, url: URL.createObjectURL(file), name: file.name }))].slice(0, maxReferenceImages));
+    setReferences((current) => [...current, ...valid.map((file, index) => ({ file, url: URL.createObjectURL(file), name: file.name, role: current.length + index === 0 ? "subject" as const : "product" as const }))].slice(0, maxReferenceImages));
     resetTask();
   };
 
@@ -100,6 +108,11 @@ export function AiImageGeneratePage() {
       if (target?.url.startsWith("blob:")) URL.revokeObjectURL(target.url);
       return current.filter((_, itemIndex) => itemIndex !== index);
     });
+    resetTask();
+  };
+
+  const updateReferenceRole = (index: number, role: ReferenceRole) => {
+    setReferences((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, role } : item));
     resetTask();
   };
 
@@ -121,7 +134,7 @@ export function AiImageGeneratePage() {
 
   const selectAsset = (asset: Asset) => {
     if (references.some((item) => item.id === asset.id) || references.length >= maxReferenceImages) return;
-    setReferences((current) => [...current, { id: asset.id, url: asset.url, name: asset.originalName }]);
+    setReferences((current) => [...current, { id: asset.id, url: asset.url, name: asset.originalName, role: current.length === 0 ? "subject" : "product" }]);
     resetTask();
   };
 
@@ -132,14 +145,7 @@ export function AiImageGeneratePage() {
     resetTask();
   };
 
-  const uploadReferences = async () => {
-    const assetIds = references.filter((item) => item.id).map((item) => item.id as string);
-    for (const item of references) {
-      if (!item.file) continue;
-      assetIds.push(await uploadImageFile(item.file, "参考图"));
-    }
-    return assetIds;
-  };
+  const uploadReferences = () => Promise.all(references.map(async (item) => item.id || (item.file ? uploadImageFile(item.file, "参考图") : Promise.reject(new Error("参考图缺少可用素材")))));
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -155,6 +161,7 @@ export function AiImageGeneratePage() {
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
         body: JSON.stringify({
           assetIds,
+          referenceRoles: references.map((item) => item.role),
           prompt: composedPrompt,
           aspectRatio: ratio,
           imageProvider: imageProviderForModel(model),
@@ -208,8 +215,8 @@ export function AiImageGeneratePage() {
               <button className={sourceTab === "local" ? "active" : ""} type="button" onClick={() => setSourceTab("local")}><Upload size={14} />本地上传</button>
               <button className={sourceTab === "asset" ? "active" : ""} type="button" onClick={loadAssets}><FolderOpen size={14} />资产库</button>
             </div>
-            {sourceTab === "local" ? <label className="yh-upload-drop"><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => chooseFiles(event.target.files)} /><span><Upload size={24} /></span><strong>参考图片（可选）</strong><small>不上传则文生图，上传后按参考图生成<br />已上传 {references.length}/{maxReferenceImages} 个</small></label> : <div className="yh-asset-picker">{assetsLoading ? <p><LoaderCircle size={18} />正在加载素材</p> : assets.length ? assets.slice(0, 12).map((asset) => <button type="button" key={asset.id} onClick={() => selectAsset(asset)}><img src={asset.url} alt="" /><span>{asset.originalName}</span></button>) : <p>暂无可用图片素材</p>}</div>}
-            {references.length > 0 && <div className="yh-reference-list">{references.map((item, index) => <article key={`${item.url}-${index}`}><img src={item.url} alt="" /><button type="button" aria-label="移除参考图" onClick={() => removeReference(index)}><X size={13} /></button></article>)}</div>}
+            {sourceTab === "local" ? <label className="yh-upload-drop"><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => chooseFiles(event.target.files)} /><span><Upload size={24} /></span><strong>参考图片（可选）</strong><small>上传后为每张图指定参考用途<br />已上传 {references.length}/{maxReferenceImages} 张</small></label> : <div className="yh-asset-picker">{assetsLoading ? <p><LoaderCircle size={18} />正在加载素材</p> : assets.length ? assets.slice(0, 12).map((asset) => <button type="button" key={asset.id} onClick={() => selectAsset(asset)}><img src={asset.url} alt="" /><span>{asset.originalName}</span></button>) : <p>暂无可用图片素材</p>}</div>}
+            {references.length > 0 && <div className="yh-reference-list with-roles">{references.map((item, index) => <article key={`${item.url}-${index}`}><img src={item.url} alt={`参考图 ${index + 1}`} /><button type="button" aria-label="移除参考图" onClick={() => removeReference(index)}><X size={13} /></button><label><span>参考图 {index + 1}</span><select value={item.role} onChange={(event) => updateReferenceRole(index, event.target.value as ReferenceRole)}>{referenceRoleOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label></article>)}</div>}
           </section>
           <ImageOutputCountControl value={outputCount} onChange={setOutputCount} disabled={busy} />
           <p className="yh-credit"><Zap size={15} />{quotedText}</p>
