@@ -128,6 +128,19 @@ export function DetailPageStudio(props: Props) {
       setPreview(image.url);
       setPlans([]); setCards([]); setSelectedPlanId(""); setStage("brief"); setTask(null); setPhase("idle"); setError("");
     },
+    setSeries: ({ seriesConfig, visualBible, seriesPlan }) => {
+      if (seriesConfig?.ratio) setRatio(seriesConfig.ratio);
+      if (seriesPlan?.length) {
+        setCards(seriesPlan.map((item, index) => ({
+          id: item.id || crypto.randomUUID(),
+          role: item.title || `系列图片 ${index + 1}`,
+          title: item.copy || item.title,
+          subtitle: item.sellingPoint,
+          visualPrompt: [visualBible ? `整套统一视觉基准：${visualBible}` : "", `本张镜头角度：${item.angle}`, item.visualPrompt].filter(Boolean).join("\n").slice(0, 360),
+        })));
+        setPlans([]); setSelectedPlanId(""); setStage("cards"); setTask(null); setPhase("idle"); setError("");
+      }
+    },
   });
   useAssistantWorkspaceContext(useMemo(() => ({
     images: preview ? [{ url: preview, name: file?.name || selectedAsset?.originalName || "商品图", role: "product" as const }] : [],

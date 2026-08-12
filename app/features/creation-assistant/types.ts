@@ -29,8 +29,27 @@ export type AssistantRecommendations = {
   quickReplies: string[];
 };
 
+export type AssistantSeriesConfig = {
+  count: 1 | 2 | 4 | 6 | 8;
+  unifiedStyle: boolean;
+  unifiedBackground: boolean;
+  preserveProduct: true;
+  reserveCopySpace: boolean;
+  differentAngles: boolean;
+  ratio: string;
+};
+
+export type AssistantSeriesCard = {
+  id: string;
+  title: string;
+  angle: string;
+  sellingPoint: string;
+  copy: string;
+  visualPrompt: string;
+};
+
 export type CreationAssistantState = {
-  step: "service" | "product" | "direction" | "result";
+  step: "service" | "product" | "direction" | "series" | "result";
   goal: ImageAssistantWorkflowKey;
   sourceText: string;
   audience: string;
@@ -42,6 +61,9 @@ export type CreationAssistantState = {
   recommendations: AssistantRecommendations | null;
   messages: AssistantMessage[];
   referenceImages: AssistantReferenceImage[];
+  seriesConfig: AssistantSeriesConfig;
+  visualBible: string;
+  seriesPlan: AssistantSeriesCard[];
   handoffPending?: boolean;
   expiresAt?: string;
 };
@@ -56,6 +78,9 @@ export type AssistantApplyDetail = {
   prompt: string;
   productSummary?: string;
   referenceImages?: AssistantReferenceImage[];
+  seriesConfig?: AssistantSeriesConfig;
+  visualBible?: string;
+  seriesPlan?: AssistantSeriesCard[];
 };
 
 export type AssistantWorkspaceContext = {

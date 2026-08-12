@@ -503,6 +503,27 @@ const checks = [
     '多商品真实场景合成',
   ],
   [
+    "Creation assistant exposes series generation planning",
+    "app/features/creation-assistant/components/creation-assistant.tsx",
+    '系列设置与预览',
+    '统一视觉风格',
+    '每张使用不同角度',
+    '系列画幅',
+  ],
+  [
+    "Series cards reach image task generation",
+    "lib/task-creation.ts",
+    'normalizedSeriesPlan',
+    'visualBible',
+    'seriesPlan',
+  ],
+  [
+    "Worker generates each series card with its own direction",
+    "scripts/worker.mjs",
+    '本张系列任务',
+    '整套系列统一视觉基准',
+  ],
+  [
     "Recreate video face mask fallback does not cover landscape identity boards",
     "app/components/recreate-video-page.tsx",
     "canvas.width < canvas.height ? fallbackFaceRegions",

@@ -12,6 +12,7 @@ import {
   type AssistantContextRequestDetail,
   type AssistantMessage,
   type AssistantWorkspaceContext,
+  type AssistantSeriesConfig,
   type CreationAssistantState,
   type ImageAssistantWorkflowKey,
 } from "../types";
@@ -37,6 +38,9 @@ function initialState(workflowKey: ImageAssistantWorkflowKey): CreationAssistant
     recommendations: null,
     messages: [initialMessage],
     referenceImages: [],
+    seriesConfig: { count: 4, unifiedStyle: true, unifiedBackground: true, preserveProduct: true, reserveCopySpace: true, differentAngles: true, ratio: "auto" },
+    visualBible: "",
+    seriesPlan: [],
     handoffPending: false,
   };
 }
@@ -140,7 +144,7 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
     if (!hydrated || !state.handoffPending || !state.prompt) return;
     const timer = window.setTimeout(() => {
       window.dispatchEvent(new CustomEvent(CREATION_ASSISTANT_APPLY_EVENT, {
-        detail: { prompt: state.prompt, productSummary: state.recommendations?.productSummary || state.sourceText, referenceImages: state.referenceImages },
+        detail: { prompt: state.prompt, productSummary: state.recommendations?.productSummary || state.sourceText, referenceImages: state.referenceImages, seriesConfig: state.seriesConfig, visualBible: state.visualBible, seriesPlan: state.seriesPlan },
       }));
       setState((current) => ({ ...current, handoffPending: false }));
     }, 250);
@@ -331,14 +335,17 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
           style: state.style,
           sellingPoint: state.sellingPoint,
           revision: state.revision,
+          seriesConfig: state.seriesConfig,
         }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.message || "提示词生成失败");
       setState((current) => ({
         ...current,
-        step: "result",
+        step: "series",
         prompt: body.prompt,
+        visualBible: body.visualBible || "",
+        seriesPlan: Array.isArray(body.seriesPlan) ? body.seriesPlan : [],
         revision: "",
         messages: [...current.messages, message("user", "按当前方向生成提示词"), message("assistant", body.summary)],
       }));
@@ -358,7 +365,7 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
   const applyPrompt = async () => {
     if (state.goal === workflowKey) {
       window.dispatchEvent(new CustomEvent(CREATION_ASSISTANT_APPLY_EVENT, {
-        detail: { prompt: state.prompt, productSummary: state.recommendations?.productSummary || state.sourceText, referenceImages: state.referenceImages },
+        detail: { prompt: state.prompt, productSummary: state.recommendations?.productSummary || state.sourceText, referenceImages: state.referenceImages, seriesConfig: state.seriesConfig, visualBible: state.visualBible, seriesPlan: state.seriesPlan },
       }));
       setOpen(false);
       return;
@@ -448,7 +455,7 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
           </section>}
 
           {state.step === "direction" && state.recommendations && <section className="creation-assistant-step" ref={activeStepRef}>
-            <div className="creation-assistant-step-title"><b>对话校正方向</b><span>3 / 4</span></div>
+            <div className="creation-assistant-step-title"><b>对话校正方向</b><span>3 / 5</span></div>
             <p className="creation-assistant-summary">{state.recommendations.productSummary}</p>
             {state.recommendations.visualAnalysis && <details className="creation-assistant-vision-analysis"><summary><ImageIcon size={14} />已读取参考图，查看识别结果</summary><p>{state.recommendations.visualAnalysis}</p></details>}
             <ChoiceGroup label="卖给谁" value={state.audience} options={state.recommendations.audiences} onChange={(audience) => setState((current) => ({ ...current, audience }))} />
@@ -460,11 +467,23 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
               {state.recommendations.quickReplies.length > 0 && <div>{state.recommendations.quickReplies.map((item) => <button type="button" disabled={busy} onClick={() => refineDirection(item)} key={item}>{item}</button>)}</div>}
               <label><input value={chatInput} onChange={(event) => setChatInput(event.target.value.slice(0, 500))} placeholder="输入你的回答或修改意见" /><button type="button" disabled={busy || !chatInput.trim()} onClick={() => refineDirection()} aria-label="发送修改意见"><Send size={15} /></button></label>
             </div>
-            <div className="creation-assistant-footer"><button type="button" onClick={() => setState((current) => ({ ...current, step: "product" }))}><ChevronLeft size={15} />修改商品</button><button className="primary" type="button" disabled={busy || !selectionsReady} onClick={generatePrompt}>{busy ? <LoaderCircle className="spin" size={15} /> : <WandSparkles size={15} />}方向满意，生成提示词</button></div>
+            <div className="creation-assistant-footer"><button type="button" onClick={() => setState((current) => ({ ...current, step: "product" }))}><ChevronLeft size={15} />修改商品</button><button className="primary" type="button" disabled={busy || !selectionsReady} onClick={generatePrompt}>{busy ? <LoaderCircle className="spin" size={15} /> : <WandSparkles size={15} />}生成系列方案</button></div>
+          </section>}
+
+          {state.step === "series" && <section className="creation-assistant-step" ref={activeStepRef}>
+            <div className="creation-assistant-step-title"><b>系列设置与预览</b><span>4 / 5</span></div>
+            <p className="creation-assistant-summary">先确认整组图片的统一规则，再逐张生成。每张卡片会绑定自己的角度、卖点和文案。</p>
+            <fieldset className="creation-assistant-choices"><legend>生成数量</legend><div>{[1, 2, 4, 6, 8].filter((count) => state.goal === "product-detail-page" || state.goal === "recreate-detail-page" ? count >= 4 : count <= 4).map((count) => <button type="button" className={state.seriesConfig.count === count ? "selected" : ""} key={count} onClick={() => setState((current) => ({ ...current, seriesConfig: { ...current.seriesConfig, count: count as AssistantSeriesConfig["count"] }, seriesPlan: [] }))}>{count} 张</button>)}</div></fieldset>
+            <label className="creation-assistant-series-ratio"><span>系列画幅</span><select value={["auto", "1:1", "3:4", "4:3", "9:16"].includes(state.seriesConfig.ratio) ? state.seriesConfig.ratio : "custom"} onChange={(event) => setState((current) => ({ ...current, seriesConfig: { ...current.seriesConfig, ratio: event.target.value === "custom" ? "8:20" : event.target.value } }))}><option value="auto">自动</option><option value="1:1">1:1 方形</option><option value="3:4">3:4 竖版</option><option value="4:3">4:3 横版</option><option value="9:16">9:16 手机竖版</option><option value="custom">自定义</option></select>{!["auto", "1:1", "3:4", "4:3", "9:16"].includes(state.seriesConfig.ratio) && <input value={state.seriesConfig.ratio} placeholder="例如 8:20" onChange={(event) => setState((current) => ({ ...current, seriesConfig: { ...current.seriesConfig, ratio: event.target.value.replace(/[^0-9:]/g, "").slice(0, 11) } }))} />}</label>
+            <div className="creation-assistant-series-toggles"><label><input type="checkbox" checked={state.seriesConfig.unifiedStyle} onChange={(event) => setState((current) => ({ ...current, seriesConfig: { ...current.seriesConfig, unifiedStyle: event.target.checked } }))} />统一视觉风格</label><label><input type="checkbox" checked={state.seriesConfig.unifiedBackground} onChange={(event) => setState((current) => ({ ...current, seriesConfig: { ...current.seriesConfig, unifiedBackground: event.target.checked } }))} />统一背景体系</label><label><input type="checkbox" checked={state.seriesConfig.reserveCopySpace} onChange={(event) => setState((current) => ({ ...current, seriesConfig: { ...current.seriesConfig, reserveCopySpace: event.target.checked } }))} />预留文案空间</label><label><input type="checkbox" checked={state.seriesConfig.differentAngles} onChange={(event) => setState((current) => ({ ...current, seriesConfig: { ...current.seriesConfig, differentAngles: event.target.checked } }))} />每张使用不同角度</label></div>
+            {state.visualBible && <details className="creation-assistant-vision-analysis" open><summary>已生成统一视觉基准</summary><p>{state.visualBible}</p></details>}
+            <div className="creation-assistant-series-plan">{state.seriesPlan.map((card, index) => <article key={card.id}><header><b>{index + 1}</b><input value={card.title} onChange={(event) => setState((current) => ({ ...current, seriesPlan: current.seriesPlan.map((item) => item.id === card.id ? { ...item, title: event.target.value.slice(0, 80) } : item) }))} /></header><label>角度<input value={card.angle} onChange={(event) => setState((current) => ({ ...current, seriesPlan: current.seriesPlan.map((item) => item.id === card.id ? { ...item, angle: event.target.value.slice(0, 80) } : item) }))} /></label><label>卖点<input value={card.sellingPoint} onChange={(event) => setState((current) => ({ ...current, seriesPlan: current.seriesPlan.map((item) => item.id === card.id ? { ...item, sellingPoint: event.target.value.slice(0, 120) } : item) }))} /></label><label>文案<textarea value={card.copy} onChange={(event) => setState((current) => ({ ...current, seriesPlan: current.seriesPlan.map((item) => item.id === card.id ? { ...item, copy: event.target.value.slice(0, 120) } : item) }))} /></label></article>)}</div>
+            {state.seriesPlan.length !== state.seriesConfig.count && <p className="creation-assistant-series-note">数量发生变化，请返回方向后重新生成系列方案。</p>}
+            <div className="creation-assistant-footer"><button type="button" onClick={() => setState((current) => ({ ...current, step: "direction" }))}><ChevronLeft size={15} />返回并重新生成</button><button className="primary" type="button" disabled={state.seriesPlan.length !== state.seriesConfig.count} onClick={() => setState((current) => ({ ...current, step: "result" }))}><WandSparkles size={15} />确认系列并查看提示词</button></div>
           </section>}
 
           {state.step === "result" && <section className="creation-assistant-step result" ref={activeStepRef}>
-            <div className="creation-assistant-step-title"><b>{currentWorkflow.label}提示词</b><span>4 / 4</span></div>
+            <div className="creation-assistant-step-title"><b>{currentWorkflow.label}系列提示词</b><span>5 / 5</span></div>
             <div className="creation-assistant-reference-block">
               <div className="creation-assistant-reference-heading"><span><ImageIcon size={15} />本次参考图</span><small>{state.referenceImages.length} / 4，将随提示词一起回填</small></div>
               {state.referenceImages.length > 0 && <div className="creation-assistant-reference-grid">{state.referenceImages.map((image) => <figure key={image.assetId}>{image.url ? <img src={image.url} alt={image.name} /> : <span className="creation-assistant-reference-placeholder"><ImageIcon size={18} /></span>}<figcaption>{image.name}</figcaption><button type="button" aria-label={`移除${image.name}`} onClick={() => setState((current) => ({ ...current, referenceImages: current.referenceImages.filter((item) => item.assetId !== image.assetId) }))}><X size={12} /></button></figure>)}</div>}

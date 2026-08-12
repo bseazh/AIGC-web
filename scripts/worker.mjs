@@ -502,6 +502,18 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
   const variation = ["正面居中构图", "轻微侧角构图", "留出营销文案空间", "更强调商品材质细节"][index] || "商业构图";
   const detailStage = ["品牌定位与首屏商品展示长图", "核心卖点解析长图", "材质、结构与工艺细节长图", "真实使用场景与效果长图", "规格、服务与购买理由长图"][index] || "商品详情长图";
   const detailCard = Array.isArray(input.detailCards) ? input.detailCards[index] : null;
+  const seriesCard = Array.isArray(input.seriesPlan) ? input.seriesPlan[index] : null;
+  const seriesDirection = seriesCard
+    ? [
+        `本张系列任务：第 ${index + 1} 张《${seriesCard.title}》。`,
+        seriesCard.angle ? `镜头角度：${seriesCard.angle}。` : "",
+        seriesCard.sellingPoint ? `本张唯一核心卖点：${seriesCard.sellingPoint}。` : "",
+        seriesCard.copy ? `后期排版文案意图：${seriesCard.copy}；图片内不要直接生成文字，只为该文案预留合适空间。` : "",
+        seriesCard.visualPrompt ? `本张画面导演要求：${seriesCard.visualPrompt}。` : "",
+        input.visualBible ? `整套系列统一视觉基准（本张必须继承）：${input.visualBible}` : "",
+        "与同组其他图片保持同一商品身份、颜色材质、摄影语言和品牌气质，只改变本张指定的角度、卖点和场景内容。",
+      ].filter(Boolean).join("\n")
+    : "";
   const detailCardDirection = detailCard
     ? `本卡片作用：${detailCard.role}。排版文案主标题：${detailCard.title}。辅助文案：${detailCard.subtitle || "无"}。画面导演要求：${detailCard.visualPrompt}。只生成承载该文案的干净商品画面并预留明确排版空间，不要把主标题、辅助文案或任何文字直接画进图片。`
     : `本卡片阶段：${detailStage}。`;
@@ -575,6 +587,7 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
     workflowKey === "recreate-reference-image" ? "" : shared,
     workflowKey === "recreate-reference-image" || !input.internalPrompt ? "" : `工作流内置策略：${input.internalPrompt}`,
     `工作流任务要求：${taskPrompt}`,
+    seriesDirection,
     input.prompt ? `用户创作要求（必须逐项落实）：\n${input.prompt}` : "",
     productionDirection,
   ].filter(Boolean).join("\n");

@@ -30,6 +30,7 @@ export function ModelWearWorkspace() {
   const [phase, setPhase] = useState<"idle" | "uploading" | "generating" | "succeeded" | "failed">("idle");
   const [error, setError] = useState("");
   const [task, setTask] = useState<TaskResult | null>(null);
+  const [seriesContext, setSeriesContext] = useState<{ visualBible?: string; seriesPlan?: unknown[] }>({});
   const markSaved = (assetId: string) => setTask((current) => current ? { ...current, outputs: current.outputs.map((output) => output.assetId === assetId ? { ...output, savedToLibrary: true, expiresAt: null } : output) } : current);
 
   useEffect(() => { fetch("/api/auth/session/", { cache: "no-store" }).then(async (response) => { if (!response.ok) throw new Error(); setAccount(await response.json()); }).catch(() => router.replace("/")); }, [router]);
@@ -51,13 +52,15 @@ export function ModelWearWorkspace() {
       ...images.map((image) => ({ assetId: image.assetId, preview: image.url || "", name: image.name })),
       ...current,
     ].filter((item) => item.preview).filter((item, index, items) => items.findIndex((candidate) => (candidate.assetId && item.assetId ? candidate.assetId === item.assetId : candidate.preview === item.preview)) === index).slice(0, 4)),
+    setOutputCount,
+    setSeriesTaskContext: ({ visualBible, seriesPlan }) => setSeriesContext({ visualBible, seriesPlan }),
     onApplied: () => { setError(""); setTask(null); setPhase("idle"); },
   });
   useAssistantWorkspaceContext(useMemo(() => ({
     images: products.map((item, index) => ({ url: item.preview, name: `商品图 ${index + 1}`, role: "product" as const })),
     productText: prompt,
   }), [products, prompt]));
-  const submit = async (event: FormEvent) => { event.preventDefault(); if (!model || !products.length || phase === "uploading" || phase === "generating") return; setError(""); setTask(null); setPhase("uploading"); try { const resolveAsset = async (item: Uploaded, label: string) => { if (item.assetId) return item.assetId; if (item.file) return uploadImageFile(item.file, label); throw new Error(`${label}缺少可用素材`); }; const [modelAssetId, ...productAssetIds] = await Promise.all([resolveAsset(model, "模特图"), ...products.map((item) => resolveAsset(item, "商品图"))]); const created = await imageRequest<{ taskId: string }>("/api/tasks/model-wear/", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ modelAssetId, productAssetIds, aspectRatio: ratio, prompt, outputCount, draftId: projectId }) }); setPhase("generating"); await pollImageTask(created.taskId, setTask); setPhase("succeeded"); setAccount(await fetch("/api/auth/session/", { cache: "no-store" }).then((item) => item.json())); } catch (caught) { setError(caught instanceof Error ? caught.message : "生成失败"); setPhase("failed"); } };
+  const submit = async (event: FormEvent) => { event.preventDefault(); if (!model || !products.length || phase === "uploading" || phase === "generating") return; setError(""); setTask(null); setPhase("uploading"); try { const resolveAsset = async (item: Uploaded, label: string) => { if (item.assetId) return item.assetId; if (item.file) return uploadImageFile(item.file, label); throw new Error(`${label}缺少可用素材`); }; const [modelAssetId, ...productAssetIds] = await Promise.all([resolveAsset(model, "模特图"), ...products.map((item) => resolveAsset(item, "商品图"))]); const created = await imageRequest<{ taskId: string }>("/api/tasks/model-wear/", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ modelAssetId, productAssetIds, aspectRatio: ratio, prompt, outputCount, visualBible: seriesContext.visualBible, seriesPlan: seriesContext.seriesPlan, draftId: projectId }) }); setPhase("generating"); await pollImageTask(created.taskId, setTask); setPhase("succeeded"); setAccount(await fetch("/api/auth/session/", { cache: "no-store" }).then((item) => item.json())); } catch (caught) { setError(caught instanceof Error ? caught.message : "生成失败"); setPhase("failed"); } };
   if (!account) return <main className="workspace-loading"><span><Sparkles size={22} /></span><p>正在载入芭乐AIGC</p></main>;
   const busy = phase === "uploading" || phase === "generating";
   return <main className="creator-shell model-wear-shell"><header className="creator-header"><button className="icon-button" aria-label="返回图片创作" onClick={() => router.push("/tools")}><ArrowLeft size={19} /></button><div><strong>模特穿搭</strong><span>芭乐AIGC</span></div><div className="creator-points"><Sparkles size={15} />{account.user.isAdministrator ? "管理员免积分" : `${account.wallet.availablePoints} 积分`}</div></header>

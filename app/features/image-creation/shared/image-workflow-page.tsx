@@ -71,6 +71,7 @@ export function ImageWorkflowPage({
   const [productDescription, setProductDescription] = useState("");
   const [outputCount, setOutputCount] = useState<ImageOutputCount>(initialOutputCount);
   const [appliedCaseId, setAppliedCaseId] = useState("");
+  const [seriesContext, setSeriesContext] = useState<{ visualBible?: string; seriesPlan?: unknown[] }>({});
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState("");
   const [task, setTask] = useState<TaskResult | null>(null);
@@ -130,6 +131,8 @@ export function ImageWorkflowPage({
       setSelectedAsset({ id: image.assetId, mimeType: "image/jpeg", byteSize: 0, originalName: image.name, url: image.url, kind: "INPUT" });
       setPreview(image.url);
     },
+    setOutputCount,
+    setSeriesTaskContext: ({ visualBible, seriesPlan }) => setSeriesContext({ visualBible, seriesPlan }),
     onApplied: resetTask,
   });
   useAssistantWorkspaceContext(useMemo(() => ({
@@ -199,7 +202,7 @@ export function ImageWorkflowPage({
       const created = await imageRequest<{ taskId: string }>(submitUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({ assetId, prompt: composedPrompt || prompt, productDescription, aspectRatio: ratio, outputCount, draftId: projectId }),
+        body: JSON.stringify({ assetId, prompt: composedPrompt || prompt, productDescription, aspectRatio: ratio, outputCount, visualBible: seriesContext.visualBible, seriesPlan: seriesContext.seriesPlan, draftId: projectId }),
       });
       setPhase("generating");
       await pollImageTask(created.taskId, setTask);

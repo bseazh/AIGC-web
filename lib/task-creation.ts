@@ -42,6 +42,23 @@ function requestedOutputCount(body: Record<string, unknown>, workflow: ImageWork
     : workflow.outputsPerTask;
 }
 
+function normalizedSeriesPlan(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 10).flatMap((item, index) => {
+    const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
+    const title = typeof record.title === "string" ? record.title.trim().slice(0, 80) : "";
+    if (!title) return [];
+    return [{
+      id: typeof record.id === "string" ? record.id.slice(0, 64) : `series-${index + 1}`,
+      title,
+      angle: typeof record.angle === "string" ? record.angle.trim().slice(0, 80) : "",
+      sellingPoint: typeof record.sellingPoint === "string" ? record.sellingPoint.trim().slice(0, 120) : "",
+      copy: typeof record.copy === "string" ? record.copy.trim().slice(0, 120) : "",
+      visualPrompt: typeof record.visualPrompt === "string" ? record.visualPrompt.trim().slice(0, 360) : "",
+    }];
+  });
+}
+
 type AssetSelector = (body: Record<string, unknown>) => string[];
 type ReadyAsset = { id: string; storage_key: string; mime_type: string; metadata_json: Record<string, unknown>; audit_status: string };
 type AssetValidator = (assets: ReadyAsset[]) => string | null;
@@ -132,7 +149,9 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
       await client.query("ROLLBACK");
       return NextResponse.json({ code: "DETAIL_CARDS_REQUIRED", message: `请至少保留 ${DETAIL_PAGE_MIN_CARDS} 张详情页卡片` }, { status: 400 });
     }
-    const input = { assetId: assets[0]?.id || null, storageKey: assets[0]?.storage_key || null, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), assetMimeTypes: assets.map((asset) => asset.mime_type), prompt, aspectRatio, aspectRatioMode: imageAspectRatio.mode, requestedAspectRatio: imageAspectRatio.requested, customAspectRatioWidth: imageAspectRatio.width, customAspectRatioHeight: imageAspectRatio.height, duration, resolution, ...(acceptsStructuredDirection ? { scene, style } : {}), internalPrompt: workflow.internalPrompt || "", outputs: requestedOutputCount(body, workflow), ...(detailCards.length ? { detailCards } : {}), ...(adminExempt ? { billingMode: ADMIN_EXEMPT_BILLING_MODE, quotedPoints: points } : {}), ...(promptConfig ? { promptConfig } : {}), ...(inputExtras?.(body) || {}) };
+    const seriesPlan = normalizedSeriesPlan(body.seriesPlan);
+    const visualBible = typeof body.visualBible === "string" ? body.visualBible.trim().slice(0, 1800) : "";
+    const input = { assetId: assets[0]?.id || null, storageKey: assets[0]?.storage_key || null, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), assetMimeTypes: assets.map((asset) => asset.mime_type), prompt, aspectRatio, aspectRatioMode: imageAspectRatio.mode, requestedAspectRatio: imageAspectRatio.requested, customAspectRatioWidth: imageAspectRatio.width, customAspectRatioHeight: imageAspectRatio.height, duration, resolution, ...(acceptsStructuredDirection ? { scene, style } : {}), internalPrompt: workflow.internalPrompt || "", outputs: requestedOutputCount(body, workflow), ...(detailCards.length ? { detailCards } : {}), ...(seriesPlan.length ? { seriesPlan } : {}), ...(visualBible ? { visualBible } : {}), ...(adminExempt ? { billingMode: ADMIN_EXEMPT_BILLING_MODE, quotedPoints: points } : {}), ...(promptConfig ? { promptConfig } : {}), ...(inputExtras?.(body) || {}) };
     await client.query(
       `INSERT INTO generation_tasks (id, user_id, workflow_key, status, points, input_json, idempotency_key, request_id)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,

@@ -178,7 +178,7 @@ function normalizeSavedState(value: unknown) {
       })
     : [];
   return {
-    step: ["service", "product", "direction", "result"].includes(String(record.step)) ? record.step : "service",
+    step: ["service", "product", "direction", "series", "result"].includes(String(record.step)) ? record.step : "service",
     goal: isImageAssistantWorkflow(record.goal) ? record.goal : "image-generate",
     sourceText: compact(record.sourceText, 3000),
     audience: compact(record.audience, 80),
@@ -200,9 +200,43 @@ function normalizeSavedState(value: unknown) {
     } : null,
     messages,
     referenceImages,
+    seriesConfig: normalizeSeriesConfig(record.seriesConfig),
+    visualBible: compact(record.visualBible, 1800),
+    seriesPlan: normalizeSeriesPlan(record.seriesPlan),
     handoffPending: record.handoffPending === true,
     expiresAt: new Date(Date.now() + sessionDays * 24 * 60 * 60 * 1000).toISOString(),
   };
+}
+
+function normalizeSeriesConfig(value: unknown) {
+  const record = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const count = [1, 2, 4, 6, 8].includes(Number(record.count)) ? Number(record.count) : 4;
+  return {
+    count,
+    unifiedStyle: record.unifiedStyle !== false,
+    unifiedBackground: record.unifiedBackground !== false,
+    preserveProduct: true,
+    reserveCopySpace: record.reserveCopySpace !== false,
+    differentAngles: record.differentAngles !== false,
+    ratio: typeof record.ratio === "string" ? record.ratio.slice(0, 20) : "auto",
+  };
+}
+
+function normalizeSeriesPlan(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 8).flatMap((item, index) => {
+    const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
+    const title = compact(record.title, 80);
+    if (!title) return [];
+    return [{
+      id: compact(record.id, 64) || `series-${index + 1}`,
+      title,
+      angle: compact(record.angle, 80),
+      sellingPoint: compact(record.sellingPoint, 120),
+      copy: compact(record.copy, 120),
+      visualPrompt: compact(record.visualPrompt, 360),
+    }];
+  });
 }
 
 function normalizeRecommendations(value: unknown, sourceText: string, visualAnalysis = "") {
@@ -378,14 +412,17 @@ export async function POST(request: NextRequest) {
     const sellingPoint = compact(body.sellingPoint, 120);
     const revision = compact(body.revision, 500);
     const visualAnalysis = compact(body.visualAnalysis, 1600);
+    const seriesConfig = normalizeSeriesConfig(body.seriesConfig);
     const productSummary = recognizedProductText || sourceText.slice(0, 500);
     const result = await callAssistantLLM({
       operation: "image_creation_assistant_prompt",
       system: "你是资深商业摄影导演和 AI 图片提示词专家。把用户选择和视觉模型的图片分析转成可直接提交给图片模型的中文提示词。图片视觉档案是商品身份事实，优先级高于用户对品类的模糊描述；不得省略或概括不可变身份锚点。只输出严格 JSON，不要 Markdown。",
       userPrompt: [
         "生成一个完整、具体、可执行的图片提示词。",
-        "输出字段：prompt、summary。",
-        "prompt 控制在 300-900 个中文字符，必须描述商品身份锁定、主体与配件关系、场景、构图、镜头、光线、材质、动作或陈列、商业目标和质量要求。",
+        "输出字段：prompt、summary、visualBible、seriesPlan。",
+        "prompt 是系列生成总提示词，控制在 500-1500 个中文字符，必须描述商品身份锁定、系列统一视觉基准、每张图的角度与卖点绑定、商业目标和质量要求。",
+        "visualBible 用 200-600 字定义整组图片必须统一的色彩、背景、光线、镜头、商品比例、阴影和构图语言。",
+        "seriesPlan 必须严格返回与生成数量一致的卡片数组，每张字段为 id、title、angle、sellingPoint、copy、visualPrompt。每张图角度和卖点不同，但必须属于同一个视觉系列。",
         "只要提供了参考图，prompt 第一段必须以‘参考图商品身份锁定：’开头，把视觉档案中的不可变几何结构、部件类型与数量、比例、颜色、材质、Logo/按键位置写完整，并明确‘必须是参考图同一款商品，不得替换成同品类常见款’。",
         "用户选择的场景、人物和动作只能改变商品周边表达，不能改变商品本体。若用户文字与参考图可见结构冲突，保留参考图结构，只吸收不冲突的创意要求。",
         "需要把商品放入新场景时，明确这是参考图编辑/商品换景任务：移除源图广告背景和外围宣传文案，将同一商品重新拍摄或真实合成到新场景，匹配透视、环境光、反射和接触阴影。",
@@ -398,13 +435,20 @@ export async function POST(request: NextRequest) {
         `使用场景：${scene || "由模型合理判断"}`,
         `视觉风格：${style || "真实商业摄影"}`,
         `核心卖点：${sellingPoint || "突出商品最可信的核心价值"}`,
+        `系列设置：生成 ${seriesConfig.count} 张；统一风格=${seriesConfig.unifiedStyle}；统一背景=${seriesConfig.unifiedBackground}；保留商品原结构=true；预留文案空间=${seriesConfig.reserveCopySpace}；不同角度=${seriesConfig.differentAngles}；画幅=${seriesConfig.ratio}。`,
         revision ? `用户修正意见：${revision}` : "用户修正意见：无",
       ].join("\n"),
       requestLog: { userId: user.id, projectId: project.id, goal },
     });
+    const seriesPlan = normalizeSeriesPlan(result.seriesPlan);
+    if (seriesPlan.length !== seriesConfig.count) {
+      return NextResponse.json({ code: "SERIES_PLAN_INCOMPLETE", message: `系列方案应包含 ${seriesConfig.count} 张卡片，请重新生成` }, { status: 502 });
+    }
     return NextResponse.json({
       prompt: compact(result.prompt, 1200),
       summary: compact(result.summary, 300) || "已根据商品、受众、场景和视觉方向生成提示词。",
+      visualBible: compact(result.visualBible, 1800),
+      seriesPlan,
     });
   } catch (error) {
     const caught = error as Error & { status?: number; code?: string };

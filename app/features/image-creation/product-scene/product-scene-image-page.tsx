@@ -47,6 +47,7 @@ export function ProductSceneImagePage() {
   const [task, setTask] = useState<TaskResult | null>(null);
   const [error, setError] = useState("");
   const [appliedCaseId, setAppliedCaseId] = useState("");
+  const [seriesContext, setSeriesContext] = useState<{ visualBible?: string; seriesPlan?: unknown[] }>({});
 
   const busy = phase === "uploading" || phase === "generating";
   const markSaved = (assetId: string) => setTask((current) => current ? { ...current, outputs: current.outputs.map((output) => output.assetId === assetId ? { ...output, savedToLibrary: true, expiresAt: null } : output) } : current);
@@ -94,6 +95,8 @@ export function ProductSceneImagePage() {
       ...images.map((image) => ({ id: image.assetId, url: image.url || "", name: image.name })),
       ...current,
     ].filter((item) => item.url).filter((item, index, items) => items.findIndex((candidate) => (candidate.id && item.id ? candidate.id === item.id : candidate.url === item.url)) === index).slice(0, maxProductImages)),
+    setOutputCount,
+    setSeriesTaskContext: ({ visualBible, seriesPlan }) => setSeriesContext({ visualBible, seriesPlan }),
     onApplied: resetTask,
   });
   useAssistantWorkspaceContext(useMemo(() => ({
@@ -174,7 +177,7 @@ export function ProductSceneImagePage() {
       const created = await imageRequest<{ taskId: string }>("/api/tasks/scene/", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({ assetIds, prompt: composedPrompt, aspectRatio: ratio, imageProvider: imageProviderForModel(model), imageResolution: resolution, outputCount, draftId: projectId }),
+        body: JSON.stringify({ assetIds, prompt: composedPrompt, aspectRatio: ratio, imageProvider: imageProviderForModel(model), imageResolution: resolution, outputCount, visualBible: seriesContext.visualBible, seriesPlan: seriesContext.seriesPlan, draftId: projectId }),
       });
       setPhase("generating");
       await pollImageTask(created.taskId, setTask);

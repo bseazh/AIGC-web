@@ -53,6 +53,7 @@ export function AiImageGeneratePage() {
   const [task, setTask] = useState<TaskResult | null>(null);
   const [error, setError] = useState("");
   const [appliedCaseId, setAppliedCaseId] = useState("");
+  const [seriesContext, setSeriesContext] = useState<{ visualBible?: string; seriesPlan?: unknown[] }>({});
 
   const busy = phase === "uploading" || phase === "generating";
   const canSubmit = prompt.trim().length > 0 && !busy && (account?.user.isAdministrator || (account?.wallet.availablePoints ?? 0) >= imageGenerateWorkflow.pointsPerTask);
@@ -85,6 +86,8 @@ export function AiImageGeneratePage() {
       ...images.map((image) => ({ id: image.assetId, url: image.url || "", name: image.name, role: "subject" as const })),
       ...current,
     ].filter((item) => item.url).filter((item, index, items) => items.findIndex((candidate) => (candidate.id && item.id ? candidate.id === item.id : candidate.url === item.url)) === index).slice(0, maxReferenceImages)),
+    setOutputCount,
+    setSeriesTaskContext: ({ visualBible, seriesPlan }) => setSeriesContext({ visualBible, seriesPlan }),
     onApplied: resetTask,
   });
   useAssistantWorkspaceContext(useMemo(() => ({
@@ -167,6 +170,8 @@ export function AiImageGeneratePage() {
           imageProvider: imageProviderForModel(model),
           imageResolution: resolution,
           outputCount,
+          visualBible: seriesContext.visualBible,
+          seriesPlan: seriesContext.seriesPlan,
           draftId: projectId,
         }),
       });
