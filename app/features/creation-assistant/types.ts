@@ -20,6 +20,7 @@ export type AssistantMessage = {
 export type AssistantRecommendations = {
   productSummary: string;
   visualAnalysis: string;
+  productProfile: AssistantProductProfile;
   audiences: string[];
   scenes: string[];
   styles: string[];
@@ -27,6 +28,15 @@ export type AssistantRecommendations = {
   reply: string;
   question: string;
   quickReplies: string[];
+};
+
+export type AssistantProductProfile = {
+  name: string;
+  colors: string[];
+  materials: string[];
+  structure: string[];
+  visibleSellingPoints: string[];
+  uncertainItems: string[];
 };
 
 export type AssistantSeriesConfig = {
@@ -59,6 +69,7 @@ export type CreationAssistantState = {
   revision: string;
   prompt: string;
   recommendations: AssistantRecommendations | null;
+  productConfirmed: boolean;
   messages: AssistantMessage[];
   referenceImages: AssistantReferenceImage[];
   seriesConfig: AssistantSeriesConfig;

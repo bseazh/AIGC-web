@@ -1306,6 +1306,39 @@ a { color: inherit; text-decoration: none; }
 .creation-assistant-vision-analysis { border: 1px solid #c9dfe5; border-radius: 7px; color: #3e5965; background: #f2f9fa; }
 .creation-assistant-vision-analysis summary { min-height: 36px; padding: 8px 10px; display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 10px; font-weight: 800; }
 .creation-assistant-vision-analysis p { margin: 0; padding: 0 10px 10px; color: #5c707a; font-size: 9px; line-height: 1.65; white-space: pre-wrap; }
+.creation-assistant-product-profile { border: 1px solid #c9dfe5; border-radius: 8px; background: #f7fbfb; overflow: hidden; }
+.creation-assistant-product-profile.confirmed { border-color: #94cdb4; background: #f4fbf7; }
+.creation-assistant-product-profile > header, .creation-assistant-product-profile > footer { padding: 9px 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.creation-assistant-product-profile > header { border-bottom: 1px solid rgba(30,110,120,.12); }
+.creation-assistant-product-profile > header div { display: grid; gap: 2px; }
+.creation-assistant-product-profile > header strong { color: #304751; font-size: 11px; }
+.creation-assistant-product-profile > header small { color: #6a8189; font-size: 9px; }
+.creation-assistant-product-profile > header button, .creation-assistant-product-profile > footer button { display: inline-flex; align-items: center; gap: 4px; border: 0; background: transparent; color: #168197; font-size: 10px; font-weight: 800; cursor: pointer; }
+.creation-assistant-profile-fields { padding: 10px; display: grid; gap: 7px; }
+.creation-assistant-profile-fields label { display: grid; gap: 3px; color: #587079; font-size: 9px; font-weight: 800; }
+.creation-assistant-profile-fields input, .creation-assistant-profile-fields textarea { width: 100%; border: 1px solid #d7e5e7; border-radius: 5px; padding: 7px 8px; color: #304751; background: #fff; font: inherit; resize: vertical; }
+.creation-assistant-profile-fields textarea { min-height: 42px; }
+.creation-assistant-profile-summary { padding: 10px; display: grid; gap: 5px; }
+.creation-assistant-profile-summary h3 { margin: 0; color: #304751; font-size: 13px; }
+.creation-assistant-profile-summary p { margin: 0; color: #168197; font-size: 9px; }
+.creation-assistant-profile-summary dl { margin: 0; display: grid; grid-template-columns: 42px 1fr; gap: 5px; color: #687b84; font-size: 9px; line-height: 1.5; }
+.creation-assistant-profile-summary dt { color: #168197; font-weight: 800; }
+.creation-assistant-profile-summary dd { margin: 0; }
+.creation-assistant-profile-summary .uncertain dt { color: #ad7523; }
+.creation-assistant-product-profile > footer { border-top: 1px solid rgba(30,110,120,.12); justify-content: flex-start; }
+.creation-assistant-product-profile > footer button:first-child { padding: 6px 9px; border-radius: 5px; color: #fff; background: #168197; }
+.detail-result-preview { position: relative; display: block; min-width: 0; padding: 0; border: 0; cursor: zoom-in; background: #eef3f4; overflow: hidden; }
+.detail-result-preview img { width: 100%; height: 100%; min-height: 260px; display: block; object-fit: cover; transition: transform .2s ease; }
+.detail-result-preview:hover img { transform: scale(1.025); }
+.detail-result-preview span { position: absolute; right: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 4px; padding: 5px 7px; border-radius: 4px; color: #fff; background: rgba(20,35,40,.72); font-size: 9px; }
+.detail-result-buttons { display: flex; flex-wrap: wrap; gap: 7px; }
+.detail-result-buttons button { display: inline-flex; align-items: center; gap: 4px; }
+.detail-card-retry { padding: 6px 8px; border: 1px solid #c8dfe4; border-radius: 5px; color: #168197; background: #f4fbfc; font-size: 10px; font-weight: 800; cursor: pointer; }
+.detail-card-retry:disabled { opacity: .55; cursor: wait; }
+.detail-lightbox { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px; background: rgba(18,29,34,.78); }
+.detail-lightbox > div { position: relative; max-width: min(92vw, 1000px); max-height: 92vh; }
+.detail-lightbox img { display: block; max-width: 100%; max-height: 92vh; object-fit: contain; background: #fff; }
+.detail-lightbox button { position: absolute; z-index: 1; top: 8px; right: 8px; display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 50%; color: #fff; background: rgba(20,35,40,.72); cursor: pointer; }
 .creation-assistant-reference-block { min-width: 0; padding: 9px; display: grid; gap: 8px; border: 1px solid #d9e4e8; border-radius: 7px; background: #f8fafb; }
 .creation-assistant-reference-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .creation-assistant-reference-heading > span { display: inline-flex; align-items: center; gap: 6px; color: #38525e; font-size: 10px; font-weight: 800; }

@@ -36,6 +36,7 @@ function initialState(workflowKey: ImageAssistantWorkflowKey): CreationAssistant
     revision: "",
     prompt: "",
     recommendations: null,
+    productConfirmed: false,
     messages: [initialMessage],
     referenceImages: [],
     seriesConfig: { count: 4, unifiedStyle: true, unifiedBackground: true, preserveProduct: true, reserveCopySpace: true, differentAngles: true, ratio: "auto" },
@@ -43,6 +44,10 @@ function initialState(workflowKey: ImageAssistantWorkflowKey): CreationAssistant
     seriesPlan: [],
     handoffPending: false,
   };
+}
+
+function emptyProductProfile() {
+  return { name: "", colors: [], materials: [], structure: [], visibleSellingPoints: [], uncertainItems: [] };
 }
 
 function message(role: AssistantMessage["role"], content: string): AssistantMessage {
@@ -90,6 +95,7 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [chatInput, setChatInput] = useState("");
+  const [profileEditing, setProfileEditing] = useState(false);
   const [workspaceContext, setWorkspaceContext] = useState<AssistantWorkspaceContext>({ images: [] });
   const scrollRef = useRef<HTMLDivElement>(null);
   const activeStepRef = useRef<HTMLElement>(null);
@@ -103,7 +109,16 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
         const body = await response.json();
         if (!response.ok) throw new Error(body.message || "创作助手记录加载失败");
         if (!active) return;
-        if (body.assistant) setState({ ...initialState(workflowKey), ...body.assistant, goal: body.assistant.goal || workflowKey });
+        if (body.assistant) setState({
+          ...initialState(workflowKey),
+          ...body.assistant,
+          goal: body.assistant.goal || workflowKey,
+          productConfirmed: body.assistant.productConfirmed === true,
+          recommendations: body.assistant.recommendations ? {
+            ...body.assistant.recommendations,
+            productProfile: { ...emptyProductProfile(), ...(body.assistant.recommendations.productProfile || {}) },
+          } : null,
+        });
       })
       .catch(() => undefined)
       .finally(() => active && setHydrated(true));
@@ -257,6 +272,7 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
         sourceText: current.sourceText || sourceText,
         step: "direction",
         recommendations,
+        productConfirmed: false,
         audience: recommendations.audiences[0] || "",
         scene: recommendations.scenes[0] || "",
         style: recommendations.styles[0] || "",
@@ -301,6 +317,7 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
       setState((current) => ({
         ...current,
         recommendations,
+        productConfirmed: false,
         audience: recommendations.audiences[0] || current.audience,
         scene: recommendations.scenes[0] || current.scene,
         style: recommendations.styles[0] || current.style,
@@ -329,6 +346,7 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
           goal: state.goal,
           sourceText: state.sourceText || state.recommendations?.productSummary,
           productSummary: state.recommendations?.productSummary,
+          recommendations: state.recommendations,
           visualAnalysis: state.recommendations?.visualAnalysis,
           audience: state.audience,
           scene: state.scene,
@@ -398,6 +416,26 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
     setChatInput("");
     setError("");
     setCopied(false);
+    setProfileEditing(false);
+  };
+
+  const updateProductProfile = (field: keyof NonNullable<CreationAssistantState["recommendations"]>["productProfile"], value: string) => {
+    setState((current) => {
+      if (!current.recommendations) return current;
+      const nextValue = field === "name"
+        ? value.slice(0, 100)
+        : value.split(/[，,\n]/).map((item) => item.trim()).filter(Boolean).slice(0, 8);
+      const productProfile = { ...current.recommendations.productProfile, [field]: nextValue };
+      return {
+        ...current,
+        productConfirmed: false,
+        recommendations: {
+          ...current.recommendations,
+          productProfile,
+          productSummary: field === "name" && typeof nextValue === "string" ? nextValue : current.recommendations.productSummary,
+        },
+      };
+    });
   };
 
   const hasWorkspaceImages = workspaceContext.images.length > 0;
@@ -456,7 +494,24 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
 
           {state.step === "direction" && state.recommendations && <section className="creation-assistant-step" ref={activeStepRef}>
             <div className="creation-assistant-step-title"><b>对话校正方向</b><span>3 / 5</span></div>
-            <p className="creation-assistant-summary">{state.recommendations.productSummary}</p>
+            <div className={`creation-assistant-product-profile ${state.productConfirmed ? "confirmed" : ""}`}>
+              <header><div><strong>商品识别档案</strong><small>{state.productConfirmed ? "已确认，将作为生成事实依据" : "请确认后再生成系列方案"}</small></div><button type="button" onClick={() => setProfileEditing((value) => !value)}>{profileEditing ? <Check size={13} /> : <Pencil size={13} />}{profileEditing ? "完成编辑" : "编辑"}</button></header>
+              {profileEditing ? <div className="creation-assistant-profile-fields">
+                <label>商品名称<input value={state.recommendations.productProfile.name} onChange={(event) => updateProductProfile("name", event.target.value)} /></label>
+                <label>主要颜色<input value={state.recommendations.productProfile.colors.join("，")} onChange={(event) => updateProductProfile("colors", event.target.value)} placeholder="用逗号分隔" /></label>
+                <label>可见材质<input value={state.recommendations.productProfile.materials.join("，")} onChange={(event) => updateProductProfile("materials", event.target.value)} placeholder="用逗号分隔" /></label>
+                <label>结构特征<textarea value={state.recommendations.productProfile.structure.join("\n")} onChange={(event) => updateProductProfile("structure", event.target.value)} /></label>
+                <label>可见卖点<textarea value={state.recommendations.productProfile.visibleSellingPoints.join("\n")} onChange={(event) => updateProductProfile("visibleSellingPoints", event.target.value)} /></label>
+                <label>待确认信息<textarea value={state.recommendations.productProfile.uncertainItems.join("\n")} onChange={(event) => updateProductProfile("uncertainItems", event.target.value)} /></label>
+              </div> : <div className="creation-assistant-profile-summary">
+                <h3>{state.recommendations.productProfile.name || state.recommendations.productSummary}</h3>
+                {[state.recommendations.productProfile.colors, state.recommendations.productProfile.materials].flat().length > 0 && <p>{[...state.recommendations.productProfile.colors, ...state.recommendations.productProfile.materials].join(" · ")}</p>}
+                {state.recommendations.productProfile.structure.length > 0 && <dl><dt>结构</dt><dd>{state.recommendations.productProfile.structure.join("；")}</dd></dl>}
+                {state.recommendations.productProfile.visibleSellingPoints.length > 0 && <dl><dt>可见卖点</dt><dd>{state.recommendations.productProfile.visibleSellingPoints.join("；")}</dd></dl>}
+                {state.recommendations.productProfile.uncertainItems.length > 0 && <dl className="uncertain"><dt>待确认</dt><dd>{state.recommendations.productProfile.uncertainItems.join("；")}</dd></dl>}
+              </div>}
+              <footer><button type="button" disabled={busy} onClick={() => { setProfileEditing(false); setState((current) => ({ ...current, productConfirmed: true })); }}><Check size={14} />确认识别正确</button><button type="button" disabled={busy} onClick={() => { setState((current) => ({ ...current, step: "product", productConfirmed: false })); setProfileEditing(false); }}><RotateCcw size={14} />重新识别</button></footer>
+            </div>
             {state.recommendations.visualAnalysis && <details className="creation-assistant-vision-analysis"><summary><ImageIcon size={14} />已读取参考图，查看识别结果</summary><p>{state.recommendations.visualAnalysis}</p></details>}
             <ChoiceGroup label="卖给谁" value={state.audience} options={state.recommendations.audiences} onChange={(audience) => setState((current) => ({ ...current, audience }))} />
             <ChoiceGroup label="使用场景" value={state.scene} options={state.recommendations.scenes} onChange={(scene) => setState((current) => ({ ...current, scene }))} />
@@ -467,7 +522,7 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
               {state.recommendations.quickReplies.length > 0 && <div>{state.recommendations.quickReplies.map((item) => <button type="button" disabled={busy} onClick={() => refineDirection(item)} key={item}>{item}</button>)}</div>}
               <label><input value={chatInput} onChange={(event) => setChatInput(event.target.value.slice(0, 500))} placeholder="输入你的回答或修改意见" /><button type="button" disabled={busy || !chatInput.trim()} onClick={() => refineDirection()} aria-label="发送修改意见"><Send size={15} /></button></label>
             </div>
-            <div className="creation-assistant-footer"><button type="button" onClick={() => setState((current) => ({ ...current, step: "product" }))}><ChevronLeft size={15} />修改商品</button><button className="primary" type="button" disabled={busy || !selectionsReady} onClick={generatePrompt}>{busy ? <LoaderCircle className="spin" size={15} /> : <WandSparkles size={15} />}生成系列方案</button></div>
+            <div className="creation-assistant-footer"><button type="button" onClick={() => setState((current) => ({ ...current, step: "product" }))}><ChevronLeft size={15} />修改商品</button><button className="primary" type="button" disabled={busy || !selectionsReady || !state.productConfirmed} onClick={generatePrompt}>{busy ? <LoaderCircle className="spin" size={15} /> : <WandSparkles size={15} />}生成系列方案</button></div>
           </section>}
 
           {state.step === "series" && <section className="creation-assistant-step" ref={activeStepRef}>

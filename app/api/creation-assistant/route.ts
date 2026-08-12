@@ -161,6 +161,9 @@ function normalizeSavedState(value: unknown) {
   const recommendations = record.recommendations && typeof record.recommendations === "object" && !Array.isArray(record.recommendations)
     ? record.recommendations as Record<string, unknown>
     : null;
+  const savedProductProfile = recommendations?.productProfile && typeof recommendations.productProfile === "object" && !Array.isArray(recommendations.productProfile)
+    ? recommendations.productProfile as Record<string, unknown>
+    : {};
   const messages = Array.isArray(record.messages)
     ? record.messages.slice(-24).map((item) => {
         const message = item && typeof item === "object" ? item as Record<string, unknown> : {};
@@ -187,9 +190,18 @@ function normalizeSavedState(value: unknown) {
     sellingPoint: compact(record.sellingPoint, 120),
     revision: compact(record.revision, 500),
     prompt: compact(record.prompt, 1200),
+    productConfirmed: record.productConfirmed === true,
     recommendations: recommendations ? {
       productSummary: compact(recommendations.productSummary, 500),
       visualAnalysis: compact(recommendations.visualAnalysis, 1600),
+      productProfile: {
+        name: compact(savedProductProfile.name, 100),
+        colors: stringList(savedProductProfile.colors, 6, 40),
+        materials: stringList(savedProductProfile.materials, 6, 60),
+        structure: stringList(savedProductProfile.structure, 8, 100),
+        visibleSellingPoints: stringList(savedProductProfile.visibleSellingPoints, 8, 100),
+        uncertainItems: stringList(savedProductProfile.uncertainItems, 8, 100),
+      },
       audiences: stringList(recommendations.audiences),
       scenes: stringList(recommendations.scenes),
       styles: stringList(recommendations.styles),
@@ -241,9 +253,20 @@ function normalizeSeriesPlan(value: unknown) {
 
 function normalizeRecommendations(value: unknown, sourceText: string, visualAnalysis = "") {
   const record = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const profile = record.productProfile && typeof record.productProfile === "object" && !Array.isArray(record.productProfile)
+    ? record.productProfile as Record<string, unknown>
+    : {};
   return {
     productSummary: compact(record.productSummary, 500) || sourceText.slice(0, 500) || "已根据当前商品图片整理商品特征",
     visualAnalysis: compact(record.visualAnalysis, 1600) || visualAnalysis,
+    productProfile: {
+      name: compact(profile.name, 100) || compact(record.productSummary, 100) || sourceText.slice(0, 100),
+      colors: stringList(profile.colors, 6, 40),
+      materials: stringList(profile.materials, 6, 60),
+      structure: stringList(profile.structure, 8, 100),
+      visibleSellingPoints: stringList(profile.visibleSellingPoints, 8, 100),
+      uncertainItems: stringList(profile.uncertainItems, 8, 100),
+    },
     audiences: stringList(record.audiences),
     scenes: stringList(record.scenes),
     styles: stringList(record.styles),
@@ -310,7 +333,18 @@ export async function POST(request: NextRequest) {
   const savedRecommendations = body.recommendations && typeof body.recommendations === "object" && !Array.isArray(body.recommendations)
     ? body.recommendations as Record<string, unknown>
     : null;
-  const recognizedProductText = compact(body.productSummary, 500) || compact(savedRecommendations?.productSummary, 500);
+  const savedProductProfile = savedRecommendations?.productProfile && typeof savedRecommendations.productProfile === "object" && !Array.isArray(savedRecommendations.productProfile)
+    ? savedRecommendations.productProfile as Record<string, unknown>
+    : null;
+  const productProfileText = savedProductProfile ? [
+    compact(savedProductProfile.name, 100) ? `商品名称：${compact(savedProductProfile.name, 100)}` : "",
+    stringList(savedProductProfile.colors, 6, 40).length ? `颜色：${stringList(savedProductProfile.colors, 6, 40).join("、")}` : "",
+    stringList(savedProductProfile.materials, 6, 60).length ? `材质：${stringList(savedProductProfile.materials, 6, 60).join("、")}` : "",
+    stringList(savedProductProfile.structure, 8, 100).length ? `结构：${stringList(savedProductProfile.structure, 8, 100).join("；")}` : "",
+    stringList(savedProductProfile.visibleSellingPoints, 8, 100).length ? `可见卖点：${stringList(savedProductProfile.visibleSellingPoints, 8, 100).join("；")}` : "",
+    stringList(savedProductProfile.uncertainItems, 8, 100).length ? `待确认：${stringList(savedProductProfile.uncertainItems, 8, 100).join("；")}` : "",
+  ].filter(Boolean).join("\n") : "";
+  const recognizedProductText = productProfileText || compact(body.productSummary, 500) || compact(savedRecommendations?.productSummary, 500);
   const productContext = sourceText || recognizedProductText;
   if (action !== "recommend" && productContext.length < 2) {
     return NextResponse.json({ code: "PRODUCT_REQUIRED", message: "商品信息已丢失，请返回上一步重新识别商品" }, { status: 400 });
@@ -325,6 +359,7 @@ export async function POST(request: NextRequest) {
       }
       let visualAnalysis = "";
       let visionProductSummary = "";
+      let visionProductProfile: Record<string, unknown> | null = null;
       if (visionUrls.length) {
         const visionResult = await callAssistantLLM({
           operation: "image_creation_assistant_vision",
@@ -333,7 +368,8 @@ export async function POST(request: NextRequest) {
           system: "你是电商商品视觉识别专家。只根据图片中真实可见内容识别商品，不猜测不可见参数。只输出严格 JSON，不要 Markdown。",
           userPrompt: [
             "请逐张读取参考图片，并合并为一份可供商业摄影导演使用的商品视觉档案。",
-            "输出字段：productSummary、visualAnalysis。",
+            "输出字段：productSummary、visualAnalysis、productProfile。",
+            "productProfile 必须包含 name、colors、materials、structure、visibleSellingPoints、uncertainItems；除 name 外均为字符串数组。只记录图片可见事实，不能确认的内容放入 uncertainItems。",
             "productSummary 用不超过 180 字说明商品是什么、外观特征和可见用途。",
             "visualAnalysis 用 400-1200 个中文字符，并严格按“主体对象拆分、不可变身份锚点、可见文字分类、当前画面、可确认卖点、无法确认信息”六部分记录。",
             "不可变身份锚点必须具体到足以区分同品类其他款式：描述整体几何形状和长宽厚关系、顶部/正面/侧面结构、关键部件类型与数量、部件相对位置、开合或连接关系、按键/接口位置、颜色分区、材质与表面处理、Logo 位置。禁止只写‘黑色剃须刀’‘圆润机身’这类品类级概括。",
@@ -349,6 +385,9 @@ export async function POST(request: NextRequest) {
         });
         visualAnalysis = compact(visionResult.visualAnalysis, 1600);
         visionProductSummary = compact(visionResult.productSummary, 500);
+        visionProductProfile = visionResult.productProfile && typeof visionResult.productProfile === "object" && !Array.isArray(visionResult.productProfile)
+          ? visionResult.productProfile as Record<string, unknown>
+          : null;
         if (!visualAnalysis) throw Object.assign(new Error("视觉模型没有返回有效的图片分析，请重试"), { status: 502, code: "VISION_EMPTY_RESPONSE" });
       }
       const recommendationSource = sourceText || visionProductSummary;
@@ -357,7 +396,8 @@ export async function POST(request: NextRequest) {
         system: "你是资深电商视觉创意策划。根据少量商品信息主动发散，但不能虚构确定性的商品参数。只输出严格 JSON，不要 Markdown。",
         userPrompt: [
           "请理解用户的商品或创作想法，并推荐适合图片生成的方向。",
-          "输出字段：productSummary、audiences、scenes、styles、sellingPoints、reply、question、quickReplies。",
+          "输出字段：productSummary、productProfile、audiences、scenes、styles、sellingPoints、reply、question、quickReplies。",
+          "productProfile 必须继承视觉识别结果，包含 name、colors、materials、structure、visibleSellingPoints、uncertainItems；没有证据的字段保留为空数组或列入 uncertainItems。",
           "audiences、scenes、styles、sellingPoints 都必须是 4 个简短、差异明显、可点击的中文选项。",
           "视觉模型已经先读取图片。必须把视觉档案作为商品事实依据，不得用常见商品模板覆盖或改写商品身份。",
           "推荐必须符合商品真实用途，禁止把所有商品都套用租房、家庭或年轻女性等固定人群。",
@@ -366,9 +406,11 @@ export async function POST(request: NextRequest) {
           `目标图片类型：${goal}`,
           `用户提供的信息：${sourceText || "用户未填写文字"}`,
           visualAnalysis ? `参考图视觉档案：${visualAnalysis}` : "参考图视觉档案：未提供图片",
+          visionProductProfile ? `结构化商品档案（必须原样继承可见事实）：${JSON.stringify(visionProductProfile)}` : "结构化商品档案：未提供",
         ].join("\n"),
         requestLog: { userId: user.id, projectId: project.id, goal, sourceLength: sourceText.length, hasVisualAnalysis: Boolean(visualAnalysis) },
       });
+      if (!result.productProfile && visionProductProfile) result.productProfile = visionProductProfile;
       return NextResponse.json({ recommendations: normalizeRecommendations(result, recommendationSource, visualAnalysis) });
     }
 
@@ -387,7 +429,8 @@ export async function POST(request: NextRequest) {
         system: "你是资深电商视觉创意顾问。通过多轮对话吸收用户纠偏，更新创作方向，每轮最多追问一个关键问题。只输出严格 JSON。",
         userPrompt: [
           "请根据用户最新回答校正商品理解和图片创作方向。",
-          "输出字段：productSummary、audiences、scenes、styles、sellingPoints、reply、question、quickReplies。",
+          "输出字段：productSummary、productProfile、audiences、scenes、styles、sellingPoints、reply、question、quickReplies。",
+          "productProfile 必须保留当前商品的可见事实，只根据用户明确纠正更新，不得为了创意方向改写商品结构。",
           "每组推荐保留 4 个具体选项，把最推荐的选项放在第一位。",
           "reply 先明确你吸收了什么修改；question 只问一个仍然影响成片的问题；quickReplies 给出 3-5 个可点击答案。",
           `目标图片类型：${goal}`,
@@ -403,6 +446,7 @@ export async function POST(request: NextRequest) {
         ].join("\n"),
         requestLog: { userId: user.id, projectId: project.id, goal },
       });
+      if (!result.productProfile) result.productProfile = current.productProfile;
       return NextResponse.json({ recommendations: normalizeRecommendations(result, productContext, current.visualAnalysis) });
     }
 

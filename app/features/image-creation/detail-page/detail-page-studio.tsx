@@ -1,9 +1,9 @@
 "use client";
 
-import { ArrowDown, ArrowLeft, ArrowUp, FolderOpen, ImagePlus, LoaderCircle, Plus, Sparkles, Trash2, Upload, Wand2, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, FolderOpen, ImagePlus, LoaderCircle, Maximize2, Plus, RefreshCw, Sparkles, Trash2, Upload, Wand2, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
+import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskOutput, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
 import { GenerationProgress } from "@/app/components/generation-progress";
 import { imageRequest, pollImageTask, uploadImageFile } from "@/app/features/image-creation/shared/image-task-api";
 import { ImageAspectRatioControl } from "@/app/features/image-creation/shared/image-aspect-ratio-control";
@@ -59,12 +59,19 @@ export function DetailPageStudio(props: Props) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [task, setTask] = useState<GeneratedTaskResult | null>(null);
   const [error, setError] = useState("");
+  const [previewOutput, setPreviewOutput] = useState<{ url: string; title: string } | null>(null);
+  const [retryingCard, setRetryingCard] = useState<number | null>(null);
+  const [cardTaskIds, setCardTaskIds] = useState<Record<string, string>>({});
+  const [cardReplacements, setCardReplacements] = useState<Record<string, GeneratedTaskOutput>>({});
   const hydrated = useRef(false);
 
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) || null;
   const busy = ["uploading", "planning", "generating"].includes(phase);
   const currentStep = stage === "brief" ? 1 : stage === "plans" ? 2 : 3;
-  const markSaved = (assetId: string) => setTask((current) => current ? { ...current, outputs: current.outputs.map((output) => output.assetId === assetId ? { ...output, savedToLibrary: true, expiresAt: null } : output) } : current);
+  const markSaved = (assetId: string) => {
+    setTask((current) => current ? { ...current, outputs: current.outputs.map((output) => output.assetId === assetId ? { ...output, savedToLibrary: true, expiresAt: null } : output) } : current);
+    setCardReplacements((current) => Object.fromEntries(Object.entries(current).map(([cardId, output]) => [cardId, output.assetId === assetId ? { ...output, savedToLibrary: true, expiresAt: null } : output])));
+  };
 
   useEffect(() => {
     fetch("/api/auth/session/", { cache: "no-store" }).then(async (response) => {
@@ -96,6 +103,15 @@ export function DetailPageStudio(props: Props) {
         if (typeof saved.selectedPlanId === "string") setSelectedPlanId(saved.selectedPlanId);
         if (typeof saved.productUnderstanding === "string") setProductUnderstanding(saved.productUnderstanding.slice(0, 240));
         if (typeof saved.ratio === "string") setRatio(saved.ratio);
+        const savedCardTaskIds = saved.cardTaskIds && typeof saved.cardTaskIds === "object" && !Array.isArray(saved.cardTaskIds) ? saved.cardTaskIds as Record<string, unknown> : {};
+        const nextCardTaskIds = Object.fromEntries(Object.entries(savedCardTaskIds).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
+        setCardTaskIds(nextCardTaskIds);
+        void Promise.all(Object.entries(nextCardTaskIds).map(async ([cardId, taskId]) => {
+          const response = await fetch(`/api/tasks/${taskId}/`, { cache: "no-store" });
+          const replacement = await response.json().catch(() => null) as GeneratedTaskResult | null;
+          if (response.ok && replacement?.status === "SUCCEEDED" && replacement.outputs[0]) return [cardId, replacement.outputs[0]] as const;
+          return null;
+        })).then((entries) => setCardReplacements(Object.fromEntries(entries.filter((entry): entry is readonly [string, GeneratedTaskOutput] => Boolean(entry)))));
         if (restoredCards.length >= DETAIL_PAGE_MIN_CARDS) setStage("cards");
         else if (restoredPlans.length) setStage("plans");
       }
@@ -168,12 +184,12 @@ export function DetailPageStudio(props: Props) {
           id: projectId,
           workflowKey: props.workflowKey,
           title: projectTitle,
-          payload: { step: stage, detailPageStudio: { assetId: resolvedAssetId || selectedAsset?.id || "", productDescription, plans, selectedPlanId, cards, productUnderstanding, ratio } },
+          payload: { step: stage, detailPageStudio: { assetId: resolvedAssetId || selectedAsset?.id || "", productDescription, plans, selectedPlanId, cards, productUnderstanding, ratio, cardTaskIds } },
         }),
       }).catch(() => undefined);
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [cards, plans, productDescription, productUnderstanding, projectId, projectTitle, props.workflowKey, ratio, resolvedAssetId, selectedAsset?.id, selectedPlanId, stage]);
+  }, [cardTaskIds, cards, plans, productDescription, productUnderstanding, projectId, projectTitle, props.workflowKey, ratio, resolvedAssetId, selectedAsset?.id, selectedPlanId, stage]);
 
   const chooseFile = (nextFile?: File) => {
     if (!nextFile) return;
@@ -258,6 +274,26 @@ export function DetailPageStudio(props: Props) {
     } catch (caught) { setError(caught instanceof Error ? caught.message : "生成失败"); setPhase("failed"); }
   };
 
+  const regenerateCard = async (index: number) => {
+    if (!preview || busy || !canAfford || !cards[index]) return;
+    setRetryingCard(index); setError("");
+    try {
+      const assetId = await uploadSource();
+      const body = await imageRequest<{ taskId: string }>(props.submitUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+        body: JSON.stringify({ assetId, prompt: productDescription, productDescription, aspectRatio: ratio, detailCards: cards, singleCardIndex: index }),
+      });
+      setCardTaskIds((current) => ({ ...current, [cards[index].id]: body.taskId }));
+      const regenerated = await pollImageTask(body.taskId, () => undefined, 10 * 60 * 1000);
+      const output = regenerated.outputs[0];
+      if (!output) throw new Error("单卡任务没有返回图片");
+      setCardReplacements((current) => ({ ...current, [cards[index].id]: output }));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "单张重生成失败");
+    } finally { setRetryingCard(null); }
+  };
+
   const applyCase = (item: ImageWorkflowCase) => {
     if (item.productDescription) setProductDescription(item.productDescription.slice(0, 900));
   };
@@ -297,10 +333,11 @@ export function DetailPageStudio(props: Props) {
 
         {stage === "cards" && <><header><div><span>{selectedPlan?.label || "卡片编排"}</span><h2>{selectedPlan?.title || "编辑详情页卡片"}</h2></div><div className="detail-workspace-actions"><button type="button" onClick={() => setStage("plans")}>返回选方案</button><button type="button" disabled={!preview || !canAfford || busy || cards.length < DETAIL_PAGE_MIN_CARDS} onClick={submit}><Wand2 size={15} />{canAfford ? `生成整套 ${cards.length} 张` : "积分不足"}</button></div></header><div className="detail-card-editor">{cards.map((card, index) => <article key={card.id} data-detail-card-id={card.id}><div className="detail-card-order"><span>{String(index + 1).padStart(2, "0")}</span><div><button type="button" aria-label="上移卡片" disabled={index === 0} onClick={() => moveCard(index, -1)}><ArrowUp size={14} /></button><button type="button" aria-label="下移卡片" disabled={index === cards.length - 1} onClick={() => moveCard(index, 1)}><ArrowDown size={14} /></button><button type="button" aria-label="删除卡片" disabled={cards.length <= DETAIL_PAGE_MIN_CARDS} onClick={() => setCards((current) => current.filter((_, cardIndex) => cardIndex !== index))}><Trash2 size={14} /></button></div></div><div className="detail-card-fields"><label>卡片作用<input value={card.role} maxLength={40} onChange={(event) => updateCard(index, "role", event.target.value)} /></label><label>主标题<input aria-label="卡片主标题" value={card.title} maxLength={36} onChange={(event) => updateCard(index, "title", event.target.value)} /></label><label className="wide">辅助文案<textarea value={card.subtitle} maxLength={90} onChange={(event) => updateCard(index, "subtitle", event.target.value)} /></label><label className="wide">画面描述<textarea value={card.visualPrompt} maxLength={360} onChange={(event) => updateCard(index, "visualPrompt", event.target.value)} /></label></div></article>)}{cards.length < DETAIL_PAGE_MAX_CARDS && <button className="detail-add-card" type="button" onClick={() => setCards((current) => [...current, newCard(current.length)])}><Plus size={16} />新增一张卡片</button>}</div></>}
 
-        {stage === "results" && <><header><div><span>生成结果</span><h2>{props.title}</h2></div>{phase === "succeeded" && <button className="detail-edit-again" type="button" onClick={() => setStage("cards")}>修改卡片后重新生成</button>}</header>{phase === "uploading" || phase === "generating" ? <GenerationProgress phase={phase === "uploading" ? "uploading" : "generating"} taskStatus={task?.status} title={props.title} outputCount={cards.length} /> : null}<TemporaryResultNotice result={task} />{task?.outputs.length ? <div className="detail-result-list">{task.outputs.map((output, index) => { const card = resultCards[index]; return <article key={output.assetId}><img src={output.url} alt={`${props.title} ${index + 1}`} /><div><span>第 {index + 1} 张 · {card?.role || "详情卡片"}</span><h3>{card?.title || `详情卡片 ${index + 1}`}</h3>{card?.subtitle && <p>{card.subtitle}</p>}<GeneratedAssetActions output={output} onSaved={markSaved} /><button type="button" className="detail-card-revise" onClick={() => { if (card?.id) setFocusedCardId(card.id); setStage("cards"); }}>修改这张卡片</button></div></article>; })}</div> : phase === "failed" ? <div className="detail-empty"><strong>任务未完成</strong><p>{error || task?.errorCode || "请返回卡片编排后重试"}</p></div> : null}</>}
+        {stage === "results" && <><header><div><span>生成结果</span><h2>{props.title}</h2></div>{phase === "succeeded" && <button className="detail-edit-again" type="button" onClick={() => setStage("cards")}>修改卡片后重新生成</button>}</header>{phase === "uploading" || phase === "generating" ? <GenerationProgress phase={phase === "uploading" ? "uploading" : "generating"} taskStatus={task?.status} title={props.title} outputCount={cards.length} /> : null}<TemporaryResultNotice result={task} />{task?.outputs.length ? <div className="detail-result-list">{task.outputs.map((originalOutput, index) => { const card = resultCards[index]; const output = card?.id ? cardReplacements[card.id] || originalOutput : originalOutput; return <article key={`${card?.id || index}-${output.assetId}`}><button type="button" className="detail-result-preview" onClick={() => setPreviewOutput({ url: output.url, title: card?.title || `详情卡片 ${index + 1}` })} aria-label="放大预览"><img src={output.url} alt={`${props.title} ${index + 1}`} /><span><Maximize2 size={15} />查看大图</span></button><div><span>第 {index + 1} 张 · {card?.role || "详情卡片"}{card?.id && cardReplacements[card.id] ? " · 已单独更新" : ""}</span><h3>{card?.title || `详情卡片 ${index + 1}`}</h3>{card?.subtitle && <p>{card.subtitle}</p>}<GeneratedAssetActions output={output} onSaved={markSaved} /><div className="detail-result-buttons"><button type="button" className="detail-card-revise" onClick={() => { if (card?.id) setFocusedCardId(card.id); setStage("cards"); }}>修改这张卡片</button><button type="button" className="detail-card-retry" disabled={retryingCard !== null || busy || !canAfford} onClick={() => void regenerateCard(index)}>{retryingCard === index ? <LoaderCircle className="generation-spinner" size={14} /> : <RefreshCw size={14} />}只重生成这张</button></div></div></article>; })}</div> : phase === "failed" ? <div className="detail-empty"><strong>任务未完成</strong><p>{error || task?.errorCode || "请返回卡片编排后重试"}</p></div> : null}</>}
       </section>
     </div>
 
     {libraryOpen && <div className="asset-picker-backdrop" role="dialog" aria-modal="true" aria-label="选择图片素材"><section className="asset-picker-modal"><header><div><span>内容资产</span><h2>选择商品图片</h2></div><button type="button" className="icon-button" onClick={() => setLibraryOpen(false)}><X size={18} /></button></header>{assetsLoading ? <div className="asset-picker-empty"><LoaderCircle size={22} />正在加载素材</div> : assets.length ? <div className="asset-picker-grid">{assets.map((asset) => <button type="button" key={asset.id} onClick={() => selectAsset(asset)}><img src={asset.url} alt="" /><strong>{asset.originalName}</strong><small>{asset.kind === "OUTPUT" ? "生成结果" : "上传素材"}</small></button>)}</div> : <div className="asset-picker-empty"><FolderOpen size={25} /><strong>暂无图片素材</strong></div>}</section></div>}
+    {previewOutput && <div className="detail-lightbox" role="dialog" aria-modal="true" aria-label="图片大图预览" onClick={() => setPreviewOutput(null)}><div><button type="button" aria-label="关闭预览" onClick={() => setPreviewOutput(null)}><X size={18} /></button><img src={previewOutput.url} alt={previewOutput.title} /></div></div>}
   </main>;
 }

@@ -32,6 +32,7 @@ const selectableImageOutputCounts = [1, 2, 4] as const;
 
 function requestedOutputCount(body: Record<string, unknown>, workflow: ImageWorkflow) {
   if (workflow.structuredDetailCards) {
+    if (Number.isInteger(body.singleCardIndex) && Number(body.singleCardIndex) >= 0) return 1;
     const count = normalizeDetailCards(body.detailCards).length;
     return count >= DETAIL_PAGE_MIN_CARDS && count <= DETAIL_PAGE_MAX_CARDS ? count : workflow.outputsPerTask;
   }
@@ -132,7 +133,8 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
   const requestId = request.headers.get("x-request-id") || randomUUID();
   const idempotencyKey = request.headers.get("Idempotency-Key") || randomUUID();
   const draftId = validUuid(body.draftId) ? body.draftId : null;
-  const points = workflow.key === "video-mix" ? ({ 15: 40, 30: 70, 45: 100, 60: 130 } as Record<number, number>)[duration] : workflow.pointsPerTask;
+  const singleCard = workflow.structuredDetailCards && Number.isInteger(body.singleCardIndex) && Number(body.singleCardIndex) >= 0;
+  const points = workflow.key === "video-mix" ? ({ 15: 40, 30: 70, 45: 100, 60: 130 } as Record<number, number>)[duration] : singleCard ? Math.max(1, Math.ceil(workflow.pointsPerTask / Math.max(1, workflow.outputsPerTask))) : workflow.pointsPerTask;
   const adminExempt = isAdministrator(user.email || user.phone);
   const client = await db.connect();
   try {
@@ -144,14 +146,15 @@ export async function createImageTask(request: NextRequest, workflow: ImageWorkf
       return NextResponse.json({ code: "INSUFFICIENT_POINTS", message: "积分不足" }, { status: 402 });
     }
     const promptConfig = workflow.key.includes("video") ? await resolvePromptConfig(client, workflow.key, user.id) : undefined;
-    const detailCards = workflow.structuredDetailCards ? normalizeDetailCards(body.detailCards) : [];
-    if (workflow.structuredDetailCards && detailCards.length < DETAIL_PAGE_MIN_CARDS) {
+    const allDetailCards = workflow.structuredDetailCards ? normalizeDetailCards(body.detailCards) : [];
+    const detailCards = singleCard ? (allDetailCards[Number(body.singleCardIndex)] ? [allDetailCards[Number(body.singleCardIndex)]] : []) : allDetailCards;
+    if (workflow.structuredDetailCards && !singleCard && detailCards.length < DETAIL_PAGE_MIN_CARDS) {
       await client.query("ROLLBACK");
       return NextResponse.json({ code: "DETAIL_CARDS_REQUIRED", message: `请至少保留 ${DETAIL_PAGE_MIN_CARDS} 张详情页卡片` }, { status: 400 });
     }
     const seriesPlan = normalizedSeriesPlan(body.seriesPlan);
     const visualBible = typeof body.visualBible === "string" ? body.visualBible.trim().slice(0, 1800) : "";
-    const input = { assetId: assets[0]?.id || null, storageKey: assets[0]?.storage_key || null, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), assetMimeTypes: assets.map((asset) => asset.mime_type), prompt, aspectRatio, aspectRatioMode: imageAspectRatio.mode, requestedAspectRatio: imageAspectRatio.requested, customAspectRatioWidth: imageAspectRatio.width, customAspectRatioHeight: imageAspectRatio.height, duration, resolution, ...(acceptsStructuredDirection ? { scene, style } : {}), internalPrompt: workflow.internalPrompt || "", outputs: requestedOutputCount(body, workflow), ...(detailCards.length ? { detailCards } : {}), ...(seriesPlan.length ? { seriesPlan } : {}), ...(visualBible ? { visualBible } : {}), ...(adminExempt ? { billingMode: ADMIN_EXEMPT_BILLING_MODE, quotedPoints: points } : {}), ...(promptConfig ? { promptConfig } : {}), ...(inputExtras?.(body) || {}) };
+    const input = { assetId: assets[0]?.id || null, storageKey: assets[0]?.storage_key || null, assetIds: assets.map((asset) => asset.id), storageKeys: assets.map((asset) => asset.storage_key), assetMimeTypes: assets.map((asset) => asset.mime_type), prompt, aspectRatio, aspectRatioMode: imageAspectRatio.mode, requestedAspectRatio: imageAspectRatio.requested, customAspectRatioWidth: imageAspectRatio.width, customAspectRatioHeight: imageAspectRatio.height, duration, resolution, ...(acceptsStructuredDirection ? { scene, style } : {}), internalPrompt: workflow.internalPrompt || "", outputs: requestedOutputCount(body, workflow), ...(detailCards.length ? { detailCards } : {}), ...(singleCard ? { singleCardIndex: Number(body.singleCardIndex) } : {}), ...(seriesPlan.length ? { seriesPlan } : {}), ...(visualBible ? { visualBible } : {}), ...(adminExempt ? { billingMode: ADMIN_EXEMPT_BILLING_MODE, quotedPoints: points } : {}), ...(promptConfig ? { promptConfig } : {}), ...(inputExtras?.(body) || {}) };
     await client.query(
       `INSERT INTO generation_tasks (id, user_id, workflow_key, status, points, input_json, idempotency_key, request_id)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
