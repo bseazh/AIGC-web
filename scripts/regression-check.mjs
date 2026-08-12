@@ -1800,6 +1800,11 @@ const checks = [
     ".yh-image-layout { align-items: stretch; }",
   ],
   [
+    "Image field grids keep adjacent controls on the same baseline",
+    "app/globals.css",
+    ".yh-field-grid > .yh-field + .yh-field { margin-top:0; }",
+  ],
+  [
     "Model wear workspace enforces aligned panels",
     "app/globals.css",
     ".model-wear-form-card, .model-wear-case-board { min-height: 704px;",
