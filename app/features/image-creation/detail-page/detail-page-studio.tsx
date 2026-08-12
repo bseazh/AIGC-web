@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
 import { GenerationProgress } from "@/app/components/generation-progress";
 import { imageRequest, pollImageTask, uploadImageFile } from "@/app/features/image-creation/shared/image-task-api";
+import { ImageAspectRatioControl } from "@/app/features/image-creation/shared/image-aspect-ratio-control";
 import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import { DETAIL_PAGE_MAX_CARDS, DETAIL_PAGE_MIN_CARDS, normalizeDetailCards, normalizeDetailPlans, type DetailPageCard, type DetailPagePlan } from "@/lib/detail-page-plans";
 import type { ImageWorkflowCase } from "@/lib/image-workflow-cases";
@@ -14,6 +15,8 @@ type Asset = { id: string; mimeType: string; originalName: string; url: string; 
 type Account = { user: { isAdministrator?: boolean }; wallet: { availablePoints: number } };
 type Stage = "brief" | "plans" | "cards" | "results";
 type Phase = "idle" | "uploading" | "planning" | "generating" | "succeeded" | "failed";
+
+const ratios = ["1:1", "3:4", "4:3", "9:16"] as const;
 
 type Props = {
   workflowKey: "product-detail-page" | "recreate-detail-page";
@@ -50,6 +53,7 @@ export function DetailPageStudio(props: Props) {
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [cards, setCards] = useState<DetailPageCard[]>([]);
   const [productUnderstanding, setProductUnderstanding] = useState("");
+  const [ratio, setRatio] = useState<string>("3:4");
   const [focusedCardId, setFocusedCardId] = useState("");
   const [stage, setStage] = useState<Stage>("brief");
   const [phase, setPhase] = useState<Phase>("idle");
@@ -91,6 +95,7 @@ export function DetailPageStudio(props: Props) {
         setCards(restoredCards);
         if (typeof saved.selectedPlanId === "string") setSelectedPlanId(saved.selectedPlanId);
         if (typeof saved.productUnderstanding === "string") setProductUnderstanding(saved.productUnderstanding.slice(0, 240));
+        if (typeof saved.ratio === "string") setRatio(saved.ratio);
         if (restoredCards.length >= DETAIL_PAGE_MIN_CARDS) setStage("cards");
         else if (restoredPlans.length) setStage("plans");
       }
@@ -150,12 +155,12 @@ export function DetailPageStudio(props: Props) {
           id: projectId,
           workflowKey: props.workflowKey,
           title: projectTitle,
-          payload: { step: stage, detailPageStudio: { assetId: resolvedAssetId || selectedAsset?.id || "", productDescription, plans, selectedPlanId, cards, productUnderstanding } },
+          payload: { step: stage, detailPageStudio: { assetId: resolvedAssetId || selectedAsset?.id || "", productDescription, plans, selectedPlanId, cards, productUnderstanding, ratio } },
         }),
       }).catch(() => undefined);
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [cards, plans, productDescription, productUnderstanding, projectId, projectTitle, props.workflowKey, resolvedAssetId, selectedAsset?.id, selectedPlanId, stage]);
+  }, [cards, plans, productDescription, productUnderstanding, projectId, projectTitle, props.workflowKey, ratio, resolvedAssetId, selectedAsset?.id, selectedPlanId, stage]);
 
   const chooseFile = (nextFile?: File) => {
     if (!nextFile) return;
@@ -232,7 +237,7 @@ export function DetailPageStudio(props: Props) {
       const body = await imageRequest<{ taskId: string }>(props.submitUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({ assetId, prompt: productDescription, productDescription, aspectRatio: "3:4", detailCards: normalized, draftId: projectId }),
+        body: JSON.stringify({ assetId, prompt: productDescription, productDescription, aspectRatio: ratio, detailCards: normalized, draftId: projectId }),
       });
       setCards(normalized); setPhase("generating"); setStage("results");
       await pollImageTask(body.taskId, setTask, 10 * 60 * 1000);
@@ -266,6 +271,7 @@ export function DetailPageStudio(props: Props) {
           {!preview ? <><div className="yh-upload-tabs"><span className="active"><Upload size={14} />本地上传</span><button type="button" onClick={openLibrary}><FolderOpen size={14} />资产库</button></div><label className="yh-upload-drop compact"><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => chooseFile(event.target.files?.[0])} /><span><Upload size={22} /></span><strong>{props.sourceTitle}</strong><small>{props.sourceHint}</small></label></> : <div className="detail-source-preview"><img src={preview} alt="商品素材" /><button type="button" aria-label="更换商品图片" onClick={() => { setFile(null); setSelectedAsset(null); setResolvedAssetId(""); setPreview(""); setPlans([]); setCards([]); setStage("brief"); }}><X size={14} /></button></div>}
         </section>
         <label className="yh-field wide">{props.productDescriptionLabel}<textarea value={productDescription} onChange={(event) => setProductDescription(event.target.value)} maxLength={900} placeholder={props.productDescriptionPlaceholder} /><small>{productDescription.length}/900</small></label>
+        <ImageAspectRatioControl value={ratio} options={ratios} onChange={setRatio} disabled={busy} required={false} />
         <button className="detail-primary-action" type="button" disabled={!preview || busy} onClick={generatePlans}>{phase === "uploading" || phase === "planning" ? <LoaderCircle className="generation-spinner" size={16} /> : <Wand2 size={16} />}{phase === "uploading" ? "正在上传商品" : phase === "planning" ? "正在策划三套方案" : plans.length ? "重新生成方案" : "生成 A / B / C 方案"}</button>
         <p className="yh-credit"><Sparkles size={14} />{account.user.isAdministrator ? `管理员免积分 · 报价 ${props.pointsPerTask} 积分` : `整套生成预估 ${props.pointsPerTask} 积分`}</p>
         {error && <p className="creator-error" role="alert">{error}</p>}

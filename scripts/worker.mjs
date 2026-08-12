@@ -8,6 +8,7 @@ import tls from "node:tls";
 import { Queue, Worker } from "bullmq";
 import COS from "cos-nodejs-sdk-v5";
 import pg from "pg";
+import sharp from "sharp";
 import { fetch as undiciFetch, ProxyAgent } from "undici";
 import { installStructuredConsole, log } from "./structured-logger.mjs";
 
@@ -185,7 +186,8 @@ async function createGeminiImage(inputUrls, prompt, generationTaskId, outputInde
   const apiKey = process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.NANO_BANANA_API_KEY;
   const model = process.env.GOOGLE_IMAGE_MODEL || "gemini-2.5-flash-image";
   if (!apiKey) throw new Error("GOOGLE_AI_API_KEY is required for Nano Banana image generation");
-  const responseAspectRatio = geminiImageResponseAspectRatio(aspectRatio);
+  const providerAspectRatio = nearestGeminiAspectRatio(aspectRatio);
+  const responseAspectRatio = geminiImageResponseAspectRatio(providerAspectRatio);
   const imageParts = [];
   for (const [index, url] of inputUrls.entries()) {
     const response = await fetch(url);
@@ -237,7 +239,7 @@ async function createGeminiImage(inputUrls, prompt, generationTaskId, outputInde
     const payload = await response.json().catch(() => null);
     const parsed = geminiImageResponse(payload);
     const errorCode = !response.ok ? "GEMINI_IMAGE_HTTP_ERROR" : !parsed.inlineData?.data ? "GEMINI_EMPTY_IMAGE_RESPONSE" : null;
-    await logProviderCall(generationTaskId, "google-gemini", "generate_image", { model, outputIndex, inputCount: imageParts.length, referenceRoles: referencePlan.slice(0, imageParts.length).map((item) => item.label), promptLength: prompt.length, aspectRatio, responseAspectRatio, attempt, responseModalities: ["IMAGE"] }, response.status, payload, errorCode, payload?.responseId || response.headers.get("x-request-id"));
+    await logProviderCall(generationTaskId, "google-gemini", "generate_image", { model, outputIndex, inputCount: imageParts.length, referenceRoles: referencePlan.slice(0, imageParts.length).map((item) => item.label), promptLength: prompt.length, requestedAspectRatio: aspectRatio, providerAspectRatio, responseAspectRatio, attempt, responseModalities: ["IMAGE"] }, response.status, payload, errorCode, payload?.responseId || response.headers.get("x-request-id"));
     if (response.ok && parsed.inlineData?.data) {
       const buffer = Buffer.from(parsed.inlineData.data, "base64");
       const contentType = parsed.inlineData.mimeType || parsed.inlineData.mime_type || "image/png";
@@ -359,8 +361,27 @@ function geminiImageConfigured() {
   return Boolean(process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.NANO_BANANA_API_KEY);
 }
 
+const supportedGeminiAspectRatios = ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"];
+
+function parsedAspectRatio(value) {
+  const match = String(value || "").match(/^(\d+):(\d+)$/);
+  if (!match || Number(match[1]) < 1 || Number(match[2]) < 1) return null;
+  return { width: Number(match[1]), height: Number(match[2]), value: Number(match[1]) / Number(match[2]) };
+}
+
+function nearestGeminiAspectRatio(value) {
+  if (supportedGeminiAspectRatios.includes(value)) return value;
+  const target = parsedAspectRatio(value);
+  if (!target) return "1:1";
+  return supportedGeminiAspectRatios.reduce((nearest, candidate) => {
+    const candidateValue = parsedAspectRatio(candidate)?.value || 1;
+    const nearestValue = parsedAspectRatio(nearest)?.value || 1;
+    return Math.abs(Math.log(candidateValue / target.value)) < Math.abs(Math.log(nearestValue / target.value)) ? candidate : nearest;
+  }, "1:1");
+}
+
 function geminiAspectRatio(value) {
-  return ["1:1", "3:4", "4:3", "9:16", "16:9"].includes(value) ? value : "1:1";
+  return nearestGeminiAspectRatio(value);
 }
 
 function geminiImageResponseAspectRatio(value) {
@@ -566,6 +587,49 @@ async function generateImageOutputs(inputUrls, input, workflowKey, generationTas
   return outputs;
 }
 
+async function referenceImageAspectRatio(inputUrls) {
+  if (!inputUrls.length) return null;
+  try {
+    const response = await fetch(inputUrls[0]);
+    if (!response.ok) return null;
+    const metadata = await sharp(Buffer.from(await response.arrayBuffer())).metadata();
+    return metadata.width && metadata.height ? `${metadata.width}:${metadata.height}` : null;
+  } catch {
+    return null;
+  }
+}
+
+function targetImageDimensions(aspectRatio, resolution = "1K") {
+  const ratio = parsedAspectRatio(aspectRatio);
+  if (!ratio) return null;
+  const longEdge = resolution === "2K" ? 2048 : 1024;
+  const scale = Math.max(1, Math.floor(longEdge / Math.max(ratio.width, ratio.height)));
+  if (ratio.width <= longEdge && ratio.height <= longEdge) return { width: ratio.width * scale, height: ratio.height * scale };
+  if (ratio.value >= 1) return { width: longEdge, height: Math.max(1, Math.round(longEdge / ratio.value)) };
+  return { width: Math.max(1, Math.round(longEdge * ratio.value)), height: longEdge };
+}
+
+async function conformImageToAspectRatio(buffer, requestedRatio, resolution) {
+  const dimensions = targetImageDimensions(requestedRatio, resolution);
+  if (!dimensions) return { buffer, dimensions: null, transformed: false };
+  const metadata = await sharp(buffer).metadata();
+  if (metadata.width === dimensions.width && metadata.height === dimensions.height) return { buffer, dimensions, transformed: false };
+  const background = await sharp(buffer)
+    .resize(dimensions.width, dimensions.height, { fit: "cover" })
+    .blur(28)
+    .modulate({ brightness: 0.86, saturation: 0.82 })
+    .toBuffer();
+  const foreground = await sharp(buffer)
+    .resize(dimensions.width, dimensions.height, { fit: "contain", withoutEnlargement: false, background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toBuffer();
+  const output = await sharp(background)
+    .composite([{ input: foreground, gravity: "centre" }])
+    .png({ compressionLevel: 8 })
+    .toBuffer();
+  return { buffer: output, dimensions, transformed: true };
+}
+
 async function generateVideo(inputUrls, input, workflowKey, taskId) {
   return waitForVideo(await createVideoTask(inputUrls, input, workflowKey, taskId), taskId);
 }
@@ -761,6 +825,9 @@ const worker = new Worker("generation", async (job) => {
     }
     const storageKeys = task.input_json.storageKeys || [task.input_json.storageKey];
     const inputUrls = await Promise.all(storageKeys.map((key) => cosUrl(key, "GET", 3600)));
+    if (task.input_json.aspectRatioMode === "auto") {
+      task.input_json.aspectRatio = await referenceImageAspectRatio(inputUrls) || "1:1";
+    }
     const temporaryOutputs = task.workflow_key === "video-mix"
       ? [await generateMix(inputUrls, task.input_json, task)]
       : ["product-ad-video", "recreate-video", "seedance-video", "model-spokesperson-video"].includes(task.workflow_key)
@@ -771,11 +838,21 @@ const worker = new Worker("generation", async (job) => {
     for (const [index, output] of temporaryOutputs.entries()) {
       const response = await fetch(output.url);
       if (!response.ok) throw new Error(`Could not download provider output ${response.status}`);
-      const buffer = Buffer.from(await response.arrayBuffer());
+      let buffer = Buffer.from(await response.arrayBuffer());
       const isVideoTask = ["product-ad-video", "recreate-video", "seedance-video", "model-spokesperson-video", "video-mix"].includes(task.workflow_key);
       const provider = output.provider || (isVideoTask ? "ark" : "sophnet");
       const model = output.model || (isVideoTask ? (process.env.ARK_MODEL || "doubao-seedance-2-0-260128") : process.env.AI_MODEL);
-      const contentType = response.headers.get("content-type")?.split(";")[0] || (isVideoTask ? "video/mp4" : "image/png");
+      let contentType = response.headers.get("content-type")?.split(";")[0] || (isVideoTask ? "video/mp4" : "image/png");
+      let outputDimensions = null;
+      let aspectRatioTransformed = false;
+      if (!isVideoTask && task.input_json.aspectRatio) {
+        const conformed = await conformImageToAspectRatio(buffer, task.input_json.aspectRatio, task.input_json.imageResolution);
+        buffer = conformed.buffer;
+        outputDimensions = conformed.dimensions;
+        aspectRatioTransformed = conformed.transformed;
+        if (aspectRatioTransformed) contentType = "image/png";
+        await logProviderCall(task.id, "image-postprocess", "conform_aspect_ratio", { requestedAspectRatio: task.input_json.requestedAspectRatio, normalizedAspectRatio: task.input_json.aspectRatio, providerAspectRatio: nearestGeminiAspectRatio(task.input_json.aspectRatio), outputDimensions }, 200, { transformed: aspectRatioTransformed });
+      }
       const extension = contentType === "image/jpeg" ? "jpg" : contentType === "image/webp" ? "webp" : contentType === "video/webm" ? "webm" : contentType.startsWith("video/") ? "mp4" : "png";
       const key = `users/${task.user_id}/outputs/${task.id}/${index + 1}-${randomUUID()}.${extension}`;
       await putObject(key, buffer, contentType);
@@ -787,7 +864,7 @@ const worker = new Worker("generation", async (job) => {
       const asset = await pool.query(
         `INSERT INTO assets (owner_id, kind, storage_key, mime_type, byte_size, audit_status, original_name, metadata_json)
          VALUES ($1, 'OUTPUT', $2, $3, $4, $5, $6, $7::jsonb) RETURNING id`,
-        [task.user_id, key, contentType, buffer.length, auditStatus, detailCard?.title ? `${String(detailCard.title).slice(0, 40)}.${extension}` : `${task.workflow_key}-${index + 1}.${extension}`, JSON.stringify({ taskId: task.id, workflowKey: task.workflow_key, ...(detailCard ? { detailPageCard: detailCard } : {}), provider, model, aiGenerated: true, aiContentLabel: "AI_GENERATED", provenance: { generatedAt: generatedAt.toISOString(), workerId }, library: { saved: false, retention: "TEMPORARY_OUTPUT", expiresAt: expiresAt.toISOString() }, moderation: { status: contentReviewEnabled ? "PENDING_REVIEW" : "BYPASSED" } })],
+        [task.user_id, key, contentType, buffer.length, auditStatus, detailCard?.title ? `${String(detailCard.title).slice(0, 40)}.${extension}` : `${task.workflow_key}-${index + 1}.${extension}`, JSON.stringify({ taskId: task.id, workflowKey: task.workflow_key, ...(detailCard ? { detailPageCard: detailCard } : {}), provider, model, aiGenerated: true, aiContentLabel: "AI_GENERATED", imageAspectRatio: { mode: task.input_json.aspectRatioMode || "preset", requested: task.input_json.requestedAspectRatio || task.input_json.aspectRatio, normalized: task.input_json.aspectRatio, provider: nearestGeminiAspectRatio(task.input_json.aspectRatio), outputDimensions, transformed: aspectRatioTransformed }, provenance: { generatedAt: generatedAt.toISOString(), workerId }, library: { saved: false, retention: "TEMPORARY_OUTPUT", expiresAt: expiresAt.toISOString() }, moderation: { status: contentReviewEnabled ? "PENDING_REVIEW" : "BYPASSED" } })],
       );
       savedAssets.push({ assetId: asset.rows[0].id, storageKey: key });
     }

@@ -1710,6 +1710,26 @@ const checks = [
     "image-aspect-ratio-preview",
   ],
   [
+    "Shared image ratio control supports automatic framing",
+    "app/features/image-creation/shared/image-aspect-ratio-control.tsx",
+    "自动画幅",
+  ],
+  [
+    "Shared image ratio control supports custom dimensions",
+    "app/features/image-creation/shared/image-aspect-ratio-control.tsx",
+    "image-aspect-ratio-custom",
+  ],
+  [
+    "Image task creation preserves custom aspect ratios",
+    "lib/task-creation.ts",
+    "requestedAspectRatio: imageAspectRatio.requested",
+  ],
+  [
+    "Image worker conforms provider output to exact aspect ratio",
+    "scripts/worker.mjs",
+    "conformImageToAspectRatio",
+  ],
+  [
     "Shared image workflows use visual ratio controls",
     "app/features/image-creation/shared/image-workflow-page.tsx",
     "<ImageAspectRatioControl",
