@@ -1805,6 +1805,16 @@ const checks = [
     ".yh-field-grid > .yh-field + .yh-field { margin-top:0; }",
   ],
   [
+    "AI image workspace keeps a compact fixed-width configuration column",
+    "app/globals.css",
+    ".yh-ai-page .yh-image-layout { width:min(1240px,100%); grid-template-columns:minmax(0,520px) minmax(0,1fr); gap:20px; }",
+  ],
+  [
+    "Detail card fields keep inputs inside their grid columns",
+    "app/globals.css",
+    ".detail-card-fields input, .detail-card-fields textarea { width: 100%; min-width: 0; box-sizing: border-box;",
+  ],
+  [
     "Model wear workspace enforces aligned panels",
     "app/globals.css",
     ".model-wear-form-card, .model-wear-case-board { min-height: 704px;",

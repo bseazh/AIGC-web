@@ -1462,9 +1462,9 @@ a { color: inherit; text-decoration: none; }
 .detail-card-order button:last-child { color: #a84a53; }
 .detail-card-order button:disabled { opacity: .3; }
 .detail-card-fields { min-width: 0; display: grid; grid-template-columns: minmax(0,.45fr) minmax(0,.55fr); gap: 9px; }
-.detail-card-fields label { min-width: 0; display: grid; gap: 5px; color: #536a74; font-size: 9px; font-weight: 900; }
+.detail-card-fields label { min-width: 0; display: grid; align-content: start; gap: 5px; color: #536a74; font-size: 9px; font-weight: 900; }
 .detail-card-fields label.wide { grid-column: 1 / -1; }
-.detail-card-fields input, .detail-card-fields textarea { width: 100%; min-width: 0; padding: 8px 9px; border: 1px solid #d4e0e4; border-radius: 6px; outline: 0; color: #344b55; background: #fff; font: inherit; font-size: 10px; line-height: 1.5; letter-spacing: 0; }
+.detail-card-fields input, .detail-card-fields textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: 8px 9px; border: 1px solid #d4e0e4; border-radius: 6px; outline: 0; color: #344b55; background: #fff; font: inherit; font-size: 10px; line-height: 1.5; letter-spacing: 0; }
 .detail-card-fields input { height: 34px; }
 .detail-card-fields textarea { min-height: 56px; resize: vertical; }
 .detail-card-fields input:focus, .detail-card-fields textarea:focus { border-color: #67aeba; box-shadow: 0 0 0 3px rgba(23,111,130,.08); }
@@ -1893,7 +1893,7 @@ a { color: inherit; text-decoration: none; }
 
 /* Keep the shared image workspace on a stable vertical rhythm. */
 .yh-image-layout { align-items: stretch; }
-.yh-ai-page .yh-image-layout { width:min(1240px,100%); grid-template-columns:minmax(0,600px) minmax(0,1fr); gap:20px; }
+.yh-ai-page .yh-image-layout { width:min(1240px,100%); grid-template-columns:minmax(0,520px) minmax(0,1fr); gap:20px; }
 .yh-ai-page .yh-image-form-card { width:100%; }
 .yh-ai-page .yh-case-board { min-width:0; }
 .yh-image-form-card, .yh-case-board { box-sizing: border-box; }
@@ -1937,7 +1937,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 @media (max-width:1080px) and (min-width:901px) {
-.yh-ai-page .yh-image-layout { grid-template-columns:minmax(0,540px) minmax(0,1fr); }
+  .yh-ai-page .yh-image-layout { grid-template-columns:minmax(0,500px) minmax(0,1fr); }
 }
 
 @media (max-width:640px) {
