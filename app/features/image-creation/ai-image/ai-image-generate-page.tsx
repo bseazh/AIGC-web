@@ -211,7 +211,7 @@ export function AiImageGeneratePage() {
           <header><ImageIcon size={18} /><strong>AI生图</strong></header>
           <label className="yh-field wide">提示词 <em>*</em><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={1200} placeholder="请输入图像描述，例如：一只可爱的橘猫在阳光下打盹，温暖真实摄影..." /><small>{prompt.length}/1200</small></label>
           <div className="yh-field-grid">
-            <label className="yh-field">首选模型 <em>*</em><select value={model} onChange={(event) => setModel(event.target.value)}>{modelOptions.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label className="yh-field">模型 <em>*</em><select value={model} onChange={(event) => setModel(event.target.value)}>{modelOptions.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label className="yh-field">清晰度 <em>*</em><select value={resolution} onChange={(event) => setResolution(event.target.value)}>{resolutions.map((item) => <option key={item}>{item}</option>)}</select></label>
           </div>
           <ImageAspectRatioControl value={ratio} options={ratios} onChange={setRatio} disabled={busy} />
