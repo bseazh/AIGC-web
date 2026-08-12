@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { GenerationProgress } from "@/app/components/generation-progress";
 import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
 import { ImageOutputCountControl, type ImageOutputCount } from "@/app/features/image-creation/shared/image-output-count-control";
+import { ImageAspectRatioControl } from "@/app/features/image-creation/shared/image-aspect-ratio-control";
 import { imageRequest, pollImageTask, uploadImageFile } from "@/app/features/image-creation/shared/image-task-api";
 import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import { productSceneCases } from "@/lib/image-workflow-cases";
@@ -224,8 +225,8 @@ export function ProductSceneImagePage() {
           <div className="yh-field-grid">
             <label className="yh-field">首选模型 <em>*</em><select value={model} onChange={(event) => setModel(event.target.value)}>{modelOptions.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label className="yh-field">清晰度 <em>*</em><select value={resolution} onChange={(event) => setResolution(event.target.value)}>{resolutions.map((item) => <option key={item}>{item}</option>)}</select></label>
-            <label className="yh-field">图片比例 <em>*</em><select value={ratio} onChange={(event) => setRatio(event.target.value)}>{ratios.map((item) => <option key={item}>{item}</option>)}</select></label>
           </div>
+          <ImageAspectRatioControl value={ratio} options={ratios} onChange={setRatio} disabled={busy} />
           <label className="yh-field wide">提示词<textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={1200} placeholder="例如：商品放在窗边桌面，保留自然投影与留白" /><small>{prompt.length}/1200</small></label>
           <label className="yh-toggle-field"><span><strong>指定模特图</strong><small>如果指定产品场景图中的人物模特，可上传模特图</small></span><input type="checkbox" checked={useModelReference} onChange={(event) => setUseModelReference(event.target.checked)} /><i /></label>
           <ImageOutputCountControl value={outputCount} onChange={setOutputCount} disabled={busy} />

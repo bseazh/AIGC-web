@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { GenerationProgress } from "@/app/components/generation-progress";
 import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
 import { ImageOutputCountControl, type ImageOutputCount } from "@/app/features/image-creation/shared/image-output-count-control";
+import { ImageAspectRatioControl } from "@/app/features/image-creation/shared/image-aspect-ratio-control";
 import { imageRequest, pollImageTask, uploadImageFile } from "@/app/features/image-creation/shared/image-task-api";
 import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import { modelWearCases } from "@/lib/image-workflow-cases";
@@ -74,7 +75,7 @@ export function ModelWearWorkspace() {
             <div className="model-wear-upload-tabs"><span className="active">本地上传</span><span>资产库</span></div>
             <div className="model-wear-product-list">{products.map((item, index) => <div className="model-wear-preview" key={item.preview}><img src={item.preview} alt={`商品素材 ${index + 1}`} /><button type="button" aria-label="移除商品图" onClick={() => setProducts((current) => { URL.revokeObjectURL(item.preview); return current.filter((entry) => entry.preview !== item.preview); })}><X size={15} /></button></div>)}{products.length < 4 && <label className="model-wear-drop product"><ImagePlus size={22} /><strong>商品图（多颜色）</strong><small>上传不同颜色的商品图片<br />已上传 {products.length}/4 个</small><input type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={(event) => addProducts(event.target.files)} /></label>}</div>
           </section>
-          <label className="model-wear-ratio-field">图片比例<div>{ratios.map((item) => <button type="button" key={item} className={ratio === item ? "active" : ""} onClick={() => setRatio(item)}>{item}</button>)}</div></label>
+          <ImageAspectRatioControl value={ratio} options={ratios} onChange={setRatio} disabled={busy} />
           <label className="model-wear-prompt-field">补充要求<textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={1200} placeholder="例如：保持模特发型，展示全身穿搭效果" /><small>{prompt.length}/1200</small></label>
           <ImageOutputCountControl value={outputCount} onChange={setOutputCount} disabled={busy} />
           <p className="model-wear-credit"><Sparkles size={15} />预估积分：{account.user.isAdministrator ? "待填写：管理员免积分" : "10 积分"}</p>

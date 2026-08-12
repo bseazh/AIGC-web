@@ -1704,6 +1704,31 @@ const checks = [
     "app/create/white-background/page.tsx",
     "@/app/features/image-creation/white-background/white-background-workspace",
   ],
+  [
+    "Shared image ratio control renders proportional frames",
+    "app/features/image-creation/shared/image-aspect-ratio-control.tsx",
+    "image-aspect-ratio-preview",
+  ],
+  [
+    "Shared image workflows use visual ratio controls",
+    "app/features/image-creation/shared/image-workflow-page.tsx",
+    "<ImageAspectRatioControl",
+  ],
+  [
+    "AI image generation uses visual ratio controls",
+    "app/features/image-creation/ai-image/ai-image-generate-page.tsx",
+    "<ImageAspectRatioControl",
+  ],
+  [
+    "Product scene generation uses visual ratio controls",
+    "app/features/image-creation/product-scene/product-scene-image-page.tsx",
+    "<ImageAspectRatioControl",
+  ],
+  [
+    "Model wear uses visual ratio controls",
+    "app/features/image-creation/model-wear/model-wear-workspace.tsx",
+    "<ImageAspectRatioControl",
+  ],
 ];
 
 const forbiddenChecks = [
@@ -1716,6 +1741,10 @@ const forbiddenChecks = [
   ["Model wear form hides scene selector", "app/features/image-creation/model-wear/model-wear-workspace.tsx", "使用场景<select"],
   ["Model wear form hides style selector", "app/features/image-creation/model-wear/model-wear-workspace.tsx", "视觉风格<select"],
   ["Detail page studio hides fixed visual selectors", "app/features/image-creation/detail-page/detail-page-studio.tsx", "视觉风格<select"],
+  ["Shared image form removes ratio select", "app/features/image-creation/shared/image-workflow-page.tsx", "<select value={ratio}"],
+  ["AI image form removes ratio select", "app/features/image-creation/ai-image/ai-image-generate-page.tsx", "<select value={ratio}"],
+  ["Product scene form removes ratio select", "app/features/image-creation/product-scene/product-scene-image-page.tsx", "<select value={ratio}"],
+  ["Model wear removes text-only ratio buttons", "app/features/image-creation/model-wear/model-wear-workspace.tsx", "model-wear-ratio-field"],
 ];
 
 let failed = false;

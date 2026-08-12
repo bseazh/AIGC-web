@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { GenerationProgress } from "@/app/components/generation-progress";
 import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
 import { ImageOutputCountControl, type ImageOutputCount } from "@/app/features/image-creation/shared/image-output-count-control";
+import { ImageAspectRatioControl } from "@/app/features/image-creation/shared/image-aspect-ratio-control";
 import { imageRequest, pollImageTask, uploadImageFile } from "@/app/features/image-creation/shared/image-task-api";
 import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import { aiImageCases } from "@/lib/image-workflow-cases";
@@ -200,8 +201,8 @@ export function AiImageGeneratePage() {
           <div className="yh-field-grid">
             <label className="yh-field">首选模型 <em>*</em><select value={model} onChange={(event) => setModel(event.target.value)}>{modelOptions.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label className="yh-field">清晰度 <em>*</em><select value={resolution} onChange={(event) => setResolution(event.target.value)}>{resolutions.map((item) => <option key={item}>{item}</option>)}</select></label>
-            <label className="yh-field">图片比例 <em>*</em><select value={ratio} onChange={(event) => setRatio(event.target.value)}>{ratios.map((item) => <option key={item}>{item}</option>)}</select></label>
           </div>
+          <ImageAspectRatioControl value={ratio} options={ratios} onChange={setRatio} disabled={busy} />
           <section className="yh-reference-upload">
             <div className="yh-upload-tabs">
               <button className={sourceTab === "local" ? "active" : ""} type="button" onClick={() => setSourceTab("local")}><Upload size={14} />本地上传</button>

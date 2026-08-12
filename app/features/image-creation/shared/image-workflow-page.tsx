@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { GenerationProgress } from "@/app/components/generation-progress";
 import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
 import { ImageOutputCountControl, type ImageOutputCount } from "@/app/features/image-creation/shared/image-output-count-control";
+import { ImageAspectRatioControl } from "@/app/features/image-creation/shared/image-aspect-ratio-control";
 import { imageRequest, pollImageTask, uploadImageFile } from "@/app/features/image-creation/shared/image-task-api";
 import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import type { ImageWorkflowCase } from "@/lib/image-workflow-cases";
@@ -233,7 +234,7 @@ export function ImageWorkflowPage({
             </> : <div className="yh-reference-list large"><article><img src={preview} alt="待生成商品素材" /><button type="button" aria-label="移除图片" onClick={() => { if (preview.startsWith("blob:")) URL.revokeObjectURL(preview); setFile(null); setSelectedAsset(null); setPreview(""); resetTask(); }}><X size={13} /></button></article></div>}
           </section>}
           {productDescriptionLabel && <label className="yh-field wide">{productDescriptionLabel}<textarea value={productDescription} onChange={(event) => setProductDescription(event.target.value)} maxLength={900} placeholder={productDescriptionPlaceholder} /><small>{productDescription.length}/900</small></label>}
-          {showAspectRatio && <label className="yh-field">图片比例 <em>*</em><select value={ratio} onChange={(event) => setRatio(event.target.value)}>{ratios.map((item) => <option key={item}>{item}</option>)}</select></label>}
+          {showAspectRatio && <ImageAspectRatioControl value={ratio} options={ratios} onChange={setRatio} disabled={busy} />}
           <label className="yh-field wide">提示词 <em>*</em><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={1200} placeholder={requireSource ? "例如：商品放在窗边桌面，保留自然投影与留白" : "请输入图像描述，例如：清新自然的电商带货模特，真实摄影质感"} /><small>{prompt.length}/1200</small></label>
           <ImageOutputCountControl value={outputCount} onChange={setOutputCount} disabled={busy} />
           <p className="yh-credit"><Sparkles size={15} />{creditText}</p>
@@ -275,7 +276,7 @@ export function ImageWorkflowPage({
       </section>
       <aside className="creator-panel">
         <div className="panel-title"><span><Sparkles size={18} /></span><div><h1>生成设置</h1><p>{account.user.isAdministrator ? `管理员免积分 · 报价 ${pointsPerTask} 积分计入成本审计` : description}</p></div></div>
-        {showAspectRatio && <><label className="field-label">画幅比例</label><div className="ratio-control">{ratios.map((item) => <button type="button" key={item} className={ratio === item ? "active" : ""} onClick={() => setRatio(item)}>{item}</button>)}</div></>}
+        {showAspectRatio && <ImageAspectRatioControl value={ratio} options={ratios} onChange={setRatio} disabled={busy} label="画幅比例" required={false} />}
         {productDescriptionLabel && <label className="field-label">{productDescriptionLabel}<textarea value={productDescription} onChange={(event) => setProductDescription(event.target.value)} maxLength={900} placeholder={productDescriptionPlaceholder} /><small>{productDescription.length}/900</small></label>}
         <label className="field-label">{requireSource ? "提示词" : "提示词"}<textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={1200} placeholder={requireSource ? "例如：商品放在窗边桌面，保留自然投影与留白" : "请输入图像描述，例如：一只可爱的橘猫在阳光下打盹，温暖真实摄影"} /><small>{prompt.length}/1200</small></label>
         <ImageOutputCountControl value={outputCount} onChange={setOutputCount} disabled={busy} />
