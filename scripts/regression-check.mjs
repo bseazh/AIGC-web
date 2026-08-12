@@ -1794,6 +1794,21 @@ const checks = [
     "app/features/image-creation/model-wear/model-wear-workspace.tsx",
     "<ImageAspectRatioControl",
   ],
+  [
+    "Shared image workspaces enforce aligned panels",
+    "app/globals.css",
+    ".yh-image-layout { align-items: stretch; }",
+  ],
+  [
+    "Model wear workspace enforces aligned panels",
+    "app/globals.css",
+    ".model-wear-form-card, .model-wear-case-board { min-height: 704px;",
+  ],
+  [
+    "Detail page workspace enforces aligned panels",
+    "app/globals.css",
+    ".detail-studio-sidebar, .detail-studio-workspace { min-height: 690px;",
+  ],
 ];
 
 const forbiddenChecks = [

@@ -1884,3 +1884,88 @@ a { color: inherit; text-decoration: none; }
 @media (max-width:900px) { .yh-image-layout { grid-template-columns:1fr; }.yh-case-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:900px) { .yh-scene-page .yh-image-layout { grid-template-columns:1fr; } }
 @media (max-width:640px) { .yh-image-page { padding:16px 14px 42px; }.yh-image-form-card,.yh-case-board { border-radius:14px; }.yh-field-grid,.yh-case-grid,.yh-result-grid,.yh-scene-case-board .yh-case-grid { grid-template-columns:1fr; }.yh-case-board { padding:16px; min-height:auto; } }
+
+/* Keep the shared image workspace on a stable vertical rhythm. */
+.yh-image-layout { align-items: stretch; }
+.yh-image-form-card, .yh-case-board { box-sizing: border-box; }
+.yh-image-form-card { display: grid; align-content: start; grid-auto-rows: max-content; gap: 0; }
+.yh-image-form-card > header { flex: none; }
+.yh-image-form-card > .yh-reference-upload,
+.yh-image-form-card > .yh-field,
+.yh-image-form-card > .image-aspect-ratio-field,
+.yh-image-form-card > .image-output-count-control,
+.yh-image-form-card > .yh-credit,
+.yh-image-form-card > .creator-error,
+.yh-image-form-card > .creator-result-temporary,
+.yh-image-form-card > .yh-actions { min-width: 0; box-sizing: border-box; }
+.yh-image-form-card > .yh-field { margin-top: 15px; }
+.yh-image-form-card > .yh-reference-upload + .yh-field,
+.yh-image-form-card > .yh-reference-upload + .image-aspect-ratio-field { margin-top: 15px; }
+.yh-image-form-card > .yh-field textarea { min-height: 112px; box-sizing: border-box; }
+.yh-image-form-card > .image-aspect-ratio-field { margin-top: 15px; }
+.yh-image-form-card > .image-output-count-control { margin-top: 15px; }
+.yh-image-form-card > .yh-credit { margin-top: 14px; }
+.yh-image-form-card > .creator-error,
+.yh-image-form-card > .creator-result-temporary { margin-bottom: 0; }
+.yh-image-form-card > .yh-actions { margin-top: 14px; }
+.yh-case-board { min-height: 708px; display: grid; grid-template-rows: max-content minmax(0,1fr) max-content; align-content: start; }
+.yh-case-board > header { min-height: 36px; }
+.yh-case-grid, .yh-result-grid { align-content: start; }
+.yh-case-grid article { min-width: 0; grid-template-rows: auto minmax(40px,1fr) auto; }
+.yh-case-grid strong { min-height: 42px; box-sizing: border-box; }
+.yh-case-grid button { width: calc(100% - 24px); box-sizing: border-box; }
+.yh-result-grid article { min-width: 0; aspect-ratio: 1; }
+.yh-result-grid img { height: 100%; }
+.yh-result-grid .generated-asset-actions { min-height: 38px; box-sizing: border-box; }
+.image-aspect-ratio-field,
+.image-output-count-control { box-sizing: border-box; }
+.image-aspect-ratio-options button { box-sizing: border-box; min-height: 64px; }
+.image-aspect-ratio-options button > span:last-child { align-self: center; }
+
+@media (max-width:900px) {
+  .yh-image-layout { align-items: start; }
+  .yh-case-board { min-height: 560px; }
+}
+
+@media (max-width:640px) {
+  .yh-case-board { min-height: 0; display: block; }
+  .yh-result-grid article { aspect-ratio: auto; }
+  .yh-result-grid img { height: auto; aspect-ratio: 1; }
+}
+
+/* Alignment contract shared by every image-generation workspace. */
+@media (min-width:901px) {
+  .creator-layout { align-items: stretch; }
+  .creator-layout > .upload-stage,
+  .creator-layout > .creator-panel { min-height: 640px; box-sizing: border-box; }
+  .creator-layout.inspiration-workflow-layout > .case-reference-panel { height: calc(100dvh - 116px); min-height: 640px; }
+  .creator-panel { align-self: stretch; align-content: start; grid-auto-rows: max-content; }
+  .case-reference-grid article { display: grid; grid-template-rows: auto minmax(0,1fr); }
+  .case-reference-grid article > div { grid-template-rows: auto auto minmax(34px,auto) 34px; align-content: start; }
+  .case-reference-grid strong { min-height: 34px; display: flex; align-items: center; }
+
+  .model-wear-workbench { align-items: stretch; }
+  .model-wear-form-card, .model-wear-case-board { min-height: 704px; box-sizing: border-box; }
+  .model-wear-form-body { align-content: start; grid-auto-rows: max-content; }
+  .model-wear-upload-block { min-width: 0; }
+  .model-wear-product-list { grid-auto-rows: 132px; }
+  .model-wear-product-list .model-wear-drop,
+  .model-wear-product-list .model-wear-preview,
+  .model-wear-product-list .model-wear-preview img { min-height: 0; height: 132px; box-sizing: border-box; }
+  .model-wear-case-board { display: grid; grid-template-rows: max-content minmax(0,1fr); align-content: start; }
+  .model-wear-case-grid { align-content: start; grid-auto-rows: 1fr; }
+  .model-wear-case-grid article > div:not(.model-wear-case-media) { min-height: 70px; box-sizing: border-box; }
+  .model-wear-case-grid button { width: calc(100% - 24px); box-sizing: border-box; }
+
+  .detail-studio-layout { align-items: stretch; }
+  .detail-studio-sidebar, .detail-studio-workspace { min-height: 690px; box-sizing: border-box; }
+  .detail-studio-sidebar { align-content: start; grid-auto-rows: max-content; }
+  .detail-case-grid, .detail-plan-grid { align-items: stretch; }
+  .detail-case-grid article { display: grid; grid-template-rows: auto minmax(0,1fr); }
+  .detail-case-grid article > div { grid-template-rows: auto minmax(34px,1fr) 36px; align-content: start; }
+  .detail-case-grid strong { min-height: 34px; display: flex; align-items: center; }
+  .detail-plan-grid > article { grid-template-rows: auto auto minmax(55px,auto) auto minmax(0,1fr) 36px; }
+  .detail-plan-grid > article > button { align-self: end; }
+  .detail-card-editor > article { min-height: 244px; box-sizing: border-box; }
+  .detail-card-fields textarea { height: 56px; box-sizing: border-box; }
+}
