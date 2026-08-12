@@ -226,8 +226,8 @@ export function ProductSceneImagePage() {
           </section>
           <label className="yh-field wide">产品描述 <em>*</em><textarea value={productDescription} onChange={(event) => setProductDescription(event.target.value)} maxLength={900} placeholder="产品名、类目、卖点等，例如：超牌火焰画，夜宵格子，桌面有番茄..." /><small>{productDescription.length}/900</small></label>
           <div className="yh-field-grid">
-            <label className="yh-field">首选模型 <em>*</em><select value={model} onChange={(event) => setModel(event.target.value)}>{modelOptions.map((item) => <option key={item}>{item}</option>)}</select></label>
-            <label className="yh-field">清晰度 <em>*</em><select value={resolution} onChange={(event) => setResolution(event.target.value)}>{resolutions.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label className="yh-field"><span className="yh-field-label">模型 <em>*</em></span><select value={model} onChange={(event) => setModel(event.target.value)}>{modelOptions.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label className="yh-field"><span className="yh-field-label">清晰度 <em>*</em></span><select value={resolution} onChange={(event) => setResolution(event.target.value)}>{resolutions.map((item) => <option key={item}>{item}</option>)}</select></label>
           </div>
           <ImageAspectRatioControl value={ratio} options={ratios} onChange={setRatio} disabled={busy} />
           <label className="yh-field wide">提示词<textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={1200} placeholder="例如：商品放在窗边桌面，保留自然投影与留白" /><small>{prompt.length}/1200</small></label>

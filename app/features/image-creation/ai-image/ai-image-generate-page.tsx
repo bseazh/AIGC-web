@@ -204,15 +204,15 @@ export function AiImageGeneratePage() {
   if (!account) return <main className="workspace-loading"><span><Sparkles size={22} /></span><p>正在载入芭乐AIGC</p></main>;
 
   return (
-    <main className="yh-image-page">
+    <main className="yh-image-page yh-ai-page">
       <button className="yh-back-button" type="button" onClick={() => router.push("/tools")}><ArrowLeft size={16} />返回图片创作</button>
       <div className="yh-image-layout">
         <form className="yh-image-form-card" onSubmit={submit}>
           <header><ImageIcon size={18} /><strong>AI生图</strong></header>
           <label className="yh-field wide">提示词 <em>*</em><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={1200} placeholder="请输入图像描述，例如：一只可爱的橘猫在阳光下打盹，温暖真实摄影..." /><small>{prompt.length}/1200</small></label>
           <div className="yh-field-grid">
-            <label className="yh-field">模型 <em>*</em><select value={model} onChange={(event) => setModel(event.target.value)}>{modelOptions.map((item) => <option key={item}>{item}</option>)}</select></label>
-            <label className="yh-field">清晰度 <em>*</em><select value={resolution} onChange={(event) => setResolution(event.target.value)}>{resolutions.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label className="yh-field"><span className="yh-field-label">模型 <em>*</em></span><select value={model} onChange={(event) => setModel(event.target.value)}>{modelOptions.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label className="yh-field"><span className="yh-field-label">清晰度 <em>*</em></span><select value={resolution} onChange={(event) => setResolution(event.target.value)}>{resolutions.map((item) => <option key={item}>{item}</option>)}</select></label>
           </div>
           <ImageAspectRatioControl value={ratio} options={ratios} onChange={setRatio} disabled={busy} />
           <section className="yh-reference-upload">
