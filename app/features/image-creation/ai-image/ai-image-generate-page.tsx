@@ -7,6 +7,7 @@ import { GenerationProgress } from "@/app/components/generation-progress";
 import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
 import { ImageOutputCountControl, type ImageOutputCount } from "@/app/features/image-creation/shared/image-output-count-control";
 import { ImageAspectRatioControl } from "@/app/features/image-creation/shared/image-aspect-ratio-control";
+import { ImageCaseDetailDialog } from "@/app/features/image-creation/shared/image-case-detail-dialog";
 import { imageRequest, pollImageTask, uploadImageFile } from "@/app/features/image-creation/shared/image-task-api";
 import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import { aiImageCases } from "@/lib/image-workflow-cases";
@@ -53,6 +54,7 @@ export function AiImageGeneratePage() {
   const [task, setTask] = useState<TaskResult | null>(null);
   const [error, setError] = useState("");
   const [appliedCaseId, setAppliedCaseId] = useState("");
+  const [selectedCase, setSelectedCase] = useState<(typeof aiImageCases)[number] | null>(null);
   const [seriesContext, setSeriesContext] = useState<{ visualBible?: string; seriesPlan?: unknown[] }>({});
 
   const busy = phase === "uploading" || phase === "generating";
@@ -143,6 +145,8 @@ export function AiImageGeneratePage() {
 
   const applyCase = (item: (typeof aiImageCases)[number]) => {
     if (item.ratio && ratios.includes(item.ratio)) setRatio(item.ratio);
+    if (item.model && modelOptions.includes(item.model)) setModel(item.model);
+    if (item.quality && resolutions.includes(item.quality)) setResolution(item.quality);
     setPrompt(item.prompt.slice(0, 1200));
     setAppliedCaseId(item.id);
     resetTask();
@@ -233,10 +237,11 @@ export function AiImageGeneratePage() {
         <section className="yh-case-board">
           <header><span><Sparkles size={17} /></span><div><h1>案例参考</h1><p>选择案例可一键回填入参</p></div></header>
           {busy && <GenerationProgress phase={phase} taskStatus={task?.status} title="AI生图" outputCount={outputCount} />}
-          {phase === "succeeded" && task?.outputs.length ? <div className="yh-result-grid">{task.outputs.map((output, index) => <article key={output.assetId}><img src={output.url} alt={`AI生图结果 ${index + 1}`} /><GeneratedAssetActions output={output} onSaved={markSaved} /></article>)}</div> : phase === "succeeded" && task?.expiredOutputCount ? null : <div className="yh-case-grid">{aiImageCases.map((item) => <article className={appliedCaseId === item.id ? "active" : ""} key={item.id}><div className="yh-case-media"><img src={item.image} alt={item.title} /><span><ImageIcon size={12} />图片案例</span></div><strong>{item.title}</strong><button type="button" onClick={() => applyCase(item)}><Wand2 size={15} />做同款</button></article>)}</div>}
+          {phase === "succeeded" && task?.outputs.length ? <div className="yh-result-grid">{task.outputs.map((output, index) => <article key={output.assetId}><img src={output.url} alt={`AI生图结果 ${index + 1}`} /><GeneratedAssetActions output={output} onSaved={markSaved} /></article>)}</div> : phase === "succeeded" && task?.expiredOutputCount ? null : <div className="yh-case-grid">{aiImageCases.map((item) => <article className={appliedCaseId === item.id ? "active" : ""} key={item.id}><button className="yh-case-media" type="button" aria-label={`查看${item.title}作品详情`} onClick={() => setSelectedCase(item)}><img src={item.image} alt={item.title} /><span><ImageIcon size={12} />图片案例</span></button><strong>{item.title}</strong><button type="button" onClick={() => setSelectedCase(item)}><Wand2 size={15} />做同款</button></article>)}</div>}
           <footer><button type="button" aria-label="上一页">‹</button><span>1 / 2</span><button type="button" aria-label="下一页">›</button></footer>
         </section>
       </div>
+      {selectedCase && <ImageCaseDetailDialog item={selectedCase} workflowKey="image-generate" workflowLabel="AI生图" onApply={applyCase} onClose={() => setSelectedCase(null)} />}
     </main>
   );
 }

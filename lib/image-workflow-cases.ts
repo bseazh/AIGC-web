@@ -10,6 +10,9 @@ export type ImageWorkflowCase = {
   referenceImages?: Array<{ image: string; label: string }>;
   model?: string;
   quality?: "1K" | "2K";
+  descriptionLabel?: string;
+  referenceLabel?: string;
+  parameters?: Array<{ label: string; value: string }>;
 };
 
 export const aiImageCases: ImageWorkflowCase[] = [

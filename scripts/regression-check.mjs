@@ -90,6 +90,14 @@ const checks = [
     "imageWorkflowSpecs",
   ],
   [
+    "Image workflow specs declare mode-specific same-style input roles",
+    "app/features/image-creation/shared/image-workflow-spec.ts",
+    "竞品参考图（最多 10 张）",
+    "对标主图",
+    "商品细节/辅助图（可选）",
+    "商品图（多颜色）",
+  ],
+  [
     "Creation assistant derives mode-specific output rules from workflow specs",
     "app/features/image-creation/shared/image-workflow-spec.ts",
     "defaultAssistantSeriesConfig",
@@ -118,6 +126,24 @@ const checks = [
     "案例素材",
     "提示词 / 关键参数",
     "做同款",
+  ],
+  [
+    "Every custom image case board opens the shared case detail dialog",
+    "app/features/image-creation/ai-image/ai-image-generate-page.tsx",
+    "<ImageCaseDetailDialog",
+    "setSelectedCase(item)",
+  ],
+  [
+    "Product scene cases open the shared case detail dialog",
+    "app/features/image-creation/product-scene/product-scene-image-page.tsx",
+    "<ImageCaseDetailDialog",
+    "setSelectedCase(item)",
+  ],
+  [
+    "Model wear cases open the shared case detail dialog",
+    "app/features/image-creation/model-wear/model-wear-workspace.tsx",
+    "<ImageCaseDetailDialog",
+    "setSelectedCase(item)",
   ],
   [
     "Shared image workflow uses one compact workspace DOM",

@@ -342,6 +342,6 @@ export function DetailPageStudio(props: Props) {
 
     {libraryOpen && <div className="asset-picker-backdrop" role="dialog" aria-modal="true" aria-label="选择图片素材"><section className="asset-picker-modal"><header><div><span>内容资产</span><h2>选择商品图片</h2></div><button type="button" className="icon-button" onClick={() => setLibraryOpen(false)}><X size={18} /></button></header>{assetsLoading ? <div className="asset-picker-empty"><LoaderCircle size={22} />正在加载素材</div> : assets.length ? <div className="asset-picker-grid">{assets.map((asset) => <button type="button" key={asset.id} onClick={() => selectAsset(asset)}><img src={asset.url} alt="" /><strong>{asset.originalName}</strong><small>{asset.kind === "OUTPUT" ? "生成结果" : "上传素材"}</small></button>)}</div> : <div className="asset-picker-empty"><FolderOpen size={25} /><strong>暂无图片素材</strong></div>}</section></div>}
     {previewOutput && <div className="detail-lightbox" role="dialog" aria-modal="true" aria-label="图片大图预览" onClick={() => setPreviewOutput(null)}><div><button type="button" aria-label="关闭预览" onClick={() => setPreviewOutput(null)}><X size={18} /></button><img src={previewOutput.url} alt={previewOutput.title} /></div></div>}
-    {selectedCase && <ImageCaseDetailDialog item={selectedCase} workflowLabel={props.title} onApply={applyCase} onClose={() => setSelectedCase(null)} />}
+    {selectedCase && <ImageCaseDetailDialog item={selectedCase} workflowKey={props.workflowKey} workflowLabel={props.title} onApply={applyCase} onClose={() => setSelectedCase(null)} />}
   </main>;
 }

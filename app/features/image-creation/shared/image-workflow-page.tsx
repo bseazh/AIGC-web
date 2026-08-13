@@ -258,6 +258,6 @@ export function ImageWorkflowPage({
         </section>
       </div>
       {libraryOpen && <div className="asset-picker-backdrop" role="dialog" aria-modal="true" aria-label="选择图片素材"><section className="asset-picker-modal"><header><div><span>内容资产</span><h2>选择图片素材</h2></div><button type="button" className="icon-button" onClick={() => setLibraryOpen(false)}><X size={18} /></button></header>{assetsLoading ? <div className="asset-picker-empty"><LoaderCircle size={22} />正在加载素材</div> : assets.length ? <div className="asset-picker-grid">{assets.map((asset) => <button type="button" key={asset.id} onClick={() => selectAsset(asset)}><img src={asset.url} alt="" /><strong>{asset.originalName}</strong><small>{asset.kind === "OUTPUT" ? "生成结果" : "上传素材"}</small></button>)}</div> : <div className="asset-picker-empty"><FolderOpen size={25} /><strong>暂无图片素材</strong><p>用户上传素材会长期保留；生成结果需要手动添加到素材库后才会显示。</p></div>}</section></div>}
-      {selectedCase && <ImageCaseDetailDialog item={selectedCase} workflowLabel={title} onApply={applyCase} onClose={() => setSelectedCase(null)} />}
+      {selectedCase && <ImageCaseDetailDialog item={selectedCase} workflowKey={workflowSpec.key} workflowLabel={title} onApply={applyCase} onClose={() => setSelectedCase(null)} />}
   </main>;
 }
