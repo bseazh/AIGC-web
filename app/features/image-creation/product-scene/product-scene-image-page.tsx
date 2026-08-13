@@ -10,7 +10,7 @@ import { ImageAspectRatioControl } from "@/app/features/image-creation/shared/im
 import { ImageCaseDetailDialog } from "@/app/features/image-creation/shared/image-case-detail-dialog";
 import { imageRequest, pollImageTask, uploadImageFile } from "@/app/features/image-creation/shared/image-task-api";
 import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
-import { productSceneCases } from "@/lib/image-workflow-cases";
+import { buildCaseRecreationPrompt, productSceneCases } from "@/lib/image-workflow-cases";
 import { sceneImageWorkflow } from "@/lib/product-config";
 
 type Account = { user: { isAdministrator?: boolean }; wallet: { availablePoints: number } };
@@ -50,6 +50,7 @@ export function ProductSceneImagePage() {
   const [appliedCaseId, setAppliedCaseId] = useState("");
   const [selectedCase, setSelectedCase] = useState<(typeof productSceneCases)[number] | null>(null);
   const [seriesContext, setSeriesContext] = useState<{ visualBible?: string; seriesPlan?: unknown[] }>({});
+  const [caseRecreationPrompt, setCaseRecreationPrompt] = useState("");
 
   const busy = phase === "uploading" || phase === "generating";
   const markSaved = (assetId: string) => setTask((current) => current ? { ...current, outputs: current.outputs.map((output) => output.assetId === assetId ? { ...output, savedToLibrary: true, expiresAt: null } : output) } : current);
@@ -151,6 +152,7 @@ export function ProductSceneImagePage() {
     if (item.model && modelOptions.includes(item.model)) setModel(item.model);
     if (item.quality && resolutions.includes(item.quality)) setResolution(item.quality);
     if (item.productDescription) setProductDescription(item.productDescription.slice(0, 900));
+    setCaseRecreationPrompt(buildCaseRecreationPrompt(item, outputCount));
     setPrompt(item.prompt.slice(0, 1200));
     setAppliedCaseId(item.id);
     resetTask();
@@ -181,7 +183,7 @@ export function ProductSceneImagePage() {
       const created = await imageRequest<{ taskId: string }>("/api/tasks/scene/", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({ assetIds, prompt: composedPrompt, aspectRatio: ratio, imageProvider: imageProviderForModel(model), imageResolution: resolution, outputCount, visualBible: seriesContext.visualBible, seriesPlan: seriesContext.seriesPlan, draftId: projectId }),
+        body: JSON.stringify({ assetIds, prompt: composedPrompt, aspectRatio: ratio, imageProvider: imageProviderForModel(model), imageResolution: resolution, outputCount, caseRecreationPrompt, visualBible: seriesContext.visualBible, seriesPlan: seriesContext.seriesPlan, draftId: projectId }),
       });
       setPhase("generating");
       await pollImageTask(created.taskId, setTask);

@@ -10,7 +10,7 @@ import { ImageAspectRatioControl } from "@/app/features/image-creation/shared/im
 import { ImageCaseDetailDialog } from "@/app/features/image-creation/shared/image-case-detail-dialog";
 import { imageRequest, pollImageTask, uploadImageFile } from "@/app/features/image-creation/shared/image-task-api";
 import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
-import { aiImageCases } from "@/lib/image-workflow-cases";
+import { aiImageCases, buildCaseRecreationPrompt } from "@/lib/image-workflow-cases";
 import { imageGenerateWorkflow } from "@/lib/product-config";
 
 type Account = { user: { isAdministrator?: boolean }; wallet: { availablePoints: number } };
@@ -56,6 +56,7 @@ export function AiImageGeneratePage() {
   const [appliedCaseId, setAppliedCaseId] = useState("");
   const [selectedCase, setSelectedCase] = useState<(typeof aiImageCases)[number] | null>(null);
   const [seriesContext, setSeriesContext] = useState<{ visualBible?: string; seriesPlan?: unknown[] }>({});
+  const [caseRecreationPrompt, setCaseRecreationPrompt] = useState("");
 
   const busy = phase === "uploading" || phase === "generating";
   const canSubmit = prompt.trim().length > 0 && !busy && (account?.user.isAdministrator || (account?.wallet.availablePoints ?? 0) >= imageGenerateWorkflow.pointsPerTask);
@@ -147,6 +148,7 @@ export function AiImageGeneratePage() {
     if (item.ratio && ratios.includes(item.ratio)) setRatio(item.ratio);
     if (item.model && modelOptions.includes(item.model)) setModel(item.model);
     if (item.quality && resolutions.includes(item.quality)) setResolution(item.quality);
+    setCaseRecreationPrompt(buildCaseRecreationPrompt(item, outputCount));
     setPrompt(item.prompt.slice(0, 1200));
     setAppliedCaseId(item.id);
     resetTask();
@@ -174,6 +176,7 @@ export function AiImageGeneratePage() {
           imageProvider: imageProviderForModel(model),
           imageResolution: resolution,
           outputCount,
+          caseRecreationPrompt,
           visualBible: seriesContext.visualBible,
           seriesPlan: seriesContext.seriesPlan,
           draftId: projectId,

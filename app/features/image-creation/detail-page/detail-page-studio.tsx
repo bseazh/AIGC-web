@@ -10,7 +10,7 @@ import { ImageAspectRatioControl } from "@/app/features/image-creation/shared/im
 import { ImageCaseDetailDialog } from "@/app/features/image-creation/shared/image-case-detail-dialog";
 import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import { DETAIL_PAGE_MAX_CARDS, DETAIL_PAGE_MIN_CARDS, normalizeDetailCards, normalizeDetailPlans, type DetailPageCard, type DetailPagePlan } from "@/lib/detail-page-plans";
-import type { ImageWorkflowCase } from "@/lib/image-workflow-cases";
+import { buildCaseRecreationPrompt, type ImageWorkflowCase } from "@/lib/image-workflow-cases";
 
 type Asset = { id: string; mimeType: string; originalName: string; url: string; kind: string };
 type Account = { user: { isAdministrator?: boolean }; wallet: { availablePoints: number } };
@@ -65,6 +65,7 @@ export function DetailPageStudio(props: Props) {
   const [retryingCard, setRetryingCard] = useState<number | null>(null);
   const [cardTaskIds, setCardTaskIds] = useState<Record<string, string>>({});
   const [cardReplacements, setCardReplacements] = useState<Record<string, GeneratedTaskOutput>>({});
+  const [caseRecreationPrompt, setCaseRecreationPrompt] = useState("");
   const hydrated = useRef(false);
 
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) || null;
@@ -268,7 +269,7 @@ export function DetailPageStudio(props: Props) {
       const body = await imageRequest<{ taskId: string }>(props.submitUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({ assetId, prompt: productDescription, productDescription, aspectRatio: ratio, detailCards: normalized, draftId: projectId }),
+        body: JSON.stringify({ assetId, prompt: productDescription, productDescription, aspectRatio: ratio, detailCards: normalized, caseRecreationPrompt, draftId: projectId }),
       });
       setCards(normalized); setPhase("generating"); setStage("results");
       await pollImageTask(body.taskId, setTask, 10 * 60 * 1000);
@@ -284,7 +285,7 @@ export function DetailPageStudio(props: Props) {
       const body = await imageRequest<{ taskId: string }>(props.submitUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({ assetId, prompt: productDescription, productDescription, aspectRatio: ratio, detailCards: cards, singleCardIndex: index }),
+        body: JSON.stringify({ assetId, prompt: productDescription, productDescription, aspectRatio: ratio, detailCards: cards, caseRecreationPrompt, singleCardIndex: index }),
       });
       setCardTaskIds((current) => ({ ...current, [cards[index].id]: body.taskId }));
       const regenerated = await pollImageTask(body.taskId, () => undefined, 10 * 60 * 1000);
@@ -297,8 +298,19 @@ export function DetailPageStudio(props: Props) {
   };
 
   const applyCase = (item: ImageWorkflowCase) => {
-    if (item.productDescription) setProductDescription(item.productDescription.slice(0, 900));
+    const count = Math.min(DETAIL_PAGE_MAX_CARDS, Math.max(DETAIL_PAGE_MIN_CARDS, item.images?.length || 5));
+    const caseBrief = buildCaseRecreationPrompt(item, count);
+    setCaseRecreationPrompt(caseBrief);
+    setProductDescription((item.productDescription || "").slice(0, 900));
     if (item.ratio && ratios.includes(item.ratio as typeof ratios[number])) setRatio(item.ratio);
+    setCards(Array.from({ length: count }, (_, index) => ({
+      id: crypto.randomUUID(),
+      role: index === 0 ? "首屏商品定位" : index === count - 1 ? "品牌收束展示" : index % 3 === 1 ? "核心卖点" : index % 3 === 2 ? "材质结构细节" : "真实使用场景",
+      title: index === 0 ? item.title : `${item.title} · ${index + 1}`,
+      subtitle: index === 0 ? "建立商品第一眼识别" : "使用当前商品重建案例的信息层级，不复制原素材",
+      visualPrompt: [`本张为系列第 ${index + 1}/${count} 张，必须与前后图片保持统一视觉基准，同时采用不同景别和角度。`, item.prompt].join("\n").slice(0, 360),
+    })));
+    setPlans([]); setSelectedPlanId(""); setStage("cards"); setTask(null); setPhase("idle"); setError("");
   };
 
   const resultCards = useMemo(() => {

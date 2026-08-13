@@ -586,6 +586,7 @@ async function generateOne(inputUrls, input, index, workflowKey, generationTaskI
     referenceDirection,
     workflowKey === "recreate-reference-image" ? "" : shared,
     workflowKey === "recreate-reference-image" || !input.internalPrompt ? "" : `工作流内置策略：${input.internalPrompt}`,
+    input.caseRecreationPrompt ? `案例结构重生成策略（只学习结构，不复制原案例素材）：${input.caseRecreationPrompt}` : "",
     `工作流任务要求：${taskPrompt}`,
     seriesDirection,
     input.prompt ? `用户创作要求（必须逐项落实）：\n${input.prompt}` : "",

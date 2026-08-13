@@ -15,6 +15,24 @@ export type ImageWorkflowCase = {
   parameters?: Array<{ label: string; value: string }>;
 };
 
+/** Converts a case into a structure-only recreation brief for the image worker. */
+export function buildCaseRecreationPrompt(item: ImageWorkflowCase, outputCount?: number) {
+  const imageCount = outputCount || item.images?.length || 1;
+  const parameters = item.parameters?.map((parameter) => `${parameter.label}=${parameter.value}`).join("；");
+  const referenceRoles = item.referenceImages?.map((reference) => reference.label).join("、");
+  return [
+    "内部案例重生成策略（仅参考结构，不复制原案例素材）：",
+    `参考案例类型：${item.tag || "图片案例"}；案例主题：${item.title}。`,
+    `输出数量：${imageCount} 张${imageCount > 1 ? "连续系列" : "独立图片"}；保持统一的视觉基准、商品身份和摄影语言。`,
+    "提取并重建原案例的构图层级、主体占比、镜头景别、视角顺序、留白位置、光线方向、背景层次、卖点表达节奏和后期排版空间。",
+    imageCount > 1 ? "系列顺序应从首屏识别开始，再到功能/材质细节、使用场景和收束展示；每张只突出一个核心卖点，角度和景别要有变化但风格连续。" : "单图应保留原案例的视觉层级和主体表达重点。",
+    referenceRoles ? `案例中观察到的参考角色：${referenceRoles}。实际生成必须优先使用用户上传的商品/人物素材。` : "实际生成必须优先使用用户上传的商品/人物素材。",
+    parameters ? `参考参数：${parameters}。` : "",
+    "必须替换原案例中的商品、人物、品牌、Logo、商标、可读文字、价格、二维码和具体道具；不得直接复制、拼贴、描摹或把原案例图放进画面。",
+    "图片内不要生成可读文字；只预留与案例相同用途的排版空间，文案由后期处理。",
+  ].filter(Boolean).join("\n");
+}
+
 export const aiImageCases: ImageWorkflowCase[] = [
   {
     id: "orange-cat",

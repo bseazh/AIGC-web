@@ -12,6 +12,7 @@ import { imageRequest, pollImageTask, uploadImageFile } from "@/app/features/ima
 import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import { getImageWorkflowSpec } from "@/app/features/image-creation/shared/image-workflow-spec";
 import type { ImageWorkflowCase } from "@/lib/image-workflow-cases";
+import { buildCaseRecreationPrompt } from "@/lib/image-workflow-cases";
 import { appendProjectId } from "@/lib/project-workflows";
 
 type Props = {
@@ -78,6 +79,7 @@ export function ImageWorkflowPage({
   const [appliedCaseId, setAppliedCaseId] = useState("");
   const [selectedCase, setSelectedCase] = useState<ImageWorkflowCase | null>(null);
   const [seriesContext, setSeriesContext] = useState<{ visualBible?: string; seriesPlan?: unknown[] }>({});
+  const [caseRecreationPrompt, setCaseRecreationPrompt] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState("");
   const [task, setTask] = useState<TaskResult | null>(null);
@@ -148,6 +150,7 @@ export function ImageWorkflowPage({
 
   const applyCase = (item: ImageWorkflowCase) => {
     if (item.ratio && ratios.includes(item.ratio)) setRatio(item.ratio);
+    setCaseRecreationPrompt(buildCaseRecreationPrompt(item, outputCount));
     setPrompt(item.prompt.slice(0, 1200));
     if (item.productDescription) setProductDescription(item.productDescription.slice(0, 900));
     setAppliedCaseId(item.id);
@@ -208,7 +211,7 @@ export function ImageWorkflowPage({
       const created = await imageRequest<{ taskId: string }>(submitUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({ assetId, prompt: composedPrompt || prompt, productDescription, aspectRatio: ratio, outputCount, visualBible: seriesContext.visualBible, seriesPlan: seriesContext.seriesPlan, draftId: projectId }),
+        body: JSON.stringify({ assetId, prompt: composedPrompt || prompt, productDescription, aspectRatio: ratio, outputCount, caseRecreationPrompt, visualBible: seriesContext.visualBible, seriesPlan: seriesContext.seriesPlan, draftId: projectId }),
       });
       setPhase("generating");
       await pollImageTask(created.taskId, setTask);
