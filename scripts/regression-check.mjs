@@ -126,6 +126,14 @@ const checks = [
     "案例素材",
     "提示词 / 关键参数",
     "做同款",
+    "fit=max",
+  ],
+  [
+    "Image case dialog preserves full images across aspect ratios",
+    "app/globals.css",
+    ".image-case-dialog-media>img",
+    "max-height:100%",
+    "object-fit:contain",
   ],
   [
     "Every custom image case board opens the shared case detail dialog",
