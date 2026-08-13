@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronLeft, Clipboard, Copy, ImageIcon, ImagePlus, LoaderCircle, MessageCircleMore, Pencil, RotateCcw, Send, Sparkles, WandSparkles, X } from "lucide-react";
+import { Check, ChevronLeft, Clipboard, Copy, ImageIcon, ImagePlus, LoaderCircle, MessageCircleMore, Pencil, RotateCcw, Sparkles, WandSparkles, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -95,7 +95,6 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
   const [referenceBusy, setReferenceBusy] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
-  const [chatInput, setChatInput] = useState("");
   const [profileEditing, setProfileEditing] = useState(false);
   const [workspaceContext, setWorkspaceContext] = useState<AssistantWorkspaceContext>({ images: [] });
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -104,13 +103,14 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
   const currentWorkflow = imageAssistantWorkflows[state.goal];
   const workflowSpec = getImageWorkflowSpec(state.goal);
   const outputCounts = assistantOutputCounts(state.goal);
+  const totalSteps = workflowSpec.assistantMode === "detail" ? 5 : 4;
   const directionLabels = workflowSpec.assistantMode === "transform"
-    ? { audience: "", scene: "处理目标", sellingPoint: "重点保留", style: "处理强度" }
+    ? { scene: "处理目标", sellingPoint: "重点保留", style: "处理强度" }
     : workflowSpec.assistantMode === "model"
-      ? { audience: "目标人群", scene: "展示场景", sellingPoint: "商品交互动作", style: "人物与镜头" }
+      ? { scene: "展示场景", sellingPoint: "商品交互动作", style: "人物与镜头" }
       : workflowSpec.assistantMode === "detail"
-        ? { audience: "目标受众", scene: "页面使用场景", sellingPoint: "卖点排序重点", style: "系列视觉方向" }
-        : { audience: "卖给谁", scene: "使用场景", sellingPoint: "突出价值", style: "画面风格" };
+        ? { scene: "页面使用场景", sellingPoint: "卖点排序重点", style: "系列视觉方向" }
+        : { scene: "使用场景", sellingPoint: "突出价值", style: "画面风格" };
 
   useEffect(() => {
     let active = true;
@@ -121,11 +121,13 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
         if (!active) return;
         if (body.assistant) {
           const savedGoal = body.assistant.goal || workflowKey;
+          const savedSpec = getImageWorkflowSpec(savedGoal);
           const allowedCounts = assistantOutputCounts(savedGoal);
           const savedCount = Number(body.assistant.seriesConfig?.count);
           setState({
             ...initialState(workflowKey),
             ...body.assistant,
+            step: savedSpec.assistantMode === "detail" && body.assistant.step === "series" ? "series" : body.assistant.step === "series" ? "result" : body.assistant.step,
             goal: savedGoal,
             seriesConfig: {
               ...defaultAssistantSeriesConfig(savedGoal),
@@ -186,10 +188,7 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
     return () => window.clearTimeout(timer);
   }, [hydrated, state.handoffPending, state.prompt, state.recommendations?.productSummary, state.sourceText]);
 
-  const selectionsReady = useMemo(() => workflowSpec.assistantMode === "transform"
-    ? Boolean(state.scene && state.style && state.sellingPoint)
-    : Boolean(state.audience && state.scene && state.style && state.sellingPoint),
-  [state.audience, state.scene, state.sellingPoint, state.style, workflowSpec.assistantMode]);
+  const selectionsReady = useMemo(() => Boolean(state.scene && state.style && state.sellingPoint), [state.scene, state.sellingPoint, state.style]);
 
   const chooseService = (goal: ImageAssistantWorkflowKey) => {
     setError("");
@@ -310,55 +309,8 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
     }
   };
 
-  const refineDirection = async (answer?: string) => {
-    const userMessage = (answer || chatInput).trim();
-    if (!userMessage) return setError("请点击一个回答，或输入你的修改意见");
-    setBusy(true);
-    setError("");
-    try {
-      const response = await fetch("/api/creation-assistant/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "refine",
-          projectId,
-          goal: state.goal,
-          assistantMode: workflowSpec.assistantMode,
-          sourceText: state.sourceText || state.recommendations?.productSummary,
-          productSummary: state.recommendations?.productSummary,
-          visualAnalysis: state.recommendations?.visualAnalysis,
-          recommendations: state.recommendations,
-          audience: state.audience,
-          scene: state.scene,
-          style: state.style,
-          sellingPoint: state.sellingPoint,
-          messages: state.messages,
-          userMessage,
-        }),
-      });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.message || "方向校正失败");
-      const recommendations = body.recommendations;
-      setState((current) => ({
-        ...current,
-        recommendations,
-        productConfirmed: false,
-        audience: recommendations.audiences[0] || current.audience,
-        scene: recommendations.scenes[0] || current.scene,
-        style: recommendations.styles[0] || current.style,
-        sellingPoint: recommendations.sellingPoints[0] || current.sellingPoint,
-        messages: [...current.messages, message("user", userMessage), message("assistant", `${recommendations.reply}${recommendations.question ? `\n${recommendations.question}` : ""}`)],
-      }));
-      setChatInput("");
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "方向校正失败");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const generatePrompt = async () => {
-    if (!selectionsReady) return setError("请先选择受众、场景、风格和核心卖点");
+    if (!selectionsReady) return setError("请先选择场景、表达重点和视觉方向");
     setBusy(true);
     setError("");
     try {
@@ -386,7 +338,7 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
       if (!response.ok) throw new Error(body.message || "提示词生成失败");
       setState((current) => ({
         ...current,
-        step: workflowSpec.assistantMode === "transform" ? "result" : "series",
+        step: workflowSpec.assistantMode === "detail" ? "series" : "result",
         prompt: body.prompt,
         visualBible: body.visualBible || "",
         seriesPlan: Array.isArray(body.seriesPlan) ? body.seriesPlan : [],
@@ -439,7 +391,6 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
 
   const reset = () => {
     setState(initialState(workflowKey));
-    setChatInput("");
     setError("");
     setCopied(false);
     setProfileEditing(false);
@@ -486,7 +437,7 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
           {state.messages.slice(-12).map((item) => <p className={item.role} key={item.id}>{item.content}</p>)}
 
           {state.step === "service" && <section className="creation-assistant-step" ref={activeStepRef}>
-            <div className="creation-assistant-step-title"><b>选择服务</b><span>1 / 4</span></div>
+            <div className="creation-assistant-step-title"><b>选择服务</b><span>1 / {totalSteps}</span></div>
             <div className="creation-assistant-service-grid">
               {imageAssistantWorkflowKeys.map((key) => <button type="button" className={state.goal === key ? "selected" : ""} onClick={() => chooseService(key)} key={key}>
                 <strong>{imageAssistantWorkflows[key].label}</strong><small>{imageAssistantWorkflows[key].description}</small>
@@ -495,7 +446,7 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
           </section>}
 
           {state.step === "product" && <section className="creation-assistant-step" ref={activeStepRef}>
-            <div className="creation-assistant-step-title"><b>理解商品</b><span>2 / 4</span></div>
+            <div className="creation-assistant-step-title"><b>理解商品</b><span>2 / {totalSteps}</span></div>
             {hasWorkspaceImages && <div className="creation-assistant-reference-block">
               <div className="creation-assistant-reference-heading"><span><ImageIcon size={15} />当前工作台</span><small>{workspaceContext.images.length} 张</small></div>
               <div className="creation-assistant-reference-grid">{workspaceContext.images.map((image) => <figure key={image.url}><img src={image.url} alt={image.name || "工作台商品图"} /><figcaption>{image.name || "商品图"}</figcaption></figure>)}</div>
@@ -519,9 +470,9 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
           </section>}
 
           {state.step === "direction" && state.recommendations && <section className="creation-assistant-step" ref={activeStepRef}>
-            <div className="creation-assistant-step-title"><b>{workflowSpec.assistantMode === "transform" ? "确认处理方案" : "对话校正方向"}</b><span>3 / 5</span></div>
+            <div className="creation-assistant-step-title"><b>选择创作方向</b><span>3 / {totalSteps}</span></div>
             <div className={`creation-assistant-product-profile ${state.productConfirmed ? "confirmed" : ""}`}>
-              <header><div><strong>商品识别档案</strong><small>{state.productConfirmed ? "已确认，将作为生成事实依据" : "请确认后再生成系列方案"}</small></div><button type="button" onClick={() => setProfileEditing((value) => !value)}>{profileEditing ? <Check size={13} /> : <Pencil size={13} />}{profileEditing ? "完成编辑" : "编辑"}</button></header>
+              <header><div><strong>商品识别档案</strong><small>{state.productConfirmed ? "已确认，将作为生成事实依据" : "请确认后再生成创作方案"}</small></div><button type="button" onClick={() => setProfileEditing((value) => !value)}>{profileEditing ? <Check size={13} /> : <Pencil size={13} />}{profileEditing ? "完成编辑" : "编辑"}</button></header>
               {profileEditing ? <div className="creation-assistant-profile-fields">
                 <label>商品名称<input value={state.recommendations.productProfile.name} onChange={(event) => updateProductProfile("name", event.target.value)} /></label>
                 <label>主要颜色<input value={state.recommendations.productProfile.colors.join("，")} onChange={(event) => updateProductProfile("colors", event.target.value)} placeholder="用逗号分隔" /></label>
@@ -539,15 +490,9 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
               <footer><button type="button" disabled={busy} onClick={() => { setProfileEditing(false); setState((current) => ({ ...current, productConfirmed: true })); }}><Check size={14} />确认识别正确</button><button type="button" disabled={busy} onClick={() => { setState((current) => ({ ...current, step: "product", productConfirmed: false })); setProfileEditing(false); }}><RotateCcw size={14} />重新识别</button></footer>
             </div>
             {state.recommendations.visualAnalysis && <details className="creation-assistant-vision-analysis"><summary><ImageIcon size={14} />已读取参考图，查看识别结果</summary><p>{state.recommendations.visualAnalysis}</p></details>}
-            {directionLabels.audience && <ChoiceGroup label={directionLabels.audience} value={state.audience} options={state.recommendations.audiences} onChange={(audience) => setState((current) => ({ ...current, audience }))} />}
             <ChoiceGroup label={directionLabels.scene} value={state.scene} options={state.recommendations.scenes} onChange={(scene) => setState((current) => ({ ...current, scene }))} />
             <ChoiceGroup label={directionLabels.sellingPoint} value={state.sellingPoint} options={state.recommendations.sellingPoints} onChange={(sellingPoint) => setState((current) => ({ ...current, sellingPoint }))} />
             <ChoiceGroup label={directionLabels.style} value={state.style} options={state.recommendations.styles} onChange={(style) => setState((current) => ({ ...current, style }))} />
-            <div className="creation-assistant-chat-box">
-              <strong>{state.recommendations.question || "还需要怎样调整？"}</strong>
-              {state.recommendations.quickReplies.length > 0 && <div>{state.recommendations.quickReplies.map((item) => <button type="button" disabled={busy} onClick={() => refineDirection(item)} key={item}>{item}</button>)}</div>}
-              <label><input value={chatInput} onChange={(event) => setChatInput(event.target.value.slice(0, 500))} placeholder="输入你的回答或修改意见" /><button type="button" disabled={busy || !chatInput.trim()} onClick={() => refineDirection()} aria-label="发送修改意见"><Send size={15} /></button></label>
-            </div>
             <div className="creation-assistant-footer"><button type="button" onClick={() => setState((current) => ({ ...current, step: "product" }))}><ChevronLeft size={15} />修改商品</button><button className="primary" type="button" disabled={busy || !selectionsReady || !state.productConfirmed} onClick={generatePrompt}>{busy ? <LoaderCircle className="spin" size={15} /> : <WandSparkles size={15} />}{workflowSpec.assistantMode === "transform" ? "生成处理方案" : workflowSpec.assistantMode === "detail" ? "生成详情页方案" : "生成创作方案"}</button></div>
           </section>}
 
@@ -564,7 +509,7 @@ export function CreationAssistant({ projectId, workflowKey }: { projectId: strin
           </section>}
 
           {state.step === "result" && <section className="creation-assistant-step result" ref={activeStepRef}>
-            <div className="creation-assistant-step-title"><b>{currentWorkflow.label}{workflowSpec.assistantMode === "transform" ? "处理提示词" : "系列提示词"}</b><span>5 / 5</span></div>
+            <div className="creation-assistant-step-title"><b>{currentWorkflow.label}{workflowSpec.assistantMode === "transform" ? "处理提示词" : workflowSpec.assistantMode === "detail" ? "系列提示词" : "创作提示词"}</b><span>{totalSteps} / {totalSteps}</span></div>
             <div className="creation-assistant-reference-block">
               <div className="creation-assistant-reference-heading"><span><ImageIcon size={15} />本次参考图</span><small>{state.referenceImages.length} / 4，将随提示词一起回填</small></div>
               {state.referenceImages.length > 0 && <div className="creation-assistant-reference-grid">{state.referenceImages.map((image) => <figure key={image.assetId}>{image.url ? <img src={image.url} alt={image.name} /> : <span className="creation-assistant-reference-placeholder"><ImageIcon size={18} /></span>}<figcaption>{image.name}</figcaption><button type="button" aria-label={`移除${image.name}`} onClick={() => setState((current) => ({ ...current, referenceImages: current.referenceImages.filter((item) => item.assetId !== image.assetId) }))}><X size={12} /></button></figure>)}</div>}

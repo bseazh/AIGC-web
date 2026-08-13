@@ -104,6 +104,14 @@ const checks = [
     'assistantMode === "detail"',
   ],
   [
+    "Creation assistant keeps the default direction flow to three choices",
+    "app/features/creation-assistant/components/creation-assistant.tsx",
+    "<ChoiceGroup label={directionLabels.scene}",
+    "<ChoiceGroup label={directionLabels.sellingPoint}",
+    "<ChoiceGroup label={directionLabels.style}",
+    'step: workflowSpec.assistantMode === "detail" ? "series" : "result"',
+  ],
+  [
     "Shared image workflow uses one compact workspace DOM",
     "app/features/image-creation/shared/image-workflow-page.tsx",
     "data-workflow-key={workflowSpec.key}",
