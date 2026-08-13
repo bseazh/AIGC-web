@@ -44,6 +44,10 @@ const tags: Record<string, string> = {
   image_enhance_demo: "高清优化",
 };
 
+// Keep generated case manifests outside the Next build trace. Production keeps this
+// directory on the persistent host volume while local development can override it.
+const caseDataRoot = process.env.CASE_REMAKE_ROOT || "/home/ubuntu/project/AIGC_web/data";
+
 function textFromParameters(value: unknown, depth = 0): string[] {
   if (depth > 3 || value == null) return [];
   if (typeof value === "string") return /^https?:\/\//.test(value) ? [] : [value.trim()];
@@ -61,15 +65,14 @@ export async function GET(request: NextRequest) {
   if (!configKeys) return NextResponse.json({ cases: [] });
 
   try {
-    const dataRoot = join(process.cwd(), "data");
-    const manifest = JSON.parse(await readFile(join(dataRoot, "image-case-remakes", "manifest.json"), "utf8")) as { items?: RemakeItem[] };
+    const manifest = JSON.parse(await readFile(join(caseDataRoot, "image-case-remakes", "manifest.json"), "utf8")) as { items?: RemakeItem[] };
     const completed = (manifest.items || []).filter((item) => item.status === "succeeded" && item.storageKey && configKeys.includes(item.configKey));
     const groups = new Map<string, RemakeItem[]>();
     for (const item of completed) groups.set(item.caseId, [...(groups.get(item.caseId) || []), item]);
 
     const sourceCases = new Map<string, Record<string, unknown>>();
     for (const configKey of configKeys) {
-      const source = JSON.parse(await readFile(join(dataRoot, "yinghai-cases", `${configKey}.json`), "utf8")) as { cases?: Array<Record<string, unknown>> };
+      const source = JSON.parse(await readFile(join(caseDataRoot, "yinghai-cases", `${configKey}.json`), "utf8")) as { cases?: Array<Record<string, unknown>> };
       for (const item of source.cases || []) sourceCases.set(String(item.id), item);
     }
 
