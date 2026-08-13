@@ -7,6 +7,7 @@ import { hdEnhanceWorkflow } from "@/lib/product-config";
 export function HdEnhanceWorkspace() {
   return (
     <ImageWorkflowPage
+      workflowKey="hd-enhance"
       title="高清优化"
       description="默认生成 1 张，可自定义生成数量，消耗 5 积分"
       submitUrl="/api/tasks/hd-enhance/"

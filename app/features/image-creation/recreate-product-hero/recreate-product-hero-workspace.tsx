@@ -6,6 +6,7 @@ import { recreateHeroCases } from "@/lib/image-workflow-cases";
 export function RecreateProductHeroWorkspace() {
   return (
     <ImageWorkflowPage
+      workflowKey="recreate-product-hero"
       title="复刻商品主图"
       description="参考构图生成原创商品主图，默认 1 张，消耗 10 积分"
       submitUrl="/api/tasks/recreate-product-hero/"

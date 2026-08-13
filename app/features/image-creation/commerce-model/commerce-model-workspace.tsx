@@ -6,6 +6,7 @@ import { commerceModelCases } from "@/lib/image-workflow-cases";
 export function CommerceModelWorkspace() {
   return (
     <ImageWorkflowPage
+      workflowKey="commerce-model"
       title="带货模特"
       description="生成可复用带货模特资产，默认 1 张，可自定义生成数量"
       submitUrl="/api/tasks/commerce-model/"

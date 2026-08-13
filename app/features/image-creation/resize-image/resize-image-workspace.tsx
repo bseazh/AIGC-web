@@ -7,6 +7,7 @@ import { resizeImageWorkflow } from "@/lib/product-config";
 export function ResizeImageWorkspace() {
   return (
     <ImageWorkflowPage
+      workflowKey="resize-image"
       title="图片比例调整"
       description="智能扩展画面并保持商品主体，默认生成 1 张，消耗 5 积分"
       submitUrl="/api/tasks/resize-image/"

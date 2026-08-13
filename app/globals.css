@@ -1896,6 +1896,11 @@ a { color: inherit; text-decoration: none; }
 .yh-ai-page .yh-image-layout { width:min(1240px,100%); grid-template-columns:minmax(0,520px) minmax(0,1fr); gap:20px; }
 .yh-ai-page .yh-image-form-card { width:100%; }
 .yh-ai-page .yh-case-board { min-width:0; }
+.yh-workflow-transform .yh-workflow-empty { min-height:560px; }
+.yh-workflow-empty { min-height:560px; display:grid; place-items:center; align-content:center; gap:9px; color:#7b8ca0; text-align:center; }
+.yh-workflow-empty svg { color:#19a9c8; }
+.yh-workflow-empty strong { color:#40536a; font-size:15px; }
+.yh-workflow-empty p { max-width:260px; margin:0; color:#8b98aa; font-size:11px; line-height:1.6; }
 .yh-image-form-card, .yh-case-board { box-sizing: border-box; }
 .yh-image-form-card { display: grid; align-content: start; grid-auto-rows: max-content; gap: 0; }
 .yh-image-form-card > header { flex: none; }

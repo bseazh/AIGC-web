@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { createSignedObjectUrl } from "@/lib/cos";
 import { authenticatedUser } from "@/lib/session";
 import { isImageAssistantWorkflow } from "@/app/features/creation-assistant/workflows";
+import { assistantOutputCounts, defaultAssistantSeriesConfig, getImageWorkflowSpec } from "@/app/features/image-creation/shared/image-workflow-spec";
 
 const sessionDays = 7;
 
@@ -222,7 +223,8 @@ function normalizeSavedState(value: unknown) {
 
 function normalizeSeriesConfig(value: unknown) {
   const record = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-  const count = [1, 2, 4, 6, 8].includes(Number(record.count)) ? Number(record.count) : 4;
+  const requestedCount = Number(record.count);
+  const count: 1 | 2 | 4 | 6 | 8 = requestedCount === 1 || requestedCount === 2 || requestedCount === 4 || requestedCount === 6 || requestedCount === 8 ? requestedCount : 4;
   return {
     count,
     unifiedStyle: record.unifiedStyle !== false,
@@ -326,6 +328,8 @@ export async function POST(request: NextRequest) {
   const project = await ownedProject(body.projectId, user.id);
   if (!project) return NextResponse.json({ code: "PROJECT_NOT_FOUND" }, { status: 404 });
   const goal = isImageAssistantWorkflow(body.goal) ? body.goal : isImageAssistantWorkflow(project.workflow_key) ? project.workflow_key : "image-generate";
+  const workflowSpec = getImageWorkflowSpec(goal);
+  const assistantMode = workflowSpec.assistantMode;
   const sourceText = compact(body.sourceText, 3000);
   const action = body.action === "generate" ? "generate" : body.action === "refine" ? "refine" : "recommend";
   const imageUrls = stringList(body.imageUrls, 4, 1_500_000).filter((url) => url.startsWith("data:image/") || url.startsWith("https://"));
@@ -393,12 +397,15 @@ export async function POST(request: NextRequest) {
       const recommendationSource = sourceText || visionProductSummary;
       const result = await callAssistantLLM({
         operation: "image_creation_assistant_recommend",
-        system: "你是资深电商视觉创意策划。根据少量商品信息主动发散，但不能虚构确定性的商品参数。只输出严格 JSON，不要 Markdown。",
+          system: `你是资深电商视觉创意策划。当前助手模式是 ${assistantMode}。根据少量商品信息主动发散，但不能虚构确定性的商品参数。只输出严格 JSON，不要 Markdown。`,
         userPrompt: [
           "请理解用户的商品或创作想法，并推荐适合图片生成的方向。",
           "输出字段：productSummary、productProfile、audiences、scenes、styles、sellingPoints、reply、question、quickReplies。",
           "productProfile 必须继承视觉识别结果，包含 name、colors、materials、structure、visibleSellingPoints、uncertainItems；没有证据的字段保留为空数组或列入 uncertainItems。",
           "audiences、scenes、styles、sellingPoints 都必须是 4 个简短、差异明显、可点击的中文选项。",
+          assistantMode === "transform" ? "这是图片处理任务：audiences 可返回空数组；scenes 表示处理目标；styles 表示处理强度；sellingPoints 表示必须保留的细节。不要推荐消费场景或营销风格。" : "",
+          assistantMode === "model" ? "这是模特任务：scenes 表示展示环境；sellingPoints 必须是人物与商品的具体交互动作；styles 表示人物身份、姿态和镜头语言。" : "",
+          assistantMode === "detail" ? "这是详情页系列任务：scenes 表示页面使用场景；sellingPoints 表示卖点叙事顺序；styles 表示整套页面视觉方向。" : "",
           "视觉模型已经先读取图片。必须把视觉档案作为商品事实依据，不得用常见商品模板覆盖或改写商品身份。",
           "推荐必须符合商品真实用途，禁止把所有商品都套用租房、家庭或年轻女性等固定人群。",
           "reply 用不超过 120 字说明你如何理解商品，并邀请用户选择方向。",
@@ -426,12 +433,15 @@ export async function POST(request: NextRequest) {
         : "";
       const result = await callAssistantLLM({
         operation: "image_creation_assistant_refine",
-        system: "你是资深电商视觉创意顾问。通过多轮对话吸收用户纠偏，更新创作方向，每轮最多追问一个关键问题。只输出严格 JSON。",
+        system: `你是资深电商视觉创意顾问。当前助手模式是 ${assistantMode}。通过多轮对话吸收用户纠偏，更新创作方向，每轮最多追问一个关键问题。只输出严格 JSON。`,
         userPrompt: [
           "请根据用户最新回答校正商品理解和图片创作方向。",
           "输出字段：productSummary、productProfile、audiences、scenes、styles、sellingPoints、reply、question、quickReplies。",
           "productProfile 必须保留当前商品的可见事实，只根据用户明确纠正更新，不得为了创意方向改写商品结构。",
           "每组推荐保留 4 个具体选项，把最推荐的选项放在第一位。",
+          assistantMode === "transform" ? "图片处理模式不讨论营销受众或新场景，只更新处理目标、保留细节和处理强度。" : "",
+          assistantMode === "model" ? "模特模式必须更新商品交互动作、人物姿态和镜头，不要只给抽象风格词。" : "",
+          assistantMode === "detail" ? "详情模式必须更新卖点顺序、卡片叙事和统一视觉规则。" : "",
           "reply 先明确你吸收了什么修改；question 只问一个仍然影响成片的问题；quickReplies 给出 3-5 个可点击答案。",
           `目标图片类型：${goal}`,
           `商品信息：${productContext}`,
@@ -456,17 +466,31 @@ export async function POST(request: NextRequest) {
     const sellingPoint = compact(body.sellingPoint, 120);
     const revision = compact(body.revision, 500);
     const visualAnalysis = compact(body.visualAnalysis, 1600);
-    const seriesConfig = normalizeSeriesConfig(body.seriesConfig);
+    const requestedSeriesConfig = normalizeSeriesConfig(body.seriesConfig);
+    const allowedCounts = assistantOutputCounts(goal);
+    const defaultSeriesConfig = defaultAssistantSeriesConfig(goal);
+    const seriesConfig = {
+      ...requestedSeriesConfig,
+      count: allowedCounts.includes(requestedSeriesConfig.count) ? requestedSeriesConfig.count : defaultSeriesConfig.count,
+      unifiedStyle: assistantMode === "transform" ? false : requestedSeriesConfig.unifiedStyle,
+      unifiedBackground: assistantMode === "transform" ? false : requestedSeriesConfig.unifiedBackground,
+      reserveCopySpace: assistantMode === "detail" ? requestedSeriesConfig.reserveCopySpace : false,
+      differentAngles: workflowSpec.supportsSeries ? requestedSeriesConfig.differentAngles : false,
+    };
     const productSummary = recognizedProductText || sourceText.slice(0, 500);
     const result = await callAssistantLLM({
       operation: "image_creation_assistant_prompt",
-      system: "你是资深商业摄影导演和 AI 图片提示词专家。把用户选择和视觉模型的图片分析转成可直接提交给图片模型的中文提示词。图片视觉档案是商品身份事实，优先级高于用户对品类的模糊描述；不得省略或概括不可变身份锚点。只输出严格 JSON，不要 Markdown。",
+      system: `你是资深商业摄影导演和 AI 图片提示词专家。当前助手模式是 ${assistantMode}。把用户选择和视觉模型的图片分析转成可直接提交给图片模型的中文提示词。图片视觉档案是商品身份事实，优先级高于用户对品类的模糊描述；不得省略或概括不可变身份锚点。只输出严格 JSON，不要 Markdown。`,
       userPrompt: [
         "生成一个完整、具体、可执行的图片提示词。",
         "输出字段：prompt、summary、visualBible、seriesPlan。",
         "prompt 是系列生成总提示词，控制在 500-1500 个中文字符，必须描述商品身份锁定、系列统一视觉基准、每张图的角度与卖点绑定、商业目标和质量要求。",
         "visualBible 用 200-600 字定义整组图片必须统一的色彩、背景、光线、镜头、商品比例、阴影和构图语言。",
         "seriesPlan 必须严格返回与生成数量一致的卡片数组，每张字段为 id、title、angle、sellingPoint、copy、visualPrompt。每张图角度和卖点不同，但必须属于同一个视觉系列。",
+        assistantMode === "transform" ? "图片处理模式固定生成 1 张：不得设计新场景、人物或营销叙事；seriesPlan 返回唯一一张处理卡片，描述修复区域、保留项和处理强度。" : "",
+        assistantMode === "model" ? "模特模式的每张卡片必须包含明确的人物姿态、商品拿取/穿着/试用动作、商品可见面和镜头景别。" : "",
+        assistantMode === "detail" ? "详情页模式必须让卡片形成首屏定位、核心卖点、结构细节、使用证据和收束转化的连续叙事；每张文案不得重复。" : "",
+        assistantMode === "creative" ? "创作模式优先保证主体识别、构图目的和卖点表达，只有多张输出时才设计角度变化。" : "",
         "只要提供了参考图，prompt 第一段必须以‘参考图商品身份锁定：’开头，把视觉档案中的不可变几何结构、部件类型与数量、比例、颜色、材质、Logo/按键位置写完整，并明确‘必须是参考图同一款商品，不得替换成同品类常见款’。",
         "用户选择的场景、人物和动作只能改变商品周边表达，不能改变商品本体。若用户文字与参考图可见结构冲突，保留参考图结构，只吸收不冲突的创意要求。",
         "需要把商品放入新场景时，明确这是参考图编辑/商品换景任务：移除源图广告背景和外围宣传文案，将同一商品重新拍摄或真实合成到新场景，匹配透视、环境光、反射和接触阴影。",

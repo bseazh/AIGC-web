@@ -6,6 +6,7 @@ import { productHeroCases } from "@/lib/image-workflow-cases";
 export function ProductHeroWorkspace() {
   return (
     <ImageWorkflowPage
+      workflowKey="product-hero-image"
       title="商品主图"
       description="默认生成 1 张，可自定义生成数量，消耗 10 积分"
       submitUrl="/api/tasks/"

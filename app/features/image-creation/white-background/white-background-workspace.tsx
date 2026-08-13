@@ -7,6 +7,7 @@ import { whiteBackgroundWorkflow } from "@/lib/product-config";
 export function WhiteBackgroundWorkspace() {
   return (
     <ImageWorkflowPage
+      workflowKey="white-background"
       title="白底图生成"
       description="默认生成 1 张，可自定义生成数量，消耗 5 积分"
       submitUrl="/api/tasks/white-background/"
