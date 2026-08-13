@@ -8,6 +8,7 @@ import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchP
 import { ImageOutputCountControl, type ImageOutputCount } from "@/app/features/image-creation/shared/image-output-count-control";
 import { ImageAspectRatioControl } from "@/app/features/image-creation/shared/image-aspect-ratio-control";
 import { ImageCaseDetailDialog } from "@/app/features/image-creation/shared/image-case-detail-dialog";
+import { useRemadeImageCases } from "@/app/features/image-creation/shared/use-remade-image-cases";
 import { imageRequest, pollImageTask, uploadImageFile } from "@/app/features/image-creation/shared/image-task-api";
 import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import { buildCaseRecreationPrompt, modelWearCases } from "@/lib/image-workflow-cases";
@@ -34,6 +35,7 @@ export function ModelWearWorkspace() {
   const [task, setTask] = useState<TaskResult | null>(null);
   const [seriesContext, setSeriesContext] = useState<{ visualBible?: string; seriesPlan?: unknown[] }>({});
   const [caseRecreationPrompt, setCaseRecreationPrompt] = useState("");
+  const displayedCases = useRemadeImageCases("model-wear", modelWearCases);
   const markSaved = (assetId: string) => setTask((current) => current ? { ...current, outputs: current.outputs.map((output) => output.assetId === assetId ? { ...output, savedToLibrary: true, expiresAt: null } : output) } : current);
 
   useEffect(() => { fetch("/api/auth/session/", { cache: "no-store" }).then(async (response) => { if (!response.ok) throw new Error(); setAccount(await response.json()); }).catch(() => router.replace("/")); }, [router]);
@@ -93,7 +95,7 @@ export function ModelWearWorkspace() {
       <aside className="model-wear-case-board">
         <header><span><Sparkles size={17} /></span><div><h2>案例参考</h2><p>选择案例可一键回填入参</p></div></header>
         <div className="model-wear-case-grid">
-          {modelWearCases.map((item) => <article className={appliedCaseId === item.id ? "active" : ""} key={item.id}>
+          {displayedCases.map((item) => <article className={appliedCaseId === item.id ? "active" : ""} key={item.id}>
             <button className="model-wear-case-media" type="button" aria-label={`查看${item.title}作品详情`} onClick={() => setSelectedCase(item)}><img src={item.image} alt={item.title} /><span><ImageIcon size={12} />图片案例</span></button>
             <div><strong>{item.title}</strong>{item.productDescription && <p>{item.productDescription}</p>}</div>
             <button type="button" onClick={() => setSelectedCase(item)}><Wand2 size={14} />做同款</button>

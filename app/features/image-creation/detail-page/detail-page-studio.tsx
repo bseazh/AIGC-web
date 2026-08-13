@@ -8,6 +8,7 @@ import { GenerationProgress } from "@/app/components/generation-progress";
 import { imageRequest, pollImageTask, uploadImageFile } from "@/app/features/image-creation/shared/image-task-api";
 import { ImageAspectRatioControl } from "@/app/features/image-creation/shared/image-aspect-ratio-control";
 import { ImageCaseDetailDialog } from "@/app/features/image-creation/shared/image-case-detail-dialog";
+import { useRemadeImageCases } from "@/app/features/image-creation/shared/use-remade-image-cases";
 import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import { DETAIL_PAGE_MAX_CARDS, DETAIL_PAGE_MIN_CARDS, normalizeDetailCards, normalizeDetailPlans, type DetailPageCard, type DetailPagePlan } from "@/lib/detail-page-plans";
 import { buildCaseRecreationPrompt, type ImageWorkflowCase } from "@/lib/image-workflow-cases";
@@ -66,6 +67,7 @@ export function DetailPageStudio(props: Props) {
   const [cardTaskIds, setCardTaskIds] = useState<Record<string, string>>({});
   const [cardReplacements, setCardReplacements] = useState<Record<string, GeneratedTaskOutput>>({});
   const [caseRecreationPrompt, setCaseRecreationPrompt] = useState("");
+  const displayedCases = useRemadeImageCases(props.workflowKey, props.cases);
   const hydrated = useRef(false);
 
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) || null;
@@ -342,7 +344,7 @@ export function DetailPageStudio(props: Props) {
       </aside>
 
       <section className="detail-studio-workspace">
-        {stage === "brief" && <><header><div><span>案例参考</span><h2>先确定商品的表达方向</h2></div><p>点击案例查看套图、素材和关键参数，再选择做同款。</p></header><div className="detail-case-grid">{props.cases.map((item) => <article key={item.id}><button className="detail-case-preview" type="button" aria-label={`查看${item.title}作品详情`} onClick={() => setSelectedCase(item)}><img src={item.image} alt={item.title} /></button><div><span>{item.tag}</span><strong>{item.title}</strong><button type="button" onClick={() => setSelectedCase(item)}><Wand2 size={14} />做同款</button></div></article>)}</div></>}
+        {stage === "brief" && <><header><div><span>案例参考</span><h2>先确定商品的表达方向</h2></div><p>点击案例查看套图、素材和关键参数，再选择做同款。</p></header><div className="detail-case-grid">{displayedCases.map((item) => <article key={item.id}><button className="detail-case-preview" type="button" aria-label={`查看${item.title}作品详情`} onClick={() => setSelectedCase(item)}><img src={item.image} alt={item.title} /></button><div><span>{item.tag}</span><strong>{item.title}</strong><button type="button" onClick={() => setSelectedCase(item)}><Wand2 size={14} />做同款</button></div></article>)}</div></>}
 
         {stage === "plans" && <><header><div><span>方案选择</span><h2>选择一套详情页叙事结构</h2></div><p>{productUnderstanding || "已结合商品图片和补充信息生成方案。"}</p></header><div className="detail-plan-grid">{plans.map((plan) => <article key={plan.id}><div><span>{plan.label}</span><em>{plan.cards.length} 张卡片</em></div><h3>{plan.title}</h3><p>{plan.strategy}</p><small>适合：{plan.suitableFor}</small><ol>{plan.cards.map((card, index) => <li key={card.id}><b>{index + 1}</b><span><strong>{card.role}</strong>{card.title}</span></li>)}</ol><button type="button" onClick={() => choosePlan(plan)}>选择并编辑这套方案</button></article>)}</div></>}
 

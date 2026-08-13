@@ -8,6 +8,7 @@ import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchP
 import { ImageOutputCountControl, type ImageOutputCount } from "@/app/features/image-creation/shared/image-output-count-control";
 import { ImageAspectRatioControl } from "@/app/features/image-creation/shared/image-aspect-ratio-control";
 import { ImageCaseDetailDialog } from "@/app/features/image-creation/shared/image-case-detail-dialog";
+import { useRemadeImageCases } from "@/app/features/image-creation/shared/use-remade-image-cases";
 import { imageRequest, pollImageTask, uploadImageFile } from "@/app/features/image-creation/shared/image-task-api";
 import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import { aiImageCases, buildCaseRecreationPrompt } from "@/lib/image-workflow-cases";
@@ -57,6 +58,7 @@ export function AiImageGeneratePage() {
   const [selectedCase, setSelectedCase] = useState<(typeof aiImageCases)[number] | null>(null);
   const [seriesContext, setSeriesContext] = useState<{ visualBible?: string; seriesPlan?: unknown[] }>({});
   const [caseRecreationPrompt, setCaseRecreationPrompt] = useState("");
+  const displayedCases = useRemadeImageCases("image-generate", aiImageCases);
 
   const busy = phase === "uploading" || phase === "generating";
   const canSubmit = prompt.trim().length > 0 && !busy && (account?.user.isAdministrator || (account?.wallet.availablePoints ?? 0) >= imageGenerateWorkflow.pointsPerTask);
@@ -240,7 +242,7 @@ export function AiImageGeneratePage() {
         <section className="yh-case-board">
           <header><span><Sparkles size={17} /></span><div><h1>案例参考</h1><p>选择案例可一键回填入参</p></div></header>
           {busy && <GenerationProgress phase={phase} taskStatus={task?.status} title="AI生图" outputCount={outputCount} />}
-          {phase === "succeeded" && task?.outputs.length ? <div className="yh-result-grid">{task.outputs.map((output, index) => <article key={output.assetId}><img src={output.url} alt={`AI生图结果 ${index + 1}`} /><GeneratedAssetActions output={output} onSaved={markSaved} /></article>)}</div> : phase === "succeeded" && task?.expiredOutputCount ? null : <div className="yh-case-grid">{aiImageCases.map((item) => <article className={appliedCaseId === item.id ? "active" : ""} key={item.id}><button className="yh-case-media" type="button" aria-label={`查看${item.title}作品详情`} onClick={() => setSelectedCase(item)}><img src={item.image} alt={item.title} /><span><ImageIcon size={12} />图片案例</span></button><strong>{item.title}</strong><button type="button" onClick={() => setSelectedCase(item)}><Wand2 size={15} />做同款</button></article>)}</div>}
+          {phase === "succeeded" && task?.outputs.length ? <div className="yh-result-grid">{task.outputs.map((output, index) => <article key={output.assetId}><img src={output.url} alt={`AI生图结果 ${index + 1}`} /><GeneratedAssetActions output={output} onSaved={markSaved} /></article>)}</div> : phase === "succeeded" && task?.expiredOutputCount ? null : <div className="yh-case-grid">{displayedCases.map((item) => <article className={appliedCaseId === item.id ? "active" : ""} key={item.id}><button className="yh-case-media" type="button" aria-label={`查看${item.title}作品详情`} onClick={() => setSelectedCase(item)}><img src={item.image} alt={item.title} /><span><ImageIcon size={12} />图片案例</span></button><strong>{item.title}</strong><button type="button" onClick={() => setSelectedCase(item)}><Wand2 size={15} />做同款</button></article>)}</div>}
           <footer><button type="button" aria-label="上一页">‹</button><span>1 / 2</span><button type="button" aria-label="下一页">›</button></footer>
         </section>
       </div>
