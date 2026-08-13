@@ -38,6 +38,8 @@ const limit = limitFlag ? Math.max(1, Number(limitFlag.split("=")[1]) || 1) : Nu
 const force = process.argv.includes("--force");
 const dryRun = process.argv.includes("--dry-run");
 const requestedRoles = new Set((process.argv.find((value) => value.startsWith("--roles="))?.split("=")[1] || "result,reference,product,other").split(","));
+const requestedConfigs = new Set((process.argv.find((value) => value.startsWith("--configs="))?.split("=")[1] || "").split(",").filter(Boolean));
+const priorityConfigs = ["product_main_detail_demo", "detail_page_baihuo_demo", "detail_page_demo", "main_image_demo"];
 
 for (const name of ["COS_BUCKET", "COS_REGION", "COS_SECRET_ID", "COS_SECRET_KEY"]) if (!process.env[name]) throw new Error(`${name} is required`);
 if (!apiKey) throw new Error("GOOGLE_AI_API_KEY or equivalent is required");
@@ -114,20 +116,25 @@ async function loadSources() {
     for (const item of data.cases || []) {
       for (const [index, image] of (item.images || []).entries()) {
         if (!requestedRoles.has(image.role)) continue;
-        result.push({ id: createHash("sha256").update(image.url).digest("hex").slice(0, 24), configKey: data.configKey, caseId: item.id, title: item.title, sourceUrl: image.url, sourcePath: image.path, role: image.role, order: index });
+        // The same source URL can legitimately appear in multiple workflows. Scope
+        // the id to its case and position so one workflow cannot mask another.
+        const identity = [data.configKey, item.id, index, image.url].join("\n");
+        result.push({ id: createHash("sha256").update(identity).digest("hex").slice(0, 24), configKey: data.configKey, caseId: item.id, title: item.title, sourceUrl: image.url, sourcePath: image.path, role: image.role, order: index });
       }
     }
   }
-  return result;
+  const priority = new Map(priorityConfigs.map((config, index) => [config, index]));
+  return result.sort((a, b) => (priority.get(a.configKey) ?? 999) - (priority.get(b.configKey) ?? 999));
 }
 
 await mkdir(dirname(manifestPath), { recursive: true });
 const manifest = existsSync(manifestPath) ? JSON.parse(await readFile(manifestPath, "utf8")) : { version: 1, generatedAt: null, source: sourceBase, model, items: [] };
 const completed = new Map((manifest.items || []).map((item) => [item.id, item]));
 const sources = await loadSources();
+const selectedSources = requestedConfigs.size ? sources.filter((source) => requestedConfigs.has(source.configKey)) : sources;
 let attempted = 0;
 
-for (const source of sources) {
+for (const source of selectedSources) {
   if (!force && completed.get(source.id)?.status === "succeeded") continue;
   if (attempted >= limit) break;
   attempted += 1;
@@ -156,5 +163,5 @@ for (const source of sources) {
   await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
 }
 
-const summary = { totalSources: sources.length, attempted, succeeded: [...completed.values()].filter((item) => item.status === "succeeded").length, failed: [...completed.values()].filter((item) => item.status === "failed").length, manifestPath };
+const summary = { totalSources: selectedSources.length, attempted, succeeded: [...completed.values()].filter((item) => item.status === "succeeded").length, failed: [...completed.values()].filter((item) => item.status === "failed").length, manifestPath };
 console.log(JSON.stringify(summary, null, 2));

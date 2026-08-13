@@ -192,9 +192,24 @@ function hrefForTool(tool: ToolCard) {
 
 function ToolTile({ tool }: { tool: ToolCard }) {
   const Icon = tool.icon;
+  const [cover, setCover] = useState(tool.cover);
+
+  useEffect(() => {
+    if (!tool.workflowKey) return;
+    let active = true;
+    fetch(`/api/image-cases/?workflowKey=${encodeURIComponent(tool.workflowKey)}`, { cache: "no-store" })
+      .then(async (response) => response.ok ? response.json() : { cases: [] })
+      .then((body) => {
+        const replacement = Array.isArray(body.cases) ? body.cases.find((item: { image?: string }) => item?.image)?.image : undefined;
+        if (active && replacement) setCover(replacement);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [tool.workflowKey]);
+
   const visual = (
-    <div className={`yh-tools-card-visual ${tool.tone}${tool.cover ? " has-cover" : ""}`}>
-      {tool.cover && <img className="yh-tools-card-cover" src={tool.cover} alt="" />}
+    <div className={`yh-tools-card-visual ${tool.tone}${cover ? " has-cover" : ""}`}>
+      {cover && <img className="yh-tools-card-cover" src={cover} alt="" />}
       <div className="yh-tools-visual-glow" />
       <div className="yh-tools-visual-copy">
         <span>{tool.category}</span>
