@@ -7,6 +7,7 @@ import { GenerationProgress } from "@/app/components/generation-progress";
 import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchProjectTaskResult, type GeneratedTaskResult } from "@/app/components/generated-asset-actions";
 import { ImageOutputCountControl, type ImageOutputCount } from "@/app/features/image-creation/shared/image-output-count-control";
 import { ImageAspectRatioControl } from "@/app/features/image-creation/shared/image-aspect-ratio-control";
+import { ImageCaseDetailDialog } from "@/app/features/image-creation/shared/image-case-detail-dialog";
 import { imageRequest, pollImageTask, uploadImageFile } from "@/app/features/image-creation/shared/image-task-api";
 import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import { getImageWorkflowSpec } from "@/app/features/image-creation/shared/image-workflow-spec";
@@ -75,6 +76,7 @@ export function ImageWorkflowPage({
   const [productDescription, setProductDescription] = useState("");
   const [outputCount, setOutputCount] = useState<ImageOutputCount>(initialOutputCount);
   const [appliedCaseId, setAppliedCaseId] = useState("");
+  const [selectedCase, setSelectedCase] = useState<ImageWorkflowCase | null>(null);
   const [seriesContext, setSeriesContext] = useState<{ visualBible?: string; seriesPlan?: unknown[] }>({});
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState("");
@@ -252,9 +254,10 @@ export function ImageWorkflowPage({
         <section className="yh-case-board">
           <header><span><Sparkles size={17} /></span><div><h1>案例参考</h1><p>选择案例可一键回填入参</p></div></header>
           {busy && <GenerationProgress phase={phase} taskStatus={task?.status} title={title} outputCount={outputCount} />}
-          {phase === "succeeded" && task?.outputs.length ? <div className="yh-result-grid">{task.outputs.map((output, index) => <article key={output.assetId}><img src={output.url} alt={`${title}结果 ${index + 1}`} /><GeneratedAssetActions output={output} onSaved={markSaved} />{nextStepHref && <button type="button" className="result-next" onClick={() => router.push(appendProjectId(`${nextStepHref}?assetId=${output.assetId}`, projectId))}>{nextStepLabel || "继续创作"}</button>}</article>)}</div> : phase === "succeeded" && task?.expiredOutputCount ? null : cases.length ? <div className="yh-case-grid">{cases.map((item) => <article className={appliedCaseId === item.id ? "active" : ""} key={item.id}><div className="yh-case-media"><img src={item.image} alt={item.title} /><span><ImagePlus size={12} />{item.tag}</span></div><strong>{item.title}</strong><button type="button" onClick={() => applyCase(item)}><Wand2 size={15} />做同款</button></article>)}</div> : <div className="yh-workflow-empty"><Sparkles size={24} /><strong>{workflowSpec.label}</strong><p>{workflowSpec.description}</p></div>}
+          {phase === "succeeded" && task?.outputs.length ? <div className="yh-result-grid">{task.outputs.map((output, index) => <article key={output.assetId}><img src={output.url} alt={`${title}结果 ${index + 1}`} /><GeneratedAssetActions output={output} onSaved={markSaved} />{nextStepHref && <button type="button" className="result-next" onClick={() => router.push(appendProjectId(`${nextStepHref}?assetId=${output.assetId}`, projectId))}>{nextStepLabel || "继续创作"}</button>}</article>)}</div> : phase === "succeeded" && task?.expiredOutputCount ? null : cases.length ? <div className="yh-case-grid">{cases.map((item) => <article className={appliedCaseId === item.id ? "active" : ""} key={item.id}><button className="yh-case-media" type="button" aria-label={`查看${item.title}作品详情`} onClick={() => setSelectedCase(item)}><img src={item.image} alt={item.title} /><span><ImagePlus size={12} />{item.tag}</span></button><strong>{item.title}</strong><button type="button" onClick={() => setSelectedCase(item)}><Wand2 size={15} />做同款</button></article>)}</div> : <div className="yh-workflow-empty"><Sparkles size={24} /><strong>{workflowSpec.label}</strong><p>{workflowSpec.description}</p></div>}
         </section>
       </div>
       {libraryOpen && <div className="asset-picker-backdrop" role="dialog" aria-modal="true" aria-label="选择图片素材"><section className="asset-picker-modal"><header><div><span>内容资产</span><h2>选择图片素材</h2></div><button type="button" className="icon-button" onClick={() => setLibraryOpen(false)}><X size={18} /></button></header>{assetsLoading ? <div className="asset-picker-empty"><LoaderCircle size={22} />正在加载素材</div> : assets.length ? <div className="asset-picker-grid">{assets.map((asset) => <button type="button" key={asset.id} onClick={() => selectAsset(asset)}><img src={asset.url} alt="" /><strong>{asset.originalName}</strong><small>{asset.kind === "OUTPUT" ? "生成结果" : "上传素材"}</small></button>)}</div> : <div className="asset-picker-empty"><FolderOpen size={25} /><strong>暂无图片素材</strong><p>用户上传素材会长期保留；生成结果需要手动添加到素材库后才会显示。</p></div>}</section></div>}
+      {selectedCase && <ImageCaseDetailDialog item={selectedCase} workflowLabel={title} onApply={applyCase} onClose={() => setSelectedCase(null)} />}
   </main>;
 }

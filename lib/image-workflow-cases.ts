@@ -6,6 +6,10 @@ export type ImageWorkflowCase = {
   prompt: string;
   productDescription?: string;
   ratio?: string;
+  images?: string[];
+  referenceImages?: Array<{ image: string; label: string }>;
+  model?: string;
+  quality?: "1K" | "2K";
 };
 
 export const aiImageCases: ImageWorkflowCase[] = [

@@ -112,6 +112,14 @@ const checks = [
     'step: workflowSpec.assistantMode === "detail" ? "series" : "result"',
   ],
   [
+    "Image workflow cases open a reusable detail dialog before same-style apply",
+    "app/features/image-creation/shared/image-case-detail-dialog.tsx",
+    "作品详情",
+    "案例素材",
+    "提示词 / 关键参数",
+    "做同款",
+  ],
+  [
     "Shared image workflow uses one compact workspace DOM",
     "app/features/image-creation/shared/image-workflow-page.tsx",
     "data-workflow-key={workflowSpec.key}",

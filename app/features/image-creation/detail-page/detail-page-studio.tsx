@@ -7,6 +7,7 @@ import { GeneratedAssetActions, TemporaryResultNotice, restoredTaskPhase, watchP
 import { GenerationProgress } from "@/app/components/generation-progress";
 import { imageRequest, pollImageTask, uploadImageFile } from "@/app/features/image-creation/shared/image-task-api";
 import { ImageAspectRatioControl } from "@/app/features/image-creation/shared/image-aspect-ratio-control";
+import { ImageCaseDetailDialog } from "@/app/features/image-creation/shared/image-case-detail-dialog";
 import { useAssistantPromptReceiver, useAssistantWorkspaceContext } from "@/app/features/creation-assistant/use-assistant-prompt";
 import { DETAIL_PAGE_MAX_CARDS, DETAIL_PAGE_MIN_CARDS, normalizeDetailCards, normalizeDetailPlans, type DetailPageCard, type DetailPagePlan } from "@/lib/detail-page-plans";
 import type { ImageWorkflowCase } from "@/lib/image-workflow-cases";
@@ -60,6 +61,7 @@ export function DetailPageStudio(props: Props) {
   const [task, setTask] = useState<GeneratedTaskResult | null>(null);
   const [error, setError] = useState("");
   const [previewOutput, setPreviewOutput] = useState<{ url: string; title: string } | null>(null);
+  const [selectedCase, setSelectedCase] = useState<ImageWorkflowCase | null>(null);
   const [retryingCard, setRetryingCard] = useState<number | null>(null);
   const [cardTaskIds, setCardTaskIds] = useState<Record<string, string>>({});
   const [cardReplacements, setCardReplacements] = useState<Record<string, GeneratedTaskOutput>>({});
@@ -296,6 +298,7 @@ export function DetailPageStudio(props: Props) {
 
   const applyCase = (item: ImageWorkflowCase) => {
     if (item.productDescription) setProductDescription(item.productDescription.slice(0, 900));
+    if (item.ratio && ratios.includes(item.ratio as typeof ratios[number])) setRatio(item.ratio);
   };
 
   const resultCards = useMemo(() => {
@@ -327,7 +330,7 @@ export function DetailPageStudio(props: Props) {
       </aside>
 
       <section className="detail-studio-workspace">
-        {stage === "brief" && <><header><div><span>案例参考</span><h2>先确定商品的表达方向</h2></div><p>上传商品后，AI 会识别商品并给出三套不同结构方案。</p></header><div className="detail-case-grid">{props.cases.map((item) => <article key={item.id}><img src={item.image} alt={item.title} /><div><span>{item.tag}</span><strong>{item.title}</strong><button type="button" onClick={() => applyCase(item)}><Wand2 size={14} />参考这个方向</button></div></article>)}</div></>}
+        {stage === "brief" && <><header><div><span>案例参考</span><h2>先确定商品的表达方向</h2></div><p>点击案例查看套图、素材和关键参数，再选择做同款。</p></header><div className="detail-case-grid">{props.cases.map((item) => <article key={item.id}><button className="detail-case-preview" type="button" aria-label={`查看${item.title}作品详情`} onClick={() => setSelectedCase(item)}><img src={item.image} alt={item.title} /></button><div><span>{item.tag}</span><strong>{item.title}</strong><button type="button" onClick={() => setSelectedCase(item)}><Wand2 size={14} />做同款</button></div></article>)}</div></>}
 
         {stage === "plans" && <><header><div><span>方案选择</span><h2>选择一套详情页叙事结构</h2></div><p>{productUnderstanding || "已结合商品图片和补充信息生成方案。"}</p></header><div className="detail-plan-grid">{plans.map((plan) => <article key={plan.id}><div><span>{plan.label}</span><em>{plan.cards.length} 张卡片</em></div><h3>{plan.title}</h3><p>{plan.strategy}</p><small>适合：{plan.suitableFor}</small><ol>{plan.cards.map((card, index) => <li key={card.id}><b>{index + 1}</b><span><strong>{card.role}</strong>{card.title}</span></li>)}</ol><button type="button" onClick={() => choosePlan(plan)}>选择并编辑这套方案</button></article>)}</div></>}
 
@@ -339,5 +342,6 @@ export function DetailPageStudio(props: Props) {
 
     {libraryOpen && <div className="asset-picker-backdrop" role="dialog" aria-modal="true" aria-label="选择图片素材"><section className="asset-picker-modal"><header><div><span>内容资产</span><h2>选择商品图片</h2></div><button type="button" className="icon-button" onClick={() => setLibraryOpen(false)}><X size={18} /></button></header>{assetsLoading ? <div className="asset-picker-empty"><LoaderCircle size={22} />正在加载素材</div> : assets.length ? <div className="asset-picker-grid">{assets.map((asset) => <button type="button" key={asset.id} onClick={() => selectAsset(asset)}><img src={asset.url} alt="" /><strong>{asset.originalName}</strong><small>{asset.kind === "OUTPUT" ? "生成结果" : "上传素材"}</small></button>)}</div> : <div className="asset-picker-empty"><FolderOpen size={25} /><strong>暂无图片素材</strong></div>}</section></div>}
     {previewOutput && <div className="detail-lightbox" role="dialog" aria-modal="true" aria-label="图片大图预览" onClick={() => setPreviewOutput(null)}><div><button type="button" aria-label="关闭预览" onClick={() => setPreviewOutput(null)}><X size={18} /></button><img src={previewOutput.url} alt={previewOutput.title} /></div></div>}
+    {selectedCase && <ImageCaseDetailDialog item={selectedCase} workflowLabel={props.title} onApply={applyCase} onClose={() => setSelectedCase(null)} />}
   </main>;
 }
